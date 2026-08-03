@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Digital Team Workspace</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">DT</span><strong>Digital Team</strong></div>
+    <div class="connection"><span id="connection-dot"></span><span id="connection-label">未连接</span></div>
+    <button id="settings-button" class="icon-button" title="连接设置" aria-label="连接设置">⚙</button>
+  </header>
+
+  <main class="workspace">
+    <aside class="rail">
+      <div class="rail-heading"><span>项目</span><button id="new-project" class="icon-button" title="新建项目">＋</button></div>
+      <div id="project-summary" class="project-item empty">选择或创建项目</div>
+      <div class="rail-section">
+        <span class="rail-label">成员身份</span>
+        <strong id="role-label">未连接</strong>
+      </div>
+      <div class="rail-section experts">
+        <span class="rail-label">专家</span>
+        <div id="expert-list"></div>
+      </div>
+    </aside>
+
+    <section class="conversation">
+      <div class="section-header">
+        <div><h1 id="project-title">项目工作台</h1><p id="project-description">自然语言协作、执行跟踪与产物交接</p></div>
+        <button id="refresh-button" class="icon-button" title="刷新">↻</button>
+      </div>
+      <div id="timeline" class="timeline">
+        <div class="welcome">
+          <strong>开始一项工作</strong>
+          <p>连接项目后，直接描述目标。Coordinator 会安排合适的专家。</p>
+        </div>
+      </div>
+      <form id="composer" class="composer">
+        <label class="attach-button" title="添加附件">＋<input id="file-input" type="file" multiple></label>
+        <textarea id="message-input" rows="1" placeholder="描述你希望团队完成的工作…" aria-label="任务描述"></textarea>
+        <button id="send-button" type="submit" class="send-button" title="发送">↑</button>
+        <div id="attachment-list" class="attachment-list"></div>
+      </form>
+    </section>
+
+    <aside class="context">
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="plan">计划</button>
+        <button class="tab" data-tab="artifacts">产物</button>
+      </div>
+      <section id="plan-panel" class="panel active"><div id="plan-list" class="stack empty-state">暂无执行计划</div></section>
+      <section id="artifacts-panel" class="panel"><div id="artifact-list" class="stack empty-state">暂无产物</div></section>
+    </aside>
+  </main>
+
+  <dialog id="settings-dialog">
+    <form method="dialog" id="settings-form">
+      <div class="dialog-header"><h2>连接工作区</h2><button value="cancel" class="icon-button">×</button></div>
+      <label>租户 ID<input id="tenant-input" required value="demo-tenant"></label>
+      <label>用户 ID<input id="user-input" required value="demo-owner"></label>
+      <label>项目 ID<input id="project-input" placeholder="可先新建项目"></label>
+      <div class="dialog-actions"><button value="cancel" class="secondary">取消</button><button id="connect-button" value="default">连接</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="project-dialog">
+    <form method="dialog" id="project-form">
+      <div class="dialog-header"><h2>新建项目</h2><button value="cancel" class="icon-button">×</button></div>
+      <label>项目名称<input id="project-name-input" required></label>
+      <label>描述<textarea id="project-desc-input" rows="3"></textarea></label>
+      <div class="dialog-actions"><button value="cancel" class="secondary">取消</button><button id="create-project-button" value="default">创建</button></div>
+    </form>
+  </dialog>
+  <script src="/app.js"></script>
+</body>
+</html>

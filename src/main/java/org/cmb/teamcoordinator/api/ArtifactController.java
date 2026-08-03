@@ -1,0 +1,54 @@
+package org.cmb.teamcoordinator.api;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.validation.Valid;
+import org.cmb.teamcoordinator.artifact.ArtifactService;
+import org.cmb.teamcoordinator.artifact.ArtifactUploadRequest;
+import org.cmb.teamcoordinator.artifact.ArtifactView;
+import org.cmb.teamcoordinator.project.IdentityProvider;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/api/v1/projects/{projectId}/artifacts")
+public class ArtifactController {
+
+    private final ArtifactService service;
+    private final IdentityProvider identityProvider;
+
+    public ArtifactController(ArtifactService service, IdentityProvider identityProvider) {
+        this.service = service;
+        this.identityProvider = identityProvider;
+    }
+
+    @PostMapping("/uploads")
+    public ArtifactView reserve(
+            HttpServletRequest servletRequest,
+            @PathVariable String projectId,
+            @Valid @RequestBody ArtifactUploadRequest request) {
+        return service.reserve(
+                identityProvider.currentIdentity(servletRequest), projectId, request);
+    }
+
+    @PostMapping("/{artifactId}/complete")
+    public ArtifactView complete(
+            HttpServletRequest servletRequest,
+            @PathVariable String projectId,
+            @PathVariable String artifactId) {
+        return service.complete(
+                identityProvider.currentIdentity(servletRequest), projectId, artifactId);
+    }
+
+    @GetMapping("/{artifactId}")
+    public ArtifactView get(
+            HttpServletRequest servletRequest,
+            @PathVariable String projectId,
+            @PathVariable String artifactId) {
+        return service.get(
+                identityProvider.currentIdentity(servletRequest), projectId, artifactId);
+    }
+}

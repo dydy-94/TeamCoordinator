@@ -1,0 +1,15 @@
+package org.cmb.teamcoordinator.coordinator;
+
+public enum ProjectEventType {
+    COORDINATOR_ANALYZING,
+    PLAN_CREATED,
+    PLAN_REVISED,
+    TASK_STARTED,
+    TASK_PROGRESS_UPDATED,
+    TASK_WAITING_HUMAN,
+    TASK_SUCCEEDED,
+    TASK_FAILED,
+    ARTIFACT_CREATED,
+    FINAL_RESPONSE,
+    MESSAGE_ACCEPTED_INTERNAL
+}

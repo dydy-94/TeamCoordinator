@@ -1,0 +1,23 @@
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+  datasource:
+    url: jdbc:h2:mem:teamcoordinator;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  flyway:
+    enabled: true
+
+digital-team:
+  execution:
+    worker-interval-ms: 60000
+  events:
+    database-poll-interval-ms: 60000
+  storage:
+    type: memory
+
+logging:
+  level:
+    com.networknt.schema: WARN
