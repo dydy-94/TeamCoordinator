@@ -58,7 +58,11 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
 
         String sessionId = "mock-run-" + UUID.randomUUID().toString();
         List<AgentRunEvent> events = new ArrayList<>();
-        events.add(new AgentRunEvent(sessionId, 1, "RUN_ACCEPTED", "ACCEPTED", "Mock expert run accepted."));
+        AgentRunEvent accepted = new AgentRunEvent(
+                sessionId, 1, "RUN_ACCEPTED", "ACCEPTED",
+                "Mock expert run accepted.");
+        accepted.getPayload().put("businessSessionId", request.getBusinessSessionId());
+        events.add(accepted);
         events.add(new AgentRunEvent(sessionId, 2, "RUN_PROGRESS", "RUNNING", "Mock expert is processing the task."));
 
         String normalizedTask = request.getTaskText() == null ? "" : request.getTaskText().toLowerCase();
@@ -85,6 +89,8 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
         } else {
             AgentRunEvent result = new AgentRunEvent(sessionId, 3, "RUN_SUCCEEDED", "SUCCEEDED", "Mock expert completed the task.");
             result.getPayload().put("expertId", request.getExpertId());
+            result.getPayload().put(
+                    "businessSessionId", request.getBusinessSessionId());
             if (!normalizedTask.contains("invalid-result")) {
                 result.getPayload().put("resultText", "Mock result for: " + request.getTaskText());
             }

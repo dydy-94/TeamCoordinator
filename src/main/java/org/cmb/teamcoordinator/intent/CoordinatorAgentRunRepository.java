@@ -19,14 +19,14 @@ public class CoordinatorAgentRunRepository {
 
     public CoordinatorAgentRun createOrLoad(
             RequestIdentity identity, String projectId, String messageId,
-            String runKey, String contextJson) {
+            String runKey, String contextJson, String businessSessionId) {
         try {
             jdbc.update(
                     "INSERT INTO coordinator_agent_run "
-                            + "(id, tenant_id, project_id, message_id, run_key, context_json) "
-                            + "VALUES (?, ?, ?, ?, ?, ?)",
+                            + "(id, tenant_id, project_id, message_id, run_key, context_json, "
+                            + "business_session_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
                     "coordinator-run-" + UUID.randomUUID(), identity.getTenantId(), projectId,
-                    messageId, runKey, contextJson);
+                    messageId, runKey, contextJson, businessSessionId);
         } catch (DuplicateKeyException ignored) {
             // Another coordinator instance won creation; both load the same durable run.
         }
@@ -36,6 +36,7 @@ public class CoordinatorAgentRunRepository {
     public CoordinatorAgentRun find(String tenantId, String runKey) {
         List<CoordinatorAgentRun> rows = jdbc.query(
                 "SELECT id, session_id, stage, status, last_sequence, context_json, "
+                        + "business_session_id, "
                         + "invalid_output, output_json FROM coordinator_agent_run "
                         + "WHERE tenant_id = ? AND run_key = ?",
                 (rs, row) -> {
@@ -48,6 +49,7 @@ public class CoordinatorAgentRunRepository {
                     run.setContextJson(rs.getString("context_json"));
                     run.setInvalidOutput(rs.getString("invalid_output"));
                     run.setOutputJson(rs.getString("output_json"));
+                    run.setBusinessSessionId(rs.getString("business_session_id"));
                     return run;
                 }, tenantId, runKey);
         return rows.isEmpty() ? null : rows.get(0);

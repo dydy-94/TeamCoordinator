@@ -35,9 +35,9 @@ public class CoordinatorAgentClient {
 
     public Result execute(
             RequestIdentity identity, String projectId, String messageId, String runKey,
-            String prompt, IntentAnalysisContext context) {
+            String businessSessionId, String prompt, IntentAnalysisContext context) {
         CoordinatorAgentRun run = runs.createOrLoad(
-                identity, projectId, messageId, runKey, write(context));
+                identity, projectId, messageId, runKey, write(context), businessSessionId);
         if ("SUCCEEDED".equals(run.getStatus()) || "FAILED".equals(run.getStatus())) {
             return new Result(true, run.getOutputJson(), "REPAIR".equals(run.getStage()));
         }
@@ -47,7 +47,7 @@ public class CoordinatorAgentClient {
         }
 
         List<AgentRunEvent> events = agentCore.streamEvents(
-                run.getSessionId(), run.getLastSequence());
+                run.getSessionId(), run.getLastSequence(), run.getBusinessSessionId());
         events.sort(Comparator.comparingLong(AgentRunEvent::getSequence));
         for (AgentRunEvent event : events) {
             if ("RUN_SUCCEEDED".equals(event.getType())) {
@@ -84,6 +84,7 @@ public class CoordinatorAgentClient {
         request.setStructuredInput(input);
         request.setAttachmentRefs(context.getAttachmentRefs());
         request.setIdempotencyKey(run.getId() + ":" + run.getStage());
+        request.setBusinessSessionId(run.getBusinessSessionId());
         AgentRunResponse response = agentCore.submitRun(request);
         runs.saveSession(run.getId(), run.getStage(), response.getSessionId());
     }

@@ -9,6 +9,7 @@ public class DispatchWork {
     private String tenantId;
     private String projectId;
     private String conversationId;
+    private String businessSessionId;
     private String messageId;
     private String userId;
     private String text;
@@ -22,6 +23,8 @@ public class DispatchWork {
     public void setProjectId(String value) { this.projectId = value; }
     public String getConversationId() { return conversationId; }
     public void setConversationId(String value) { this.conversationId = value; }
+    public String getBusinessSessionId() { return businessSessionId; }
+    public void setBusinessSessionId(String value) { this.businessSessionId = value; }
     public String getMessageId() { return messageId; }
     public void setMessageId(String value) { this.messageId = value; }
     public String getUserId() { return userId; }

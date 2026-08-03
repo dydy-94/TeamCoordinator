@@ -74,7 +74,8 @@ public class IntentAnalysisService {
             RequestIdentity identity, String projectId, IntentAnalysisRequest request) {
         String runKey = "direct-" + UUID.randomUUID();
         CoordinatorDecision decision = analyze(
-                identity, projectId, null, runKey, request);
+                identity, projectId, null, null, runKey,
+                "direct-session-" + UUID.randomUUID(), request);
         if (decision == null) {
             throw new IllegalStateException("Coordinator AgentCore run is still in progress.");
         }
@@ -82,18 +83,23 @@ public class IntentAnalysisService {
     }
 
     public CoordinatorDecision analyzeForDispatch(
-            RequestIdentity identity, String projectId, String messageId,
+            RequestIdentity identity, String projectId, String taskId,
+            String messageId, String businessSessionId,
             IntentAnalysisRequest request) {
-        return analyze(identity, projectId, messageId, "message-" + messageId, request);
+        return analyze(
+                identity, projectId, taskId, messageId, "message-" + messageId,
+                businessSessionId, request);
     }
 
     private CoordinatorDecision analyze(
-            RequestIdentity identity, String projectId, String messageId, String runKey,
+            RequestIdentity identity, String projectId, String taskId,
+            String messageId, String runKey, String businessSessionId,
             IntentAnalysisRequest request) {
         projectService.requireTaskInitiator(identity, projectId);
-        IntentAnalysisContext context = buildContext(identity, projectId, request);
+        IntentAnalysisContext context = buildContext(identity, projectId, taskId, request);
         CoordinatorAgentClient.Result agentResult = coordinatorAgent.execute(
-                identity, projectId, messageId, runKey, prompt, context);
+                identity, projectId, messageId, runKey,
+                businessSessionId, prompt, context);
         if (!agentResult.isComplete()) {
             return null;
         }
@@ -103,7 +109,8 @@ public class IntentAnalysisService {
         if (parsed == null && !repaired) {
             coordinatorAgent.prepareRepair(identity, runKey, output);
             agentResult = coordinatorAgent.execute(
-                    identity, projectId, messageId, runKey, prompt, context);
+                    identity, projectId, messageId, runKey,
+                    businessSessionId, prompt, context);
             if (!agentResult.isComplete()) {
                 return null;
             }
@@ -134,15 +141,18 @@ public class IntentAnalysisService {
     }
 
     private IntentAnalysisContext buildContext(
-            RequestIdentity identity, String projectId, IntentAnalysisRequest request) {
+            RequestIdentity identity, String projectId, String taskId,
+            IntentAnalysisRequest request) {
         ProjectView project = projectService.get(identity, projectId);
         IntentAnalysisContext context = new IntentAnalysisContext();
         context.setProjectName(project.getName());
         context.setProjectDescription(project.getDescription());
         context.setText(request.getText());
         context.setAttachmentRefs(request.getAttachmentRefs());
-        context.setRecentMessages(messageRepository.findRecentMessageTexts(
-                identity.getTenantId(), projectId, 10));
+        context.setRecentMessages(taskId == null
+                ? new ArrayList<>()
+                : messageRepository.findRecentMessageTexts(
+                        identity.getTenantId(), projectId, taskId, 10));
         context.setExperts(enabledExperts(project));
         List<MockFileDescriptor> attachments = new ArrayList<>();
         for (String reference : request.getAttachmentRefs()) {

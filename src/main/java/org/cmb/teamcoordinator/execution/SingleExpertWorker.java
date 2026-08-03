@@ -108,12 +108,13 @@ public class SingleExpertWorker {
         if (isTerminal(task.getStatus())) {
             return task;
         }
-        AgentRunEvent event = agentCore.cancelRun(task.getSessionId());
+        DispatchWork work = executionRepository.loadWorkForTask(
+                identity.getTenantId(), projectId, taskId);
+        AgentRunEvent event = agentCore.cancelRun(
+                task.getSessionId(), work.getBusinessSessionId());
         if (event == null) {
             throw ApiException.conflict("TASK_CANCEL_FAILED", "AgentCore run was not found.");
         }
-        DispatchWork work = executionRepository.loadWorkForTask(
-                identity.getTenantId(), projectId, taskId);
         if (executionRepository.recordEvent(identity.getTenantId(), taskId, event)) {
             applyEvent(work, task, event);
         }
@@ -132,7 +133,8 @@ public class SingleExpertWorker {
         request.setText(work.getText());
         request.setAttachmentRefs(work.getAttachmentRefs());
         CoordinatorDecision decision = analysisService.analyzeForDispatch(
-                identity, work.getProjectId(), work.getMessageId(), request);
+                identity, work.getProjectId(), work.getConversationId(),
+                work.getMessageId(), work.getBusinessSessionId(), request);
         if (decision == null) {
             executionRepository.releaseDispatch(work.getDispatchId());
             return;
@@ -214,7 +216,14 @@ public class SingleExpertWorker {
         inputRefs.addAll(artifactRepository.findAvailableStorageKeys(
                 task.getPlanId(), task.getDependencies()));
         runRequest.setAttachmentRefs(inputRefs);
+        runRequest.setRequiredTools(
+                java.util.Collections.singletonList("upload_artifact"));
+        Map<String, String> toolContext = new HashMap<>();
+        toolContext.put("projectId", work.getProjectId());
+        toolContext.put("taskId", work.getConversationId());
+        runRequest.setToolContext(toolContext);
         runRequest.setIdempotencyKey(task.getRequestId());
+        runRequest.setBusinessSessionId(work.getBusinessSessionId());
         AgentRunResponse response = agentCore.submitRun(runRequest);
         executionRepository.saveSession(task.getId(), response.getSessionId());
         emit(work, ProjectEventType.TASK_STARTED, "Expert " + expertId + " accepted the task.");
@@ -222,8 +231,11 @@ public class SingleExpertWorker {
 
     private void consumeEvents(DispatchWork work, TaskRecord task) {
         List<AgentRunEvent> events = new ArrayList<>(
-                agentCore.streamEvents(task.getSessionId(), task.getLastSequence()));
-        if (events.isEmpty() && agentCore.getRunStatus(task.getSessionId()) == null) {
+                agentCore.streamEvents(
+                        task.getSessionId(), task.getLastSequence(),
+                        work.getBusinessSessionId()));
+        if (events.isEmpty() && agentCore.getRunStatus(
+                task.getSessionId(), work.getBusinessSessionId()) == null) {
             AgentRunEvent lost = new AgentRunEvent(
                     task.getSessionId(),
                     task.getLastSequence() + 1,
@@ -378,6 +390,11 @@ public class SingleExpertWorker {
 
     private List<String> registerArtifacts(
             DispatchWork work, TaskRecord task, AgentRunEvent event) {
+        Object registered = event.getPayload().get("artifactIds");
+        if (registered instanceof List) {
+            return artifactService.acceptAgentArtifacts(
+                    work, task, (List<?>) registered);
+        }
         Object value = event.getPayload().get("artifactFileIds");
         if (!(value instanceof List)) {
             return java.util.Collections.emptyList();
@@ -403,7 +420,9 @@ public class SingleExpertWorker {
                 type,
                 EventVisibility.PUBLIC,
                 payload);
-        streamHub.publish(work.getTenantId(), work.getProjectId(), event);
+        streamHub.publish(
+                work.getTenantId(), work.getProjectId(),
+                work.getConversationId(), event);
     }
 
     private void emitHumanRequest(
@@ -422,7 +441,9 @@ public class SingleExpertWorker {
                 ProjectEventType.TASK_WAITING_HUMAN,
                 EventVisibility.PUBLIC,
                 payload);
-        streamHub.publish(work.getTenantId(), work.getProjectId(), event);
+        streamHub.publish(
+                work.getTenantId(), work.getProjectId(),
+                work.getConversationId(), event);
     }
 
     private boolean isTerminal(String status) {

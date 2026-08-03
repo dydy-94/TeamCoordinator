@@ -16,9 +16,8 @@
     <version>1.0-SNAPSHOT</version>
 
     <properties>
-        <java.version>1.8</java.version>
-        <maven.compiler.source>1.8</maven.compiler.source>
-        <maven.compiler.target>1.8</maven.compiler.target>
+        <java.version>21</java.version>
+        <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <jacoco.version>0.8.11</jacoco.version>
         <testcontainers.version>1.19.8</testcontainers.version>
@@ -143,44 +142,23 @@
                 </dependencies>
                 <executions>
                     <execution>
-                        <id>enforce-java-8-compatible-build</id>
+                        <id>enforce-java-21-build</id>
                         <goals>
                             <goal>enforce</goal>
                         </goals>
                         <configuration>
                             <rules>
                                 <requireJavaVersion>
-                                    <version>[1.8,)</version>
+                                    <version>[21,22)</version>
                                 </requireJavaVersion>
                                 <enforceBytecodeVersion>
-                                    <maxJdkVersion>8</maxJdkVersion>
+                                    <maxJdkVersion>21</maxJdkVersion>
                                     <ignoredScopes>
                                         <ignoredScope>test</ignoredScope>
                                     </ignoredScopes>
                                 </enforceBytecodeVersion>
                             </rules>
                         </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>animal-sniffer-maven-plugin</artifactId>
-                <version>1.23</version>
-                <configuration>
-                    <signature>
-                        <groupId>org.codehaus.mojo.signature</groupId>
-                        <artifactId>java18</artifactId>
-                        <version>1.0</version>
-                    </signature>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>check-java-8-api</id>
-                        <phase>verify</phase>
-                        <goals>
-                            <goal>check</goal>
-                        </goals>
                     </execution>
                 </executions>
             </plugin>

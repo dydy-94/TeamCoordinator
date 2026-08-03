@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.UUID;
+import java.util.List;
 import org.cmb.teamcoordinator.TeamCoordinatorApplication;
 import org.cmb.teamcoordinator.coordinator.EventVisibility;
 import org.cmb.teamcoordinator.coordinator.MessageEventRepository;
@@ -47,10 +48,12 @@ class ProjectMessageEventIntegrationTest {
     @Test
     void persistsIdempotentMessageAndReplaysEventsAfterCursor() throws Exception {
         String projectId = createProject("message-owner");
+        String taskId = createTask(projectId);
         String requestBody = "{\"client_message_id\":\"client-1\",\"text\":\"analyze this\","
                 + "\"attachment_refs\":[\"file-1\"],\"idempotency_key\":\"idem-1\"}";
 
-        String first = mockMvc.perform(post("/api/v1/projects/" + projectId + "/messages")
+        String first = mockMvc.perform(post("/api/v1/projects/" + projectId
+                        + "/tasks/" + taskId + "/messages")
                         .headers(identity("tenant-message", "message-owner"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
@@ -59,7 +62,8 @@ class ProjectMessageEventIntegrationTest {
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
-        String duplicate = mockMvc.perform(post("/api/v1/projects/" + projectId + "/messages")
+        String duplicate = mockMvc.perform(post("/api/v1/projects/" + projectId
+                        + "/tasks/" + taskId + "/messages")
                         .headers(identity("tenant-message", "message-owner"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
@@ -86,7 +90,8 @@ class ProjectMessageEventIntegrationTest {
         assertEquals(Integer.valueOf(1), messageCount);
         assertEquals(Integer.valueOf(1), dispatchCount);
 
-        MvcResult stream = mockMvc.perform(get("/api/v1/projects/" + projectId + "/events")
+        MvcResult stream = mockMvc.perform(get("/api/v1/projects/" + projectId
+                        + "/tasks/" + taskId + "/events")
                         .headers(identity("tenant-message", "message-owner"))
                         .header("Last-Event-ID", "0"))
                 .andExpect(request().asyncStarted())
@@ -97,7 +102,8 @@ class ProjectMessageEventIntegrationTest {
         assertTrue(events.contains("id:2"));
         assertTrue(!events.contains("MESSAGE_ACCEPTED_INTERNAL"));
 
-        MvcResult afterCursor = mockMvc.perform(get("/api/v1/projects/" + projectId + "/events")
+        MvcResult afterCursor = mockMvc.perform(get("/api/v1/projects/" + projectId
+                        + "/tasks/" + taskId + "/events")
                         .headers(identity("tenant-message", "message-owner"))
                         .header("Last-Event-ID", "2"))
                 .andExpect(request().asyncStarted())
@@ -106,7 +112,8 @@ class ProjectMessageEventIntegrationTest {
 
         String liveRequest = "{\"client_message_id\":\"client-2\",\"text\":\"follow up\","
                 + "\"attachment_refs\":[],\"idempotency_key\":\"idem-2\"}";
-        mockMvc.perform(post("/api/v1/projects/" + projectId + "/messages")
+        mockMvc.perform(post("/api/v1/projects/" + projectId
+                        + "/tasks/" + taskId + "/messages")
                         .headers(identity("tenant-message", "message-owner"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(liveRequest))
@@ -118,7 +125,7 @@ class ProjectMessageEventIntegrationTest {
         eventRepository.insertEvent(
                 new RequestIdentity("tenant-message", "remote-instance"),
                 projectId,
-                firstJson.get("conversationId").asText(),
+                taskId,
                 null,
                 ProjectEventType.PLAN_CREATED,
                 EventVisibility.PUBLIC,
@@ -128,7 +135,8 @@ class ProjectMessageEventIntegrationTest {
         assertTrue(databaseEvents.contains("event:PLAN_CREATED"));
         assertTrue(databaseEvents.contains("id:5"));
 
-        mockMvc.perform(get("/api/v1/projects/" + projectId + "/events")
+        mockMvc.perform(get("/api/v1/projects/" + projectId
+                        + "/tasks/" + taskId + "/events")
                         .headers(identity("tenant-message", "outsider")))
                 .andExpect(status().isNotFound());
     }
@@ -137,8 +145,9 @@ class ProjectMessageEventIntegrationTest {
     void serializesMessagesWithinOneProjectAcrossInstances() throws Exception {
         jdbc.update("UPDATE coordinator_dispatch SET status = 'COMPLETED'");
         String projectId = createProject("message-owner");
-        submit(projectId, "serial-client-1", "first");
-        submit(projectId, "serial-client-2", "second");
+        String taskId = createTask(projectId);
+        submit(projectId, taskId, "serial-client-1", "first");
+        submit(projectId, taskId, "serial-client-2", "second");
 
         DispatchWork first = executionRepository.claimNext("instance-a", 30);
         assertEquals(projectId, first.getProjectId());
@@ -156,8 +165,44 @@ class ProjectMessageEventIntegrationTest {
         assertTrue(!first.getDispatchId().equals(second.getDispatchId()));
     }
 
-    private void submit(String projectId, String clientId, String text) throws Exception {
-        mockMvc.perform(post("/api/v1/projects/" + projectId + "/messages")
+    @Test
+    void isolatesSessionsMessagesAndEventsBetweenTasksInOneProject() throws Exception {
+        String projectId = createProject("message-owner");
+        String firstTask = createTask(projectId);
+        String secondTask = createTask(projectId);
+        submit(projectId, firstTask, "task-one-message", "first task only");
+        submit(projectId, secondTask, "task-two-message", "second task only");
+
+        String firstSession = jdbc.queryForObject(
+                "SELECT session_id FROM project_conversation WHERE id = ?",
+                String.class, firstTask);
+        String secondSession = jdbc.queryForObject(
+                "SELECT session_id FROM project_conversation WHERE id = ?",
+                String.class, secondTask);
+        assertTrue(!firstSession.equals(secondSession));
+
+        MvcResult firstStream = mockMvc.perform(get("/api/v1/projects/" + projectId
+                        + "/tasks/" + firstTask + "/events")
+                        .headers(identity("tenant-message", "message-owner"))
+                        .header("Last-Event-ID", "0"))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+        String firstEvents = firstStream.getResponse().getContentAsString();
+        assertTrue(firstEvents.contains("\"taskId\":\"" + firstTask + "\""));
+        assertTrue(!firstEvents.contains("\"taskId\":\"" + secondTask + "\""));
+
+        List<String> firstHistory = eventRepository.findRecentMessageTexts(
+                "tenant-message", projectId, firstTask, 10);
+        List<String> secondHistory = eventRepository.findRecentMessageTexts(
+                "tenant-message", projectId, secondTask, 10);
+        assertEquals(java.util.Collections.singletonList("first task only"), firstHistory);
+        assertEquals(java.util.Collections.singletonList("second task only"), secondHistory);
+    }
+
+    private void submit(
+            String projectId, String taskId, String clientId, String text) throws Exception {
+        mockMvc.perform(post("/api/v1/projects/" + projectId
+                        + "/tasks/" + taskId + "/messages")
                         .headers(identity("tenant-message", "message-owner"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"client_message_id\":\"" + clientId
@@ -165,6 +210,17 @@ class ProjectMessageEventIntegrationTest {
                                 + "\",\"attachment_refs\":[],\"idempotency_key\":\""
                                 + clientId + "\"}"))
                 .andExpect(status().isAccepted());
+    }
+
+    private String createTask(String projectId) throws Exception {
+        String body = mockMvc.perform(post("/api/v1/projects/" + projectId + "/tasks")
+                        .headers(identity("tenant-message", "message-owner"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Conversation task\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.sessionId").exists())
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(body).get("taskId").asText();
     }
 
     private String createProject(String owner) throws Exception {

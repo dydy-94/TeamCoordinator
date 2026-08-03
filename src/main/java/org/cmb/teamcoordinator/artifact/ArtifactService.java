@@ -1,6 +1,8 @@
 package org.cmb.teamcoordinator.artifact;
 
 import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import org.cmb.teamcoordinator.artifact.ArtifactRepository.ArtifactRecord;
 import org.cmb.teamcoordinator.common.ApiException;
@@ -71,6 +73,64 @@ public class ArtifactService {
         projectService.get(identity, projectId);
         ArtifactRecord artifact = require(identity, projectId, artifactId);
         return toView(artifact, "AVAILABLE".equals(artifact.status));
+    }
+
+    @Transactional
+    public ArtifactView uploadFromAgent(
+            String projectId, AgentArtifactUploadContext context,
+            String fileName, String mediaType, byte[] content) {
+        if (fileName == null || fileName.trim().isEmpty()) {
+            throw ApiException.badRequest(
+                    "ARTIFACT_FILE_NAME_REQUIRED", "Uploaded file must have a file name.");
+        }
+        if (content == null || content.length == 0) {
+            throw ApiException.badRequest(
+                    "ARTIFACT_FILE_EMPTY", "Uploaded file must not be empty.");
+        }
+        if (content.length > MAX_SIZE) {
+            throw ApiException.badRequest(
+                    "ARTIFACT_TOO_LARGE", "Artifact exceeds the maximum size.");
+        }
+        String normalizedMediaType = mediaType == null || mediaType.trim().isEmpty()
+                ? "application/octet-stream" : mediaType;
+        MockFileDescriptor file = fileStore.reserve(fileName, normalizedMediaType);
+        try {
+            fileStore.put(file.getFileId(), content);
+            ArtifactRecord artifact = new ArtifactRecord();
+            artifact.id = "artifact-" + UUID.randomUUID();
+            artifact.projectId = projectId;
+            artifact.taskId = context.getCoordinatorTaskId();
+            artifact.expertRunId = context.getAgentRunId();
+            artifact.version = repository.nextVersion(projectId, fileName);
+            artifact.storageKey = file.getFileId();
+            artifact.fileName = fileName;
+            artifact.mediaType = normalizedMediaType;
+            artifact.status = "UPLOADING";
+            repository.insert(
+                    artifact, context.getTenantId(), "agent:" + context.getAgentId());
+            repository.complete(artifact.id, content.length, sha256(content));
+            return toView(
+                    repository.find(context.getTenantId(), projectId, artifact.id), true);
+        } catch (RuntimeException ex) {
+            fileStore.delete(file.getFileId());
+            throw ex;
+        }
+    }
+
+    public List<String> acceptAgentArtifacts(
+            DispatchWork work, TaskRecord task, List<?> artifactIds) {
+        List<String> result = new ArrayList<>();
+        for (Object value : artifactIds) {
+            String artifactId = String.valueOf(value);
+            if (!repository.isAvailableAgentArtifact(
+                    work.getTenantId(), work.getProjectId(), task.getId(),
+                    task.getSessionId(), artifactId)) {
+                throw new IllegalStateException(
+                        "Agent returned an unavailable or unrelated artifact: " + artifactId);
+            }
+            result.add(artifactId);
+        }
+        return result;
     }
 
     @Transactional

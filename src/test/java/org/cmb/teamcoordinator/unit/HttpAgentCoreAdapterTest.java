@@ -3,6 +3,8 @@ package org.cmb.teamcoordinator.unit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.springframework.test.web.client.ExpectedCount.once;
+import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -40,6 +42,11 @@ class HttpAgentCoreAdapterTest {
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(header("Content-Type", MediaType.APPLICATION_JSON_VALUE))
                 .andExpect(header("X-Agent-Token", "secret"))
+                .andExpect(header("X-Session-Id", "business-session-1"))
+                .andExpect(content().string(
+                        containsString("\"requiredTools\":[\"upload_artifact\"]")))
+                .andExpect(content().string(
+                        containsString("\"toolContext\":{\"taskId\":\"task-1\"}")))
                 .andRespond(withSuccess(
                         "{\"sessionId\":\"session-1\",\"status\":\"ACCEPTED\"}",
                         MediaType.APPLICATION_JSON));
@@ -55,17 +62,21 @@ class HttpAgentCoreAdapterTest {
                 .andExpect(method(HttpMethod.GET))
                 .andExpect(header("Content-Type", MediaType.APPLICATION_JSON_VALUE))
                 .andExpect(header("Accept", MediaType.TEXT_EVENT_STREAM_VALUE))
+                .andExpect(header("X-Session-Id", "business-session-1"))
                 .andRespond(withSuccess(sse, MediaType.TEXT_EVENT_STREAM));
         server.expect(once(), requestTo("http://agentcore.test/api/runs/session-1"))
                 .andExpect(method(HttpMethod.GET))
+                .andExpect(header("X-Session-Id", "business-session-1"))
                 .andRespond(withSuccess(
                         "{\"sessionId\":\"session-1\",\"sequence\":2,"
                                 + "\"type\":\"RUN_SUCCEEDED\",\"status\":\"SUCCEEDED\"}",
                         MediaType.APPLICATION_JSON));
         server.expect(once(), requestTo("http://agentcore.test/api/runs/missing"))
+                .andExpect(header("X-Session-Id", "business-session-1"))
                 .andRespond(withStatus(HttpStatus.NOT_FOUND));
         server.expect(once(), requestTo("http://agentcore.test/api/runs/session-1/cancel"))
                 .andExpect(method(HttpMethod.POST))
+                .andExpect(header("X-Session-Id", "business-session-1"))
                 .andRespond(withSuccess(
                         "{\"sessionId\":\"session-1\",\"sequence\":3,"
                                 + "\"type\":\"RUN_CANCELLED\",\"status\":\"CANCELLED\"}",
@@ -74,16 +85,22 @@ class HttpAgentCoreAdapterTest {
         AgentRunRequest request = new AgentRunRequest();
         request.setExpertId("expert-analysis");
         request.setTaskText("analyze");
+        request.setRequiredTools(java.util.Collections.singletonList("upload_artifact"));
+        request.setToolContext(java.util.Collections.singletonMap("taskId", "task-1"));
+        request.setBusinessSessionId("business-session-1");
         AgentRunResponse submitted = adapter.submitRun(request);
         assertEquals("session-1", submitted.getSessionId());
-        List<AgentRunEvent> events = adapter.streamEvents("session-1", 0L);
+        List<AgentRunEvent> events = adapter.streamEvents(
+                "session-1", 0L, "business-session-1");
         assertEquals(2, events.size());
         assertEquals("RUN_ACCEPTED", events.get(0).getType());
         assertEquals(1L, events.get(0).getSequence());
         assertEquals("session-1:1", events.get(0).getEventId());
-        assertEquals("SUCCEEDED", adapter.getRunStatus("session-1").getStatus());
-        assertNull(adapter.getRunStatus("missing"));
-        assertEquals("CANCELLED", adapter.cancelRun("session-1").getStatus());
+        assertEquals("SUCCEEDED", adapter.getRunStatus(
+                "session-1", "business-session-1").getStatus());
+        assertNull(adapter.getRunStatus("missing", "business-session-1"));
+        assertEquals("CANCELLED", adapter.cancelRun(
+                "session-1", "business-session-1").getStatus());
         server.verify();
     }
 }

@@ -25,6 +25,14 @@ public class ArtifactController {
         this.identityProvider = identityProvider;
     }
 
+    /**
+     * 上传文件
+     * 预留一个 Artifact，并获取 MinIO 预签名上传地址
+     * @param servletRequest
+     * @param projectId
+     * @param request
+     * @return
+     */
     @PostMapping("/uploads")
     public ArtifactView reserve(
             HttpServletRequest servletRequest,
@@ -34,6 +42,13 @@ public class ArtifactController {
                 identityProvider.currentIdentity(servletRequest), projectId, request);
     }
 
+    /**
+     * 通知 Coordinator 上传完成
+     * @param servletRequest
+     * @param projectId
+     * @param artifactId
+     * @return
+     */
     @PostMapping("/{artifactId}/complete")
     public ArtifactView complete(
             HttpServletRequest servletRequest,
@@ -43,6 +58,13 @@ public class ArtifactController {
                 identityProvider.currentIdentity(servletRequest), projectId, artifactId);
     }
 
+    /**
+     * 查询 Artifact 元数据并取得临时 downloadUrl
+     * @param servletRequest
+     * @param projectId
+     * @param artifactId
+     * @return
+     */
     @GetMapping("/{artifactId}")
     public ArtifactView get(
             HttpServletRequest servletRequest,

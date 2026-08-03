@@ -52,19 +52,25 @@ public class HttpAgentCoreAdapter implements AgentCoreAdapter {
         ResponseEntity<AgentRunResponse> response = restTemplate.exchange(
                 uri(properties.getSubmitPath()),
                 HttpMethod.POST,
-                new HttpEntity<>(request, jsonHeaders()),
+                new HttpEntity<>(request, jsonHeaders(request.getBusinessSessionId())),
                 AgentRunResponse.class);
         return response.getBody();
     }
 
     @Override
     public List<AgentRunEvent> streamEvents(String sessionId, Long afterSequence) {
+        return streamEvents(sessionId, afterSequence, null);
+    }
+
+    @Override
+    public List<AgentRunEvent> streamEvents(
+            String sessionId, Long afterSequence, String businessSessionId) {
         UriComponentsBuilder builder =
                 UriComponentsBuilder.fromUri(uri(path(properties.getStreamPath(), sessionId)));
         if (afterSequence != null) {
             builder.queryParam("afterSequence", afterSequence);
         }
-        HttpHeaders headers = jsonHeaders();
+        HttpHeaders headers = jsonHeaders(businessSessionId);
         headers.setAccept(Collections.singletonList(MediaType.TEXT_EVENT_STREAM));
         ResponseEntity<String> response = restTemplate.exchange(
                 builder.build(true).toUri(),
@@ -76,11 +82,16 @@ public class HttpAgentCoreAdapter implements AgentCoreAdapter {
 
     @Override
     public AgentRunEvent getRunStatus(String sessionId) {
+        return getRunStatus(sessionId, null);
+    }
+
+    @Override
+    public AgentRunEvent getRunStatus(String sessionId, String businessSessionId) {
         try {
             ResponseEntity<AgentRunEvent> response = restTemplate.exchange(
                     uri(path(properties.getStatusPath(), sessionId)),
                     HttpMethod.GET,
-                    new HttpEntity<Void>(jsonHeaders()),
+                    new HttpEntity<Void>(jsonHeaders(businessSessionId)),
                     AgentRunEvent.class);
             return response.getBody();
         } catch (HttpClientErrorException.NotFound ex) {
@@ -90,11 +101,16 @@ public class HttpAgentCoreAdapter implements AgentCoreAdapter {
 
     @Override
     public AgentRunEvent cancelRun(String sessionId) {
+        return cancelRun(sessionId, null);
+    }
+
+    @Override
+    public AgentRunEvent cancelRun(String sessionId, String businessSessionId) {
         try {
             ResponseEntity<AgentRunEvent> response = restTemplate.exchange(
                     uri(path(properties.getCancelPath(), sessionId)),
                     HttpMethod.POST,
-                    new HttpEntity<Void>(jsonHeaders()),
+                    new HttpEntity<Void>(jsonHeaders(businessSessionId)),
                     AgentRunEvent.class);
             return response.getBody();
         } catch (HttpClientErrorException.NotFound ex) {
@@ -105,13 +121,20 @@ public class HttpAgentCoreAdapter implements AgentCoreAdapter {
     @Override
     public AgentRunResponse resumeRun(
             String sessionId, String humanResponse, String idempotencyKey) {
+        return resumeRun(sessionId, humanResponse, idempotencyKey, null);
+    }
+
+    @Override
+    public AgentRunResponse resumeRun(
+            String sessionId, String humanResponse, String idempotencyKey,
+            String businessSessionId) {
         java.util.Map<String, String> body = new java.util.HashMap<>();
         body.put("human_response", humanResponse);
         body.put("idempotency_key", idempotencyKey);
         ResponseEntity<AgentRunResponse> response = restTemplate.exchange(
                 uri(path(properties.getResumePath(), sessionId)),
                 HttpMethod.POST,
-                new HttpEntity<>(body, jsonHeaders()),
+                new HttpEntity<>(body, jsonHeaders(businessSessionId)),
                 AgentRunResponse.class);
         return response.getBody();
     }
@@ -161,11 +184,14 @@ public class HttpAgentCoreAdapter implements AgentCoreAdapter {
         return result;
     }
 
-    private HttpHeaders jsonHeaders() {
+    private HttpHeaders jsonHeaders(String businessSessionId) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         if (properties.getAuthValue() != null && !properties.getAuthValue().isEmpty()) {
             headers.set(properties.getAuthHeader(), properties.getAuthValue());
+        }
+        if (businessSessionId != null && !businessSessionId.trim().isEmpty()) {
+            headers.set(properties.getSessionHeader(), businessSessionId);
         }
         return headers;
     }

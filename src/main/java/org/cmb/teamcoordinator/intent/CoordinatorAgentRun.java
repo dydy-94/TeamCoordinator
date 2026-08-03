@@ -10,6 +10,7 @@ public class CoordinatorAgentRun {
     private String contextJson;
     private String invalidOutput;
     private String outputJson;
+    private String businessSessionId;
 
     public String getId() { return id; }
     public void setId(String value) { this.id = value; }
@@ -27,4 +28,6 @@ public class CoordinatorAgentRun {
     public void setInvalidOutput(String value) { this.invalidOutput = value; }
     public String getOutputJson() { return outputJson; }
     public void setOutputJson(String value) { this.outputJson = value; }
+    public String getBusinessSessionId() { return businessSessionId; }
+    public void setBusinessSessionId(String value) { this.businessSessionId = value; }
 }

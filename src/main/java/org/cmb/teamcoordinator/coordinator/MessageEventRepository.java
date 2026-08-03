@@ -24,44 +24,24 @@ public class MessageEventRepository {
         this.objectMapper = objectMapper;
     }
 
-    public String getOrCreateConversation(RequestIdentity identity, String projectId) {
-        List<String> existing = jdbc.queryForList(
-                "SELECT id FROM project_conversation WHERE tenant_id = ? AND project_id = ?",
-                String.class,
-                identity.getTenantId(),
-                projectId);
-        if (!existing.isEmpty()) {
-            return existing.get(0);
-        }
-        String conversationId = "conversation-" + UUID.randomUUID();
-        try {
-            jdbc.update(
-                    "INSERT INTO project_conversation (id, tenant_id, project_id) VALUES (?, ?, ?)",
-                    conversationId,
-                    identity.getTenantId(),
-                    projectId);
-            return conversationId;
-        } catch (DuplicateKeyException ex) {
-            return jdbc.queryForObject(
-                    "SELECT id FROM project_conversation WHERE tenant_id = ? AND project_id = ?",
-                    String.class,
-                    identity.getTenantId(),
-                    projectId);
-        }
-    }
-
     public MessageAcceptedResponse findDuplicate(
-            RequestIdentity identity, String projectId, MessageRequest request) {
+            RequestIdentity identity, String projectId, String taskId,
+            MessageRequest request) {
         List<MessageAcceptedResponse> rows = jdbc.query(
-                "SELECT id, conversation_id, status FROM project_message "
-                        + "WHERE tenant_id = ? AND project_id = ? "
-                        + "AND (client_message_id = ? OR idempotency_key = ?) LIMIT 1",
+                "SELECT m.id, m.conversation_id, c.session_id, m.status "
+                        + "FROM project_message m JOIN project_conversation c "
+                        + "ON c.id = m.conversation_id "
+                        + "WHERE m.tenant_id = ? AND m.project_id = ? "
+                        + "AND m.conversation_id = ? "
+                        + "AND (m.client_message_id = ? OR m.idempotency_key = ?) LIMIT 1",
                 (rs, rowNum) -> new MessageAcceptedResponse(
                         rs.getString("id"),
                         rs.getString("conversation_id"),
+                        rs.getString("session_id"),
                         rs.getString("status")),
                 identity.getTenantId(),
                 projectId,
+                taskId,
                 request.getClientMessageId(),
                 request.getIdempotencyKey());
         return rows.isEmpty() ? null : rows.get(0);
@@ -90,34 +70,36 @@ public class MessageEventRepository {
                 "ACCEPTED");
     }
 
-    public long allocateSequence(String tenantId, String projectId) {
+    public long allocateSequence(String tenantId, String taskId) {
         try {
             jdbc.update(
-                    "INSERT INTO project_event_sequence (tenant_id, project_id, next_sequence) "
+                    "INSERT INTO conversation_event_sequence "
+                            + "(tenant_id, conversation_id, next_sequence) "
                             + "VALUES (?, ?, 2)",
                     tenantId,
-                    projectId);
+                    taskId);
             return 1L;
         } catch (DuplicateKeyException ignored) {
             for (int attempt = 0; attempt < 20; attempt++) {
                 Long next = jdbc.queryForObject(
-                        "SELECT next_sequence FROM project_event_sequence "
-                                + "WHERE tenant_id = ? AND project_id = ?",
+                        "SELECT next_sequence FROM conversation_event_sequence "
+                                + "WHERE tenant_id = ? AND conversation_id = ?",
                         Long.class,
                         tenantId,
-                        projectId);
+                        taskId);
                 int updated = jdbc.update(
-                        "UPDATE project_event_sequence SET next_sequence = ? "
-                                + "WHERE tenant_id = ? AND project_id = ? AND next_sequence = ?",
+                        "UPDATE conversation_event_sequence SET next_sequence = ? "
+                                + "WHERE tenant_id = ? AND conversation_id = ? "
+                                + "AND next_sequence = ?",
                         next + 1,
                         tenantId,
-                        projectId,
+                        taskId,
                         next);
                 if (updated == 1) {
                     return next;
                 }
             }
-            throw new IllegalStateException("Could not allocate a project event sequence.");
+            throw new IllegalStateException("Could not allocate a task event sequence.");
         }
     }
 
@@ -129,7 +111,7 @@ public class MessageEventRepository {
             ProjectEventType type,
             EventVisibility visibility,
             JsonNode payload) {
-        long sequence = allocateSequence(identity.getTenantId(), projectId);
+        long sequence = allocateSequence(identity.getTenantId(), conversationId);
         ProjectEvent event = new ProjectEvent();
         event.setId("event-" + UUID.randomUUID());
         event.setProjectId(projectId);
@@ -173,32 +155,38 @@ public class MessageEventRepository {
     }
 
     public List<ProjectEvent> findPublicEvents(
-            String tenantId, String projectId, long afterSequence) {
-        return findPublicEvents(tenantId, projectId, afterSequence, 1000);
+            String tenantId, String projectId, String taskId, long afterSequence) {
+        return findPublicEvents(tenantId, projectId, taskId, afterSequence, 1000);
     }
 
     public List<ProjectEvent> findPublicEvents(
-            String tenantId, String projectId, long afterSequence, int limit) {
+            String tenantId, String projectId, String taskId,
+            long afterSequence, int limit) {
         return jdbc.query(
                 "SELECT id, project_id, conversation_id, message_id, sequence, event_type, "
                         + "payload, created_at FROM project_event "
                         + "WHERE tenant_id = ? AND project_id = ? AND visibility = 'PUBLIC' "
+                        + "AND conversation_id = ? "
                         + "AND sequence > ? ORDER BY sequence LIMIT ?",
                 (rs, rowNum) -> mapEvent(rs),
                 tenantId,
                 projectId,
+                taskId,
                 afterSequence,
                 limit);
     }
 
-    public List<String> findRecentMessageTexts(String tenantId, String projectId, int limit) {
+    public List<String> findRecentMessageTexts(
+            String tenantId, String projectId, String taskId, int limit) {
         return jdbc.queryForList(
                 "SELECT message_text FROM project_message "
                         + "WHERE tenant_id = ? AND project_id = ? "
+                        + "AND conversation_id = ? "
                         + "ORDER BY created_at DESC LIMIT ?",
                 String.class,
                 tenantId,
                 projectId,
+                taskId,
                 limit);
     }
 

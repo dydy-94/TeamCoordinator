@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/projects/{projectId}/tasks")
+@RequestMapping("/api/v1/projects/{projectId}/expert-tasks")
 public class TaskController {
 
     private final SingleExpertWorker worker;
@@ -21,6 +21,13 @@ public class TaskController {
         this.identityProvider = identityProvider;
     }
 
+    /**
+     * 取消任务
+     * @param servletRequest
+     * @param projectId
+     * @param taskId
+     * @return
+     */
     @DeleteMapping("/{taskId}")
     public TaskRecord cancel(
             HttpServletRequest servletRequest,

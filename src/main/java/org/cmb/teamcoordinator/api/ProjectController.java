@@ -33,6 +33,12 @@ public class ProjectController {
         this.identityProvider = identityProvider;
     }
 
+    /**
+     * 创建项目
+     * @param servletRequest
+     * @param request
+     * @return
+     */
     @PostMapping
     public ResponseEntity<ProjectView> create(
             HttpServletRequest servletRequest, @Valid @RequestBody CreateProject request) {
@@ -40,11 +46,24 @@ public class ProjectController {
                 .body(projectService.create(identity(servletRequest), request));
     }
 
+    /**
+     * 查询项目详情
+     * @param request
+     * @param projectId
+     * @return
+     */
     @GetMapping("/{projectId}")
     public ProjectView get(HttpServletRequest request, @PathVariable String projectId) {
         return projectService.get(identity(request), projectId);
     }
 
+    /**
+     * 更新项目
+     * @param servletRequest
+     * @param projectId
+     * @param request
+     * @return
+     */
     @PatchMapping("/{projectId}")
     public ProjectView update(
             HttpServletRequest servletRequest,
@@ -53,6 +72,13 @@ public class ProjectController {
         return projectService.update(identity(servletRequest), projectId, request);
     }
 
+    /**
+     * 添加/更新项目成员
+     * @param servletRequest
+     * @param projectId
+     * @param request
+     * @return
+     */
     @PostMapping("/{projectId}/members")
     public ProjectView upsertMember(
             HttpServletRequest servletRequest,
@@ -61,6 +87,13 @@ public class ProjectController {
         return projectService.upsertMember(identity(servletRequest), projectId, request);
     }
 
+    /**
+     * 删除项目成员
+     * @param servletRequest
+     * @param projectId
+     * @param userId
+     * @return
+     */
     @DeleteMapping("/{projectId}/members/{userId}")
     public ResponseEntity<Void> removeMember(
             HttpServletRequest servletRequest,
@@ -70,6 +103,13 @@ public class ProjectController {
         return ResponseEntity.noContent().build();
     }
 
+    /**
+     * 更新专家列表
+     * @param servletRequest
+     * @param projectId
+     * @param request
+     * @return
+     */
     @PostMapping("/{projectId}/experts")
     public ProjectView upsertExpert(
             HttpServletRequest servletRequest,
@@ -78,6 +118,13 @@ public class ProjectController {
         return projectService.upsertExpert(identity(servletRequest), projectId, request);
     }
 
+    /**
+     * 删除专家
+     * @param servletRequest
+     * @param projectId
+     * @param expertId
+     * @return
+     */
     @DeleteMapping("/{projectId}/experts/{expertId}")
     public ResponseEntity<Void> removeExpert(
             HttpServletRequest servletRequest,

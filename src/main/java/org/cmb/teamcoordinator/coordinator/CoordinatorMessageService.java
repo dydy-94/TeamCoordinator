@@ -17,35 +17,40 @@ public class CoordinatorMessageService {
 
     private final ProjectService projectService;
     private final MessageEventRepository repository;
+    private final ConversationTaskService tasks;
     private final ProjectEventStreamHub streamHub;
     private final ObjectMapper objectMapper;
 
     public CoordinatorMessageService(
             ProjectService projectService,
             MessageEventRepository repository,
+            ConversationTaskService tasks,
             ProjectEventStreamHub streamHub,
             ObjectMapper objectMapper) {
         this.projectService = projectService;
         this.repository = repository;
+        this.tasks = tasks;
         this.streamHub = streamHub;
         this.objectMapper = objectMapper;
     }
 
     @Transactional
     public MessageAcceptedResponse accept(
-            RequestIdentity identity, String projectId, MessageRequest request) {
+            RequestIdentity identity, String projectId, String taskId,
+            MessageRequest request) {
         projectService.requireTaskInitiator(identity, projectId);
-        MessageAcceptedResponse duplicate = repository.findDuplicate(identity, projectId, request);
+        ConversationTaskView task = tasks.require(identity, projectId, taskId);
+        MessageAcceptedResponse duplicate = repository.findDuplicate(
+                identity, projectId, taskId, request);
         if (duplicate != null) {
             return duplicate;
         }
 
-        String conversationId = repository.getOrCreateConversation(identity, projectId);
         String messageId = "message-" + UUID.randomUUID();
         try {
-            repository.insertMessage(identity, projectId, conversationId, messageId, request);
+            repository.insertMessage(identity, projectId, taskId, messageId, request);
         } catch (DuplicateKeyException ex) {
-            return repository.findDuplicate(identity, projectId, request);
+            return repository.findDuplicate(identity, projectId, taskId, request);
         }
 
         ObjectNode internalPayload = objectMapper.createObjectNode();
@@ -53,7 +58,7 @@ public class CoordinatorMessageService {
         repository.insertEvent(
                 identity,
                 projectId,
-                conversationId,
+                taskId,
                 messageId,
                 ProjectEventType.MESSAGE_ACCEPTED_INTERNAL,
                 EventVisibility.INTERNAL,
@@ -65,33 +70,39 @@ public class CoordinatorMessageService {
         ProjectEvent publicEvent = repository.insertEvent(
                 identity,
                 projectId,
-                conversationId,
+                taskId,
                 messageId,
                 ProjectEventType.COORDINATOR_ANALYZING,
                 EventVisibility.PUBLIC,
                 publicPayload);
-        repository.insertDispatch(identity, projectId, conversationId, messageId);
-        publishAfterCommit(identity, projectId, publicEvent);
-        return new MessageAcceptedResponse(messageId, conversationId, "ACCEPTED");
+        repository.insertDispatch(identity, projectId, taskId, messageId);
+        publishAfterCommit(identity, projectId, taskId, publicEvent);
+        return new MessageAcceptedResponse(
+                messageId, taskId, task.getSessionId(), "ACCEPTED");
     }
 
     @Transactional(readOnly = true)
-    public void requireEventAccess(RequestIdentity identity, String projectId) {
-        projectService.get(identity, projectId);
+    public void requireEventAccess(
+            RequestIdentity identity, String projectId, String taskId) {
+        tasks.require(identity, projectId, taskId);
     }
 
     @Transactional(readOnly = true)
     public List<ProjectEvent> replayAuthorized(
-            RequestIdentity identity, String projectId, long afterSequence) {
-        return repository.findPublicEvents(identity.getTenantId(), projectId, afterSequence);
+            RequestIdentity identity, String projectId, String taskId,
+            long afterSequence) {
+        tasks.require(identity, projectId, taskId);
+        return repository.findPublicEvents(
+                identity.getTenantId(), projectId, taskId, afterSequence);
     }
 
     private void publishAfterCommit(
-            RequestIdentity identity, String projectId, ProjectEvent publicEvent) {
+            RequestIdentity identity, String projectId, String taskId,
+            ProjectEvent publicEvent) {
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                streamHub.publish(identity.getTenantId(), projectId, publicEvent);
+                streamHub.publish(identity.getTenantId(), projectId, taskId, publicEvent);
             }
         });
     }

@@ -25,6 +25,13 @@ public class IntentAnalysisController {
         this.identityProvider = identityProvider;
     }
 
+    /**
+     * 内部测试接口，用于诊断分析
+     * @param servletRequest
+     * @param projectId
+     * @param request
+     * @return
+     */
     @PostMapping
     public CoordinatorDecision analyze(
             HttpServletRequest servletRequest,

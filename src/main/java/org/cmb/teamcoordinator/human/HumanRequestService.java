@@ -9,6 +9,7 @@ import org.cmb.teamcoordinator.agentcore.AgentCoreAdapter;
 import org.cmb.teamcoordinator.agentcore.AgentRunRequest;
 import org.cmb.teamcoordinator.agentcore.AgentRunResponse;
 import org.cmb.teamcoordinator.execution.ExecutionRepository;
+import org.cmb.teamcoordinator.execution.DispatchWork;
 import org.cmb.teamcoordinator.execution.TaskRecord;
 import org.cmb.teamcoordinator.human.HumanRequestRepository.HumanRequestRecord;
 import org.cmb.teamcoordinator.project.ProjectMember;
@@ -94,14 +95,18 @@ public class HumanRequestService {
                 && request.getDecision() != HumanDecision.REJECT) {
             TaskRecord task = executionRepository.findTask(
                     identity.getTenantId(), projectId, record.taskId);
+            DispatchWork work = executionRepository.loadWorkForTask(
+                    identity.getTenantId(), projectId, record.taskId);
             String answer = request.getResponse().path("answer").asText();
             AgentRunResponse resumed = tryResume(
-                    task.getSessionId(), answer, request.getIdempotencyKey());
+                    task.getSessionId(), answer, request.getIdempotencyKey(),
+                    work.getBusinessSessionId());
             if (resumed == null) {
                 AgentRunRequest run = new AgentRunRequest();
                 run.setExpertId(task.getExpertId());
                 run.setTaskText(task.getObjective() + "\nHuman response: " + answer);
                 run.setIdempotencyKey(request.getIdempotencyKey() + ":new-run");
+                run.setBusinessSessionId(work.getBusinessSessionId());
                 resumed = agentCore.submitRun(run);
                 executionRepository.replaceSession(
                         task.getId(), resumed.getSessionId());
@@ -117,9 +122,11 @@ public class HumanRequestService {
     }
 
     private AgentRunResponse tryResume(
-            String sessionId, String answer, String idempotencyKey) {
+            String sessionId, String answer, String idempotencyKey,
+            String businessSessionId) {
         try {
-            return agentCore.resumeRun(sessionId, answer, idempotencyKey);
+            return agentCore.resumeRun(
+                    sessionId, answer, idempotencyKey, businessSessionId);
         } catch (RuntimeException ex) {
             return null;
         }

@@ -74,6 +74,35 @@ public class ArtifactRepository {
                 size, sha256, id);
     }
 
+    public AgentArtifactUploadContext findAgentUploadContext(
+            String projectId, String conversationId, String businessSessionId,
+            String agentRunId, String agentId) {
+        List<AgentArtifactUploadContext> rows = jdbc.query(
+                "SELECT t.tenant_id, t.id coordinator_task_id "
+                        + "FROM coordinator_task t "
+                        + "JOIN coordinator_plan p ON p.id = t.plan_id "
+                        + "JOIN project_conversation c ON c.id = p.conversation_id "
+                        + "WHERE t.project_id = ? AND p.conversation_id = ? "
+                        + "AND c.session_id = ? AND t.session_id = ? AND t.expert_id = ? "
+                        + "AND t.status IN ('RUNNING', 'WAITING_HUMAN')",
+                (rs, rowNum) -> new AgentArtifactUploadContext(
+                        rs.getString("tenant_id"), rs.getString("coordinator_task_id"),
+                        agentId, agentRunId),
+                projectId, conversationId, businessSessionId, agentRunId, agentId);
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
+    public boolean isAvailableAgentArtifact(
+            String tenantId, String projectId, String coordinatorTaskId,
+            String agentRunId, String artifactId) {
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM project_artifact WHERE tenant_id = ? "
+                        + "AND project_id = ? AND task_id = ? AND expert_run_id = ? "
+                        + "AND id = ? AND status = 'AVAILABLE'",
+                Integer.class, tenantId, projectId, coordinatorTaskId, agentRunId, artifactId);
+        return count != null && count == 1;
+    }
+
     public List<String> findAvailableStorageKeys(
             String planId, List<String> dependencyKeys) {
         if (dependencyKeys.isEmpty()) {

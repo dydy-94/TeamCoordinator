@@ -1,12 +1,14 @@
 package org.cmb.teamcoordinator.coordinator;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.Instant;
 
 public class ProjectEvent {
 
     private String id;
     private String projectId;
+    @JsonProperty("taskId")
     private String conversationId;
     private String messageId;
     private long sequence;

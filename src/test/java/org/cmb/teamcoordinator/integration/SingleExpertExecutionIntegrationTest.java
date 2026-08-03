@@ -86,6 +86,20 @@ class SingleExpertExecutionIntegrationTest {
                 projectId);
         assertEquals(Integer.valueOf(1), requestCount);
         assertEquals(Integer.valueOf(1), finalCount);
+        String businessSessionId = jdbc.queryForObject(
+                "SELECT c.session_id FROM project_conversation c "
+                        + "JOIN coordinator_dispatch d ON d.conversation_id = c.id "
+                        + "WHERE d.project_id = ?",
+                String.class, projectId);
+        assertEquals(businessSessionId, jdbc.queryForObject(
+                "SELECT business_session_id FROM coordinator_agent_run "
+                        + "WHERE project_id = ?",
+                String.class, projectId));
+        String resultJson = jdbc.queryForObject(
+                "SELECT result_json FROM coordinator_task WHERE id = ?",
+                String.class, task.getId());
+        assertTrue(resultJson.contains(
+                "\"businessSessionId\":\"" + businessSessionId + "\""));
     }
 
     @Test
@@ -101,7 +115,8 @@ class SingleExpertExecutionIntegrationTest {
         String cancelledProject = createProject();
         submitMessage(cancelledProject, "分析取消场景");
         TaskRecord running = runUntilTaskExists(cancelledProject);
-        mockMvc.perform(delete("/api/v1/projects/" + cancelledProject + "/tasks/" + running.getId())
+        mockMvc.perform(delete("/api/v1/projects/" + cancelledProject
+                        + "/expert-tasks/" + running.getId())
                         .headers(identity()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CANCELLED"));
@@ -128,7 +143,16 @@ class SingleExpertExecutionIntegrationTest {
     }
 
     private void submitMessage(String projectId, String text) throws Exception {
-        mockMvc.perform(post("/api/v1/projects/" + projectId + "/messages")
+        String taskBody = mockMvc.perform(post(
+                        "/api/v1/projects/" + projectId + "/tasks")
+                        .headers(identity())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Execution test\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String taskId = objectMapper.readTree(taskBody).get("taskId").asText();
+        mockMvc.perform(post("/api/v1/projects/" + projectId
+                        + "/tasks/" + taskId + "/messages")
                         .headers(identity())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"client_message_id\":\"client-" + UUID.randomUUID()

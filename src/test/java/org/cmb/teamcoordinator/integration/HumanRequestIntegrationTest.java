@@ -183,7 +183,16 @@ class HumanRequestIntegrationTest {
     }
 
     private void submit(String projectId, String text) throws Exception {
-        mockMvc.perform(post("/api/v1/projects/" + projectId + "/messages")
+        String taskBody = mockMvc.perform(post(
+                        "/api/v1/projects/" + projectId + "/tasks")
+                        .headers(identity())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Human test\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String taskId = objectMapper.readTree(taskBody).get("taskId").asText();
+        mockMvc.perform(post("/api/v1/projects/" + projectId
+                        + "/tasks/" + taskId + "/messages")
                         .headers(identity())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"client_message_id\":\"client-" + UUID.randomUUID()

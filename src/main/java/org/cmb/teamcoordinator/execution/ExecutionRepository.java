@@ -39,6 +39,7 @@ public class ExecutionRepository {
                         + "AND NOT EXISTS (SELECT 1 FROM coordinator_dispatch older "
                         + "WHERE older.tenant_id = d.tenant_id "
                         + "AND older.project_id = d.project_id "
+                        + "AND older.conversation_id = d.conversation_id "
                         + "AND older.status IN ('PENDING', 'RUNNING') "
                         + "AND (older.created_at < d.created_at "
                         + "OR (older.created_at = d.created_at AND older.id < d.id))) "
@@ -63,8 +64,10 @@ public class ExecutionRepository {
     public DispatchWork loadWork(String dispatchId) {
         return jdbc.queryForObject(
                 "SELECT d.id dispatch_id, d.tenant_id, d.project_id, d.conversation_id, "
-                        + "d.message_id, m.user_id, m.message_text, m.attachment_refs "
+                        + "d.message_id, m.user_id, m.message_text, m.attachment_refs, "
+                        + "c.session_id business_session_id "
                         + "FROM coordinator_dispatch d JOIN project_message m ON m.id = d.message_id "
+                        + "JOIN project_conversation c ON c.id = d.conversation_id "
                         + "WHERE d.id = ?",
                 (rs, rowNum) -> {
                     DispatchWork work = new DispatchWork();
@@ -72,6 +75,7 @@ public class ExecutionRepository {
                     work.setTenantId(rs.getString("tenant_id"));
                     work.setProjectId(rs.getString("project_id"));
                     work.setConversationId(rs.getString("conversation_id"));
+                    work.setBusinessSessionId(rs.getString("business_session_id"));
                     work.setMessageId(rs.getString("message_id"));
                     work.setUserId(rs.getString("user_id"));
                     work.setText(rs.getString("message_text"));

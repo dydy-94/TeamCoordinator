@@ -20,7 +20,7 @@ public class ProjectEventStreamHub {
     private static final int POLL_BATCH_SIZE = 200;
 
     private final MessageEventRepository repository;
-    private final Map<ProjectKey, CopyOnWriteArrayList<Subscriber>> subscribers =
+    private final Map<TaskKey, CopyOnWriteArrayList<Subscriber>> subscribers =
             new ConcurrentHashMap<>();
 
     public ProjectEventStreamHub(MessageEventRepository repository) {
@@ -30,9 +30,10 @@ public class ProjectEventStreamHub {
     public SseEmitter subscribe(
             String tenantId,
             String projectId,
+            String taskId,
             long afterSequence,
             Supplier<List<ProjectEvent>> replaySupplier) {
-        ProjectKey key = new ProjectKey(tenantId, projectId);
+        TaskKey key = new TaskKey(tenantId, projectId, taskId);
         SseEmitter emitter = new SseEmitter(30 * 60 * 1000L);
         Subscriber subscriber = new Subscriber(emitter, afterSequence);
         CopyOnWriteArrayList<Subscriber> projectSubscribers =
@@ -54,9 +55,10 @@ public class ProjectEventStreamHub {
         return emitter;
     }
 
-    public void publish(String tenantId, String projectId, ProjectEvent event) {
+    public void publish(
+            String tenantId, String projectId, String taskId, ProjectEvent event) {
         CopyOnWriteArrayList<Subscriber> projectSubscribers =
-                subscribers.get(new ProjectKey(tenantId, projectId));
+                subscribers.get(new TaskKey(tenantId, projectId, taskId));
         if (projectSubscribers == null) {
             return;
         }
@@ -74,7 +76,7 @@ public class ProjectEventStreamHub {
 
     @Scheduled(fixedDelayString = "${digital-team.events.database-poll-interval-ms:500}")
     public void pollDatabaseEvents() {
-        for (Map.Entry<ProjectKey, CopyOnWriteArrayList<Subscriber>> entry
+        for (Map.Entry<TaskKey, CopyOnWriteArrayList<Subscriber>> entry
                 : subscribers.entrySet()) {
             CopyOnWriteArrayList<Subscriber> projectSubscribers = entry.getValue();
             if (projectSubscribers.isEmpty()) {
@@ -86,10 +88,15 @@ public class ProjectEventStreamHub {
                 List<ProjectEvent> events = repository.findPublicEvents(
                         entry.getKey().tenantId,
                         entry.getKey().projectId,
+                        entry.getKey().taskId,
                         afterSequence,
                         POLL_BATCH_SIZE);
                 for (ProjectEvent event : events) {
-                    publish(entry.getKey().tenantId, entry.getKey().projectId, event);
+                        publish(
+                                entry.getKey().tenantId,
+                                entry.getKey().projectId,
+                                entry.getKey().taskId,
+                                event);
                 }
             } catch (RuntimeException ex) {
                 LOGGER.warn(
@@ -122,7 +129,7 @@ public class ProjectEventStreamHub {
     }
 
     private void remove(
-            ProjectKey key,
+            TaskKey key,
             CopyOnWriteArrayList<Subscriber> projectSubscribers,
             Subscriber subscriber) {
         projectSubscribers.remove(subscriber);
@@ -141,13 +148,15 @@ public class ProjectEventStreamHub {
         }
     }
 
-    private static final class ProjectKey {
+    private static final class TaskKey {
         private final String tenantId;
         private final String projectId;
+        private final String taskId;
 
-        private ProjectKey(String tenantId, String projectId) {
+        private TaskKey(String tenantId, String projectId, String taskId) {
             this.tenantId = tenantId;
             this.projectId = projectId;
+            this.taskId = taskId;
         }
 
         @Override
@@ -155,17 +164,18 @@ public class ProjectEventStreamHub {
             if (this == other) {
                 return true;
             }
-            if (!(other instanceof ProjectKey)) {
+            if (!(other instanceof TaskKey)) {
                 return false;
             }
-            ProjectKey that = (ProjectKey) other;
+            TaskKey that = (TaskKey) other;
             return Objects.equals(tenantId, that.tenantId)
-                    && Objects.equals(projectId, that.projectId);
+                    && Objects.equals(projectId, that.projectId)
+                    && Objects.equals(taskId, that.taskId);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(tenantId, projectId);
+            return Objects.hash(tenantId, projectId, taskId);
         }
     }
 }

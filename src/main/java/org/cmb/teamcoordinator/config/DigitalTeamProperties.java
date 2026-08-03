@@ -30,8 +30,10 @@ public class DigitalTeamProperties {
         private String cancelPath = "/runs/{sessionId}/cancel";
         private String resumePath = "/runs/{sessionId}/resume";
         private String coordinatorAgentId = "coordinator";
+        private String sessionHeader = "X-Session-Id";
         private String authHeader = "Authorization";
         private String authValue;
+        private String artifactToolToken;
         private int connectTimeoutMs = 5000;
         private int readTimeoutMs = 60000;
 
@@ -57,10 +59,14 @@ public class DigitalTeamProperties {
         public void setResumePath(String resumePath) { this.resumePath = resumePath; }
         public String getCoordinatorAgentId() { return coordinatorAgentId; }
         public void setCoordinatorAgentId(String value) { this.coordinatorAgentId = value; }
+        public String getSessionHeader() { return sessionHeader; }
+        public void setSessionHeader(String value) { this.sessionHeader = value; }
         public String getAuthHeader() { return authHeader; }
         public void setAuthHeader(String authHeader) { this.authHeader = authHeader; }
         public String getAuthValue() { return authValue; }
         public void setAuthValue(String authValue) { this.authValue = authValue; }
+        public String getArtifactToolToken() { return artifactToolToken; }
+        public void setArtifactToolToken(String value) { this.artifactToolToken = value; }
         public int getConnectTimeoutMs() { return connectTimeoutMs; }
         public void setConnectTimeoutMs(int value) { this.connectTimeoutMs = value; }
         public int getReadTimeoutMs() { return readTimeoutMs; }

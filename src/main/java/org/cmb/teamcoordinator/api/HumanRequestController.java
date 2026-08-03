@@ -25,6 +25,14 @@ public class HumanRequestController {
         this.identityProvider = identityProvider;
     }
 
+    /**
+     * HITL 用户输入消息
+     * @param servletRequest
+     * @param projectId
+     * @param requestId
+     * @param request
+     * @return
+     */
     @PostMapping("/{requestId}/responses")
     public HumanRequestView respond(
             HttpServletRequest servletRequest,

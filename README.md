@@ -1,6 +1,12 @@
 # TeamCoordinator
 
+Current business, SSE, AgentCore, and local mock contracts are documented in
+[`API_DOCUMENTATION.md`](API_DOCUMENTATION.md).
+
 MVP Spring Boot skeleton for the digital team coordinator service.
+
+The required build and runtime is JDK 21. Maven rejects other JDK major
+versions so local and CI builds use the same Java baseline.
 
 ## Local Dependencies
 
@@ -45,11 +51,14 @@ contract. The adapter will be replaced by X Identity Service in the deployed
 environment. OpenAPI JSON is available at `/v3/api-docs` and Swagger UI at
 `/swagger-ui.html`.
 
-Messages are submitted with `POST /api/v1/projects/{projectId}/messages`.
-Project events are streamed from `GET /api/v1/projects/{projectId}/events`;
-the endpoint supports the `Last-Event-ID` header for replay.
+Create each new conversation as a business Task with
+`POST /api/v1/projects/{projectId}/tasks`. The response contains the Task's
+stable business `sessionId`. Messages are submitted with
+`POST /api/v1/projects/{projectId}/tasks/{taskId}/messages`, and Task events
+are streamed from `GET /api/v1/projects/{projectId}/tasks/{taskId}/events`.
+The endpoint supports the `Last-Event-ID` header for replay.
 
-Each Coordinator instance polls MySQL only for projects with local SSE
+Each Coordinator instance polls MySQL only for Tasks with local SSE
 subscribers. This lets an SSE connection receive events written by another
 Coordinator instance without Redis Pub/Sub or Streams. The polling interval
 defaults to 500 ms and can be changed with
@@ -66,7 +75,11 @@ over either phase after the dispatch lease expires.
 
 The local worker interval defaults to 500 ms and can be changed with
 `EXECUTION_WORKER_INTERVAL_MS`. Tasks can be cancelled with
-`DELETE /api/v1/projects/{projectId}/tasks/{taskId}`.
+`DELETE /api/v1/projects/{projectId}/expert-tasks/{expertTaskId}`.
+
+The business Task `sessionId` is sent as `X-Session-Id` on every Coordinator
+and expert AgentCore request. AgentCore's returned run `sessionId` is separate
+and is used only to query that individual run.
 
 ### Real AgentCore
 
@@ -74,9 +87,18 @@ Set `AGENTCORE_MOCK_ENABLED=false` and provide:
 
 - `AGENTCORE_BASE_URL`
 - `AGENTCORE_AUTH_HEADER` and `AGENTCORE_AUTH_VALUE`
+- `AGENTCORE_ARTIFACT_TOOL_TOKEN`
 - `COORDINATOR_AGENT_ID` (defaults to `coordinator`)
+- `AGENTCORE_SESSION_HEADER` (defaults to `X-Session-Id`)
 - Optional `AGENTCORE_SUBMIT_PATH`, `AGENTCORE_STATUS_PATH`,
   `AGENTCORE_STREAM_PATH`, and `AGENTCORE_CANCEL_PATH`
+
+Register the AgentCore HTTP file tool `upload_artifact` against
+`POST /api/v1/agent-tools/projects/{projectId}/tasks/{taskId}/artifacts`.
+AgentCore sends the Agent-generated file as multipart field `file` and injects
+the configured tool token, business session, Agent run ID, and Agent ID.
+Coordinator stores the bytes in MinIO and returns an `artifactId`; neither the
+Agent nor AgentCore needs MinIO credentials.
 
 The HTTP adapter sends JSON request headers and accepts
 `text/event-stream` from the stream endpoint. To run the gated 20-run

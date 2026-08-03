@@ -11,6 +11,8 @@ spring:
     enabled: true
 
 digital-team:
+  agent-core:
+    artifact-tool-token: test-agentcore-tool-token
   execution:
     worker-interval-ms: 60000
   events:

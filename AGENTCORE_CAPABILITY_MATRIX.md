@@ -11,6 +11,7 @@ is enabled.
 | Coordinator agent | `expertId=coordinator`; returns a structured `decision` in the success payload | Agent ID configurable with `COORDINATOR_AGENT_ID`; pending verification |
 | Task input | `taskText`, `structuredInput`, `attachmentRefs` | Pending verification |
 | Run identity | Unique `mock-run-{uuid}`; retained for process lifetime | Pending verification |
+| Business session | One stable session per conversation Task; sent on every call as `X-Session-Id` | Header name configurable; pending verification |
 | Query run | `GET /mock/agentcore/runs/{sessionId}` | Configurable path implemented; pending verification |
 | Stream events | GET with JSON request headers; response is `text/event-stream` | SSE parser and cursor implemented; pending verification |
 | Event order | Monotonic `sequence`; consumers sort and deduplicate by sequence | Pending verification |
@@ -29,7 +30,7 @@ is enabled.
 | Metadata | File name, content type, size and SHA-256 checksum | Pending verification |
 | Access control | None in Step 0 Mock; project authorization is introduced in Step 2 | Pending verification |
 | Cleanup | In-memory data is removed when the process exits | Pending verification |
-| Expert artifact | Successful Run creates a downloadable `result.txt` | Pending verification |
+| Expert artifact | Registered `upload_artifact` multipart tool returns an `artifactId`; terminal Run references it through `artifactIds` | Mock integration verified; real AgentCore registration pending |
 
 ## Event Sample
 
