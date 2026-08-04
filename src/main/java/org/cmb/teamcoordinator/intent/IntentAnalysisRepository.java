@@ -3,17 +3,17 @@ package org.cmb.teamcoordinator.intent;
 import java.util.UUID;
 import org.cmb.teamcoordinator.human.HumanRequestRepository;
 import org.cmb.teamcoordinator.project.RequestIdentity;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.cmb.teamcoordinator.persistence.MyBatisExecutor;
 import org.springframework.stereotype.Repository;
 
 @Repository
 public class IntentAnalysisRepository {
 
-    private final JdbcTemplate jdbc;
+    private final MyBatisExecutor jdbc;
     private final HumanRequestRepository humanRequests;
 
     public IntentAnalysisRepository(
-            JdbcTemplate jdbc, HumanRequestRepository humanRequests) {
+            MyBatisExecutor jdbc, HumanRequestRepository humanRequests) {
         this.jdbc = jdbc;
         this.humanRequests = humanRequests;
     }

@@ -4,16 +4,16 @@ import java.sql.Timestamp;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.cmb.teamcoordinator.persistence.MyBatisExecutor;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public class PromptRepository {
 
-    private final JdbcTemplate jdbc;
+    private final MyBatisExecutor jdbc;
 
-    public PromptRepository(JdbcTemplate jdbc) {
+    public PromptRepository(MyBatisExecutor jdbc) {
         this.jdbc = jdbc;
     }
 
@@ -102,7 +102,7 @@ public class PromptRepository {
         }
     }
 
-    private PromptTemplateView map(java.sql.ResultSet rs) throws java.sql.SQLException {
+    private PromptTemplateView map(org.cmb.teamcoordinator.persistence.MyBatisRow rs) {
         PromptTemplateView value = new PromptTemplateView();
         value.setId(rs.getString("business_id"));
         value.setPromptKey(rs.getString("prompt_key"));

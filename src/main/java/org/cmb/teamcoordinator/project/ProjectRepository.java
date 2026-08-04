@@ -1,21 +1,20 @@
 package org.cmb.teamcoordinator.project;
 
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import org.cmb.teamcoordinator.persistence.MyBatisRow;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.RowMapper;
+import org.cmb.teamcoordinator.persistence.MyBatisExecutor;
+import org.cmb.teamcoordinator.persistence.MyBatisRowMapper;
 import org.springframework.stereotype.Repository;
 
 @Repository
 public class ProjectRepository {
 
-    private final JdbcTemplate jdbc;
+    private final MyBatisExecutor jdbc;
 
-    public ProjectRepository(JdbcTemplate jdbc) {
+    public ProjectRepository(MyBatisExecutor jdbc) {
         this.jdbc = jdbc;
     }
 
@@ -188,11 +187,11 @@ public class ProjectRepository {
                 detail);
     }
 
-    private RowMapper<ProjectRecord> projectMapper() {
+    private MyBatisRowMapper<ProjectRecord> projectMapper() {
         return (rs, rowNum) -> mapProject(rs);
     }
 
-    private ProjectRecord mapProject(ResultSet rs) throws SQLException {
+    private ProjectRecord mapProject(MyBatisRow rs) {
         ProjectRecord project = new ProjectRecord();
         project.setDatabaseId(rs.getLong("id"));
         project.setBusinessId(rs.getString("business_id"));

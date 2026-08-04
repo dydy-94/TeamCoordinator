@@ -2,24 +2,23 @@ package org.cmb.teamcoordinator.coordinator;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import org.cmb.teamcoordinator.persistence.MyBatisRow;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.cmb.teamcoordinator.project.RequestIdentity;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.cmb.teamcoordinator.persistence.MyBatisExecutor;
 import org.springframework.stereotype.Repository;
 
 @Repository
 public class MessageEventRepository {
 
-    private final JdbcTemplate jdbc;
+    private final MyBatisExecutor jdbc;
     private final ObjectMapper objectMapper;
 
-    public MessageEventRepository(JdbcTemplate jdbc, ObjectMapper objectMapper) {
+    public MessageEventRepository(MyBatisExecutor jdbc, ObjectMapper objectMapper) {
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
     }
@@ -188,7 +187,7 @@ public class MessageEventRepository {
                 limit);
     }
 
-    private ProjectEvent mapEvent(ResultSet rs) throws SQLException {
+    private ProjectEvent mapEvent(MyBatisRow rs) {
         ProjectEvent event = new ProjectEvent();
         event.setId(rs.getString("id"));
         event.setProjectId(rs.getString("project_id"));

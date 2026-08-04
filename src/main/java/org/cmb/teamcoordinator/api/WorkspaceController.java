@@ -7,7 +7,7 @@ import org.cmb.teamcoordinator.project.IdentityProvider;
 import org.cmb.teamcoordinator.coordinator.ConversationTaskService;
 import org.cmb.teamcoordinator.project.ProjectService;
 import org.cmb.teamcoordinator.project.RequestIdentity;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.cmb.teamcoordinator.persistence.MyBatisExecutor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -17,13 +17,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/projects/{projectId}/tasks/{taskId}/workspace")
 public class WorkspaceController {
 
-    private final JdbcTemplate jdbc;
+    private final MyBatisExecutor jdbc;
     private final ProjectService projectService;
     private final IdentityProvider identityProvider;
     private final ConversationTaskService conversationTasks;
 
     public WorkspaceController(
-            JdbcTemplate jdbc,
+            MyBatisExecutor jdbc,
             ProjectService projectService,
             IdentityProvider identityProvider,
             ConversationTaskService conversationTasks) {

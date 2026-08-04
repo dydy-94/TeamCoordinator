@@ -1,15 +1,15 @@
 package org.cmb.teamcoordinator.artifact;
 
 import java.util.List;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.cmb.teamcoordinator.persistence.MyBatisExecutor;
 import org.springframework.stereotype.Repository;
 
 @Repository
 public class ArtifactRepository {
 
-    private final JdbcTemplate jdbc;
+    private final MyBatisExecutor jdbc;
 
-    public ArtifactRepository(JdbcTemplate jdbc) {
+    public ArtifactRepository(MyBatisExecutor jdbc) {
         this.jdbc = jdbc;
     }
 

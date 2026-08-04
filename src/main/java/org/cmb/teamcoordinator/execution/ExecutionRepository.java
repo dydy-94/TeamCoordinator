@@ -13,17 +13,17 @@ import org.cmb.teamcoordinator.planning.CoordinatorPlanSpec;
 import org.cmb.teamcoordinator.planning.PlannedTask;
 import org.cmb.teamcoordinator.planning.PlanningResult;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.cmb.teamcoordinator.persistence.MyBatisExecutor;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public class ExecutionRepository {
 
-    private final JdbcTemplate jdbc;
+    private final MyBatisExecutor jdbc;
     private final ObjectMapper objectMapper;
 
-    public ExecutionRepository(JdbcTemplate jdbc, ObjectMapper objectMapper) {
+    public ExecutionRepository(MyBatisExecutor jdbc, ObjectMapper objectMapper) {
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
     }
@@ -406,7 +406,7 @@ public class ExecutionRepository {
         return dispatchIds.isEmpty() ? null : loadWork(dispatchIds.get(0));
     }
 
-    private TaskRecord mapTask(java.sql.ResultSet rs) throws java.sql.SQLException {
+    private TaskRecord mapTask(org.cmb.teamcoordinator.persistence.MyBatisRow rs) {
         TaskRecord task = new TaskRecord();
         task.setDatabaseId(rs.getLong("database_id"));
         task.setBusinessId(rs.getString("business_id"));
@@ -489,20 +489,12 @@ public class ExecutionRepository {
                 + "t.last_sequence";
     }
 
-    private String column(java.sql.ResultSet rs, String name) {
-        try {
-            return rs.getString(name);
-        } catch (java.sql.SQLException ex) {
-            return null;
-        }
+    private String column(org.cmb.teamcoordinator.persistence.MyBatisRow rs, String name) {
+        return rs.getString(name);
     }
 
-    private int intColumn(java.sql.ResultSet rs, String name) {
-        try {
-            return rs.getInt(name);
-        } catch (java.sql.SQLException ex) {
-            return 0;
-        }
+    private int intColumn(org.cmb.teamcoordinator.persistence.MyBatisRow rs, String name) {
+        return rs.getInt(name);
     }
 
     private List<String> readList(String json) {

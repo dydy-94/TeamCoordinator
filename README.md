@@ -1,5 +1,18 @@
 # TeamCoordinator
 
+## Persistence
+
+Application database access uses MyBatis. Controllers and services depend on
+domain repositories; repositories execute parameterized SQL through
+`DatabaseMapper` and `MyBatisExecutor`.
+
+- Runtime values are bound with MyBatis `#{}` parameters.
+- Repository result rows are mapped to domain records through `MyBatisRow`.
+- Database `id` maps to `databaseId`; `business_id` maps to `businessId`.
+- API identifiers expose business IDs only.
+- `JdbcTemplate` is limited to integration-test assertions and is not used by
+  production data access.
+
 Current business, SSE, AgentCore, and local mock contracts are documented in
 [`API_DOCUMENTATION.md`](API_DOCUMENTATION.md).
 

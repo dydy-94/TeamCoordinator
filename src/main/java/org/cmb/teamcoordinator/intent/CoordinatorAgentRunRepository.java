@@ -5,15 +5,15 @@ import java.util.UUID;
 import org.cmb.teamcoordinator.agentcore.AgentRunEvent;
 import org.cmb.teamcoordinator.project.RequestIdentity;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.cmb.teamcoordinator.persistence.MyBatisExecutor;
 import org.springframework.stereotype.Repository;
 
 @Repository
 public class CoordinatorAgentRunRepository {
 
-    private final JdbcTemplate jdbc;
+    private final MyBatisExecutor jdbc;
 
-    public CoordinatorAgentRunRepository(JdbcTemplate jdbc) {
+    public CoordinatorAgentRunRepository(MyBatisExecutor jdbc) {
         this.jdbc = jdbc;
     }
 

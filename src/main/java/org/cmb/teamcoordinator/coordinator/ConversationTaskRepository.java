@@ -4,15 +4,15 @@ import java.sql.Timestamp;
 import java.util.List;
 import java.util.UUID;
 import org.cmb.teamcoordinator.project.RequestIdentity;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.cmb.teamcoordinator.persistence.MyBatisExecutor;
 import org.springframework.stereotype.Repository;
 
 @Repository
 public class ConversationTaskRepository {
 
-    private final JdbcTemplate jdbc;
+    private final MyBatisExecutor jdbc;
 
-    public ConversationTaskRepository(JdbcTemplate jdbc) {
+    public ConversationTaskRepository(MyBatisExecutor jdbc) {
         this.jdbc = jdbc;
     }
 

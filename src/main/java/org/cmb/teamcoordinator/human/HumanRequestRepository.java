@@ -7,16 +7,16 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.cmb.teamcoordinator.project.RequestIdentity;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.cmb.teamcoordinator.persistence.MyBatisExecutor;
 import org.springframework.stereotype.Repository;
 
 @Repository
 public class HumanRequestRepository {
 
-    private final JdbcTemplate jdbc;
+    private final MyBatisExecutor jdbc;
     private final ObjectMapper objectMapper;
 
-    public HumanRequestRepository(JdbcTemplate jdbc, ObjectMapper objectMapper) {
+    public HumanRequestRepository(MyBatisExecutor jdbc, ObjectMapper objectMapper) {
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
     }
@@ -166,8 +166,8 @@ public class HumanRequestRepository {
         }
     }
 
-    private HumanRequestRecord map(java.sql.ResultSet rs)
-            throws java.sql.SQLException {
+    private HumanRequestRecord map(org.cmb.teamcoordinator.persistence.MyBatisRow rs)
+            {
         HumanRequestRecord record = new HumanRequestRecord();
         record.id = rs.getString("business_id");
         record.tenantId = rs.getString("tenant_id");
