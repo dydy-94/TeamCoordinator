@@ -42,6 +42,8 @@ management:
         enabled: true
 
 digital-team:
+  prompt:
+    admin-users: ${PROMPT_ADMIN_USERS:root}
   rollout:
     enabled: ${DIGITAL_TEAM_MVP_ENABLED:true}
     emergency-stop: ${DIGITAL_TEAM_EMERGENCY_STOP:false}

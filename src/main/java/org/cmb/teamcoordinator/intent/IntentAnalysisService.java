@@ -3,8 +3,6 @@ package org.cmb.teamcoordinator.intent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -23,12 +21,11 @@ import org.cmb.teamcoordinator.project.ProjectService;
 import org.cmb.teamcoordinator.project.ProjectView;
 import org.cmb.teamcoordinator.project.RequestIdentity;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StreamUtils;
 
 @Service
 public class IntentAnalysisService {
 
-    private static final String PROMPT_VERSION = "intent-v1";
+    private static final String PROMPT_VERSION = "database-managed";
     private static final String SCHEMA_VERSION = "task-intent-v1";
 
     private final ProjectService projectService;
@@ -42,7 +39,6 @@ public class IntentAnalysisService {
     private final DecisionSchemaValidator schemaValidator;
     private final ObjectMapper objectMapper;
     private final Validator validator;
-    private final String prompt;
 
     public IntentAnalysisService(
             ProjectService projectService,
@@ -67,7 +63,6 @@ public class IntentAnalysisService {
         this.schemaValidator = schemaValidator;
         this.objectMapper = objectMapper;
         this.validator = validator;
-        this.prompt = loadPrompt();
     }
 
     public CoordinatorDecision analyze(
@@ -99,7 +94,7 @@ public class IntentAnalysisService {
         IntentAnalysisContext context = buildContext(identity, projectId, taskId, request);
         CoordinatorAgentClient.Result agentResult = coordinatorAgent.execute(
                 identity, projectId, messageId, runKey,
-                businessSessionId, prompt, context);
+                businessSessionId, context);
         if (!agentResult.isComplete()) {
             return null;
         }
@@ -110,7 +105,7 @@ public class IntentAnalysisService {
             coordinatorAgent.prepareRepair(identity, runKey, output);
             agentResult = coordinatorAgent.execute(
                     identity, projectId, messageId, runKey,
-                    businessSessionId, prompt, context);
+                    businessSessionId, context);
             if (!agentResult.isComplete()) {
                 return null;
             }
@@ -219,19 +214,6 @@ public class IntentAnalysisService {
         decision.setDecisionType(DecisionType.ASK_HUMAN);
         decision.setQuestion("暂时无法可靠理解该请求，请补充目标和期望输出后重试。");
         return decision;
-    }
-
-    private String loadPrompt() {
-        try {
-            InputStream input = getClass().getResourceAsStream(
-                    "/coordinator/task-intent-prompt-v1.txt");
-            if (input == null) {
-                throw new IllegalStateException("Intent prompt is missing.");
-            }
-            return StreamUtils.copyToString(input, StandardCharsets.UTF_8);
-        } catch (IOException ex) {
-            throw new IllegalStateException("Could not load intent prompt.", ex);
-        }
     }
 
     private String write(Object value) {

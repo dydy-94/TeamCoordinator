@@ -643,9 +643,54 @@ This is a read-oriented aggregate endpoint. It returns public events only.
 Several nested fields are raw database JSON strings and should be treated as
 diagnostic data rather than a stable domain schema.
 
-## 10. Health API
+## 10. Prompt Management API
 
-### 10.1 Liveness
+Prompt templates are stored in MySQL and are not loaded from project resource
+files.
+
+| Prompt key | Scene | Purpose |
+|---|---|---|
+| `coordinator.execution` | `COORDINATOR_EXECUTION` | Intent routing, delegation context and output protocol |
+| `coordinator.planning` | `COORDINATOR_PLANNING` | Expert task decomposition and dependency planning |
+| `expert.execution` | `EXPERT_EXECUTION` | Subtask background, acceptance criteria and communication protocol |
+| `expert.resume` | `EXPERT_RESUME` | Resume an expert task after human input |
+
+Templates use `{{context_json}}` for runtime context. Dynamic content is
+serialized as JSON and treated as untrusted task data.
+
+### 10.1 List Prompt Versions
+
+`GET /api/v1/admin/prompts?promptKey=expert.execution`
+
+Requires a user listed in `PROMPT_ADMIN_USERS`.
+
+### 10.2 Create Draft Version
+
+`POST /api/v1/admin/prompts`
+
+```json
+{
+  "promptKey": "expert.execution",
+  "agentScope": "EXPERT_COMMON",
+  "scene": "EXPERT_EXECUTION",
+  "templateContent": "Instructions...\n{{context_json}}",
+  "variablesSchema": "{\"required\":[\"context_json\"]}"
+}
+```
+
+The server assigns the next immutable version and creates it as `DRAFT`.
+
+### 10.3 Publish Version
+
+`POST /api/v1/admin/prompts/{promptId}/publish`
+
+The selected version becomes `PUBLISHED`; the prior version becomes
+`RETIRED`. Each render is recorded in `prompt_execution` with its template,
+version, Agent, scene, variables snapshot and rendered Prompt.
+
+## 11. Health API
+
+### 11.1 Liveness
 
 `GET /health`
 
@@ -657,7 +702,7 @@ diagnostic data rather than a stable domain schema.
 }
 ```
 
-### 10.2 Readiness
+### 11.2 Readiness
 
 `GET /ready`
 
@@ -672,7 +717,7 @@ diagnostic data rather than a stable domain schema.
 Spring Boot probes are also available below `/actuator`, including
 `/actuator/health`.
 
-## 11. AgentCore Integration Contract
+## 12. AgentCore Integration Contract
 
 The following is the outbound contract expected by Coordinator. Paths are
 configurable through environment variables.
@@ -703,7 +748,7 @@ X-Session-Id: session-...
 
 The header name can be changed with `AGENTCORE_SESSION_HEADER`.
 
-### 11.1 Submit Agent Run
+### 12.1 Submit Agent Run
 
 ```json
 {
@@ -726,7 +771,7 @@ Response: `202 Accepted`
 
 The same non-empty `idempotencyKey` must return the same logical run/session.
 
-### 11.2 Coordinator Agent Submission
+### 12.2 Coordinator Agent Submission
 
 Coordinator intent analysis uses the same submit endpoint with the configured
 `COORDINATOR_AGENT_ID`:
@@ -757,13 +802,13 @@ Coordinator intent analysis uses the same submit endpoint with the configured
 For schema repair, `operation` is `REPAIR` and `invalidOutput` contains the
 previous invalid result.
 
-### 11.3 Query Status
+### 12.3 Query Status
 
 `GET /runs/{sessionId}`
 
 Response is the latest `AgentRunEvent`, or `404` when the run is unknown.
 
-### 11.4 Stream Run Events
+### 12.4 Stream Run Events
 
 `GET /runs/{sessionId}/streamEvents?afterSequence={sequence}`
 
@@ -822,7 +867,7 @@ Coordinator deduplicates expert events by event ID and sequence and persists
 the last consumed sequence. AgentCore must support replay after
 `afterSequence`.
 
-### 11.5 Coordinator Success Payload
+### 12.5 Coordinator Success Payload
 
 The Coordinator agent must return a schema-valid decision:
 
@@ -854,7 +899,7 @@ The Coordinator agent must return a schema-valid decision:
 `payload.decision` may also be a JSON string. A result may alternatively be
 placed in `payload.resultText`, but it must contain the complete decision JSON.
 
-### 11.6 Expert Success Payload
+### 12.6 Expert Success Payload
 
 ```json
 {
@@ -874,7 +919,7 @@ placed in `payload.resultText`, but it must contain the complete decision JSON.
 optional. Every ID must have been created by the `upload_artifact` tool for
 the same Agent run. `artifactFileIds` is a legacy in-process Mock field.
 
-### 11.7 Waiting for Human Input
+### 12.7 Waiting for Human Input
 
 ```json
 {
@@ -892,18 +937,18 @@ the same Agent run. `artifactFileIds` is a legacy in-process Mock field.
 
 `payload.question` is required by the Coordinator workflow.
 
-### 11.8 Cancel Run
+### 12.8 Cancel Run
 
 `POST /runs/{sessionId}/cancel`
 
 Response: terminal `AgentRunEvent` with type `RUN_CANCELLED`; `404` if the
 session does not exist.
 
-## 12. Local Mock API
+## 13. Local Mock API
 
 These endpoints are development-only and should not be exposed in production.
 
-### 12.1 List Mock Experts
+### 13.1 List Mock Experts
 
 `GET /mock/experts`
 
@@ -920,27 +965,27 @@ These endpoints are development-only and should not be exposed in production.
 ]
 ```
 
-### 12.2 Submit Mock Run
+### 13.2 Submit Mock Run
 
 `POST /mock/agentcore/runs`
 
 Uses the AgentCore submit request and returns `202 Accepted`.
 
-### 12.3 Get Mock Run
+### 13.3 Get Mock Run
 
 `GET /mock/agentcore/runs/{sessionId}`
 
-### 12.4 Stream Mock Run
+### 13.4 Stream Mock Run
 
 `GET /mock/agentcore/runs/{sessionId}/streamEvents?afterSequence=0`
 
 Response: `text/event-stream`.
 
-### 12.5 Cancel Mock Run
+### 13.5 Cancel Mock Run
 
 `POST /mock/agentcore/runs/{sessionId}/cancel`
 
-### 12.6 Reserve Mock File
+### 13.6 Reserve Mock File
 
 `POST /mock/files/presign`
 
@@ -965,29 +1010,29 @@ Response:
 }
 ```
 
-### 12.7 Upload Mock File
+### 13.7 Upload Mock File
 
 `PUT /mock/files/{fileId}/content`
 
 Request body: raw binary bytes.
 
-### 12.8 Get Mock File Metadata
+### 13.8 Get Mock File Metadata
 
 `GET /mock/files/{fileId}`
 
-### 12.9 Download Mock File
+### 13.9 Download Mock File
 
 `GET /mock/files/{fileId}/content`
 
 Response content type: `application/octet-stream`.
 
-### 12.10 Delete Mock File
+### 13.10 Delete Mock File
 
 `DELETE /mock/files/{fileId}`
 
 Response: `204 No Content`, or `404` if not found.
 
-## 13. Runtime Configuration
+## 14. Runtime Configuration
 
 | Environment variable | Default | Purpose |
 |---|---|---|

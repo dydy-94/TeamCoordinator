@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.networknt.schema.JsonSchemaFactory;
 import com.networknt.schema.SpecVersion;
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.cmb.teamcoordinator.common.ApiException;
 import org.cmb.teamcoordinator.agentcore.AgentCoreAdapter;
 import org.cmb.teamcoordinator.agentcore.AgentRunRequest;
@@ -17,6 +19,8 @@ import org.cmb.teamcoordinator.project.ProjectRole;
 import org.cmb.teamcoordinator.project.ProjectService;
 import org.cmb.teamcoordinator.project.ProjectView;
 import org.cmb.teamcoordinator.project.RequestIdentity;
+import org.cmb.teamcoordinator.prompt.PromptService;
+import org.cmb.teamcoordinator.prompt.RenderedPrompt;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -29,16 +33,19 @@ public class HumanRequestService {
     private final ProjectService projectService;
     private final ExecutionRepository executionRepository;
     private final AgentCoreAdapter agentCore;
+    private final PromptService prompts;
 
     public HumanRequestService(
             HumanRequestRepository repository,
             ProjectService projectService,
             ExecutionRepository executionRepository,
-            AgentCoreAdapter agentCore) {
+            AgentCoreAdapter agentCore,
+            PromptService prompts) {
         this.repository = repository;
         this.projectService = projectService;
         this.executionRepository = executionRepository;
         this.agentCore = agentCore;
+        this.prompts = prompts;
     }
 
     @Transactional
@@ -104,7 +111,24 @@ public class HumanRequestService {
             if (resumed == null) {
                 AgentRunRequest run = new AgentRunRequest();
                 run.setExpertId(task.getExpertId());
-                run.setTaskText(task.getObjective() + "\nHuman response: " + answer);
+                Map<String, Object> promptContext = new LinkedHashMap<>();
+                promptContext.put("objective", task.getObjective());
+                promptContext.put("expectedOutput", task.getExpectedOutput());
+                promptContext.put("acceptanceCriteria", task.getAcceptanceCriteria());
+                promptContext.put("humanResponse", answer);
+                promptContext.put("previousAgentRunId", task.getSessionId());
+                RenderedPrompt prompt = prompts.render(
+                        PromptService.EXPERT_RESUME, promptContext,
+                        identity.getTenantId(), projectId, work.getConversationId(),
+                        request.getIdempotencyKey() + ":new-run", task.getExpertId());
+                run.setTaskText(prompt.getContent());
+                run.setStructuredInput(promptContext);
+                run.setRequiredTools(
+                        java.util.Collections.singletonList("upload_artifact"));
+                Map<String, String> toolContext = new LinkedHashMap<>();
+                toolContext.put("projectId", projectId);
+                toolContext.put("taskId", work.getConversationId());
+                run.setToolContext(toolContext);
                 run.setIdempotencyKey(request.getIdempotencyKey() + ":new-run");
                 run.setBusinessSessionId(work.getBusinessSessionId());
                 resumed = agentCore.submitRun(run);

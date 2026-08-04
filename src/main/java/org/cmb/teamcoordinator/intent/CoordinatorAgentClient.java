@@ -11,6 +11,8 @@ import org.cmb.teamcoordinator.agentcore.AgentRunEvent;
 import org.cmb.teamcoordinator.agentcore.AgentRunRequest;
 import org.cmb.teamcoordinator.agentcore.AgentRunResponse;
 import org.cmb.teamcoordinator.config.DigitalTeamProperties;
+import org.cmb.teamcoordinator.prompt.PromptService;
+import org.cmb.teamcoordinator.prompt.RenderedPrompt;
 import org.cmb.teamcoordinator.project.RequestIdentity;
 import org.springframework.stereotype.Component;
 
@@ -23,26 +25,29 @@ public class CoordinatorAgentClient {
     private final CoordinatorAgentRunRepository runs;
     private final ObjectMapper objectMapper;
     private final String coordinatorAgentId;
+    private final PromptService prompts;
 
     public CoordinatorAgentClient(
             AgentCoreAdapter agentCore, CoordinatorAgentRunRepository runs,
-            ObjectMapper objectMapper, DigitalTeamProperties properties) {
+            ObjectMapper objectMapper, DigitalTeamProperties properties,
+            PromptService prompts) {
         this.agentCore = agentCore;
         this.runs = runs;
         this.objectMapper = objectMapper;
         this.coordinatorAgentId = properties.getAgentCore().getCoordinatorAgentId();
+        this.prompts = prompts;
     }
 
     public Result execute(
             RequestIdentity identity, String projectId, String messageId, String runKey,
-            String businessSessionId, String prompt, IntentAnalysisContext context) {
+            String businessSessionId, IntentAnalysisContext context) {
         CoordinatorAgentRun run = runs.createOrLoad(
                 identity, projectId, messageId, runKey, write(context), businessSessionId);
         if ("SUCCEEDED".equals(run.getStatus()) || "FAILED".equals(run.getStatus())) {
             return new Result(true, run.getOutputJson(), "REPAIR".equals(run.getStage()));
         }
         if (run.getSessionId() == null) {
-            submit(run, prompt, context);
+            submit(identity, projectId, run, context);
             run = runs.find(identity.getTenantId(), runKey);
         }
 
@@ -71,16 +76,22 @@ public class CoordinatorAgentClient {
     }
 
     private void submit(
-            CoordinatorAgentRun run, String prompt, IntentAnalysisContext context) {
+            RequestIdentity identity, String projectId,
+            CoordinatorAgentRun run, IntentAnalysisContext context) {
         AgentRunRequest request = new AgentRunRequest();
         request.setExpertId(coordinatorAgentId);
-        request.setTaskText(context.getText());
         Map<String, Object> input = new LinkedHashMap<>();
         input.put("operation", run.getStage());
-        input.put("prompt", prompt);
         input.put("context", objectMapper.convertValue(
                 context, new TypeReference<Map<String, Object>>() { }));
         input.put("invalidOutput", run.getInvalidOutput());
+        RenderedPrompt prompt = prompts.render(
+                PromptService.COORDINATOR_EXECUTION, input,
+                identity.getTenantId(), projectId, null,
+                run.getId() + ":" + run.getStage(), coordinatorAgentId);
+        request.setTaskText(prompt.getContent());
+        input.put("promptVersion", prompt.getVersion());
+        input.put("promptTemplateId", prompt.getTemplateId());
         request.setStructuredInput(input);
         request.setAttachmentRefs(context.getAttachmentRefs());
         request.setIdempotencyKey(run.getId() + ":" + run.getStage());

@@ -8,6 +8,17 @@ MVP Spring Boot skeleton for the digital team coordinator service.
 The required build and runtime is JDK 21. Maven rejects other JDK major
 versions so local and CI builds use the same Java baseline.
 
+## Prompt Management
+
+Coordinator and expert Prompts are versioned in MySQL. Runtime calls use only
+the `PUBLISHED` version and record the rendered Prompt and variables in
+`prompt_execution`. Manage versions through `/api/v1/admin/prompts`; configure
+administrators with `PROMPT_ADMIN_USERS` as comma-separated user IDs.
+
+Coordinator execution/planning and expert execution/resume use separate
+templates and context builders. Templates use `{{context_json}}`; Prompt text
+is no longer loaded from classpath `.txt` files.
+
 ## Local Dependencies
 
 The default `local` profile connects to MySQL at `127.0.0.1:3306/xservice`

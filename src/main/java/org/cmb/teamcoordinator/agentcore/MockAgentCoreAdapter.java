@@ -12,7 +12,6 @@ import org.cmb.teamcoordinator.artifact.MockFileDescriptor;
 import org.cmb.teamcoordinator.artifact.FileStore;
 import org.cmb.teamcoordinator.artifact.MockFileStore;
 import org.cmb.teamcoordinator.config.DigitalTeamProperties;
-import org.cmb.teamcoordinator.intent.CoordinatorAgentClient;
 import org.cmb.teamcoordinator.intent.IntentAnalysisContext;
 import org.cmb.teamcoordinator.intent.MockIntentModelClient;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -65,7 +64,11 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
         events.add(accepted);
         events.add(new AgentRunEvent(sessionId, 2, "RUN_PROGRESS", "RUNNING", "Mock expert is processing the task."));
 
-        String normalizedTask = request.getTaskText() == null ? "" : request.getTaskText().toLowerCase();
+        Object objective = request.getStructuredInput() == null
+                ? null : request.getStructuredInput().get("objective");
+        String effectiveTask = objective == null
+                ? request.getTaskText() : String.valueOf(objective);
+        String normalizedTask = effectiveTask == null ? "" : effectiveTask.toLowerCase();
         if (coordinatorAgentId.equals(request.getExpertId())) {
             addCoordinatorEvents(request, sessionId, events);
             eventsBySessionId.put(sessionId, events);
@@ -92,7 +95,7 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
             result.getPayload().put(
                     "businessSessionId", request.getBusinessSessionId());
             if (!normalizedTask.contains("invalid-result")) {
-                result.getPayload().put("resultText", "Mock result for: " + request.getTaskText());
+                result.getPayload().put("resultText", "Mock result for: " + effectiveTask);
             }
             result.getPayload().put("attachmentRefs", request.getAttachmentRefs());
             List<String> attachmentContents = new ArrayList<>();
@@ -104,7 +107,7 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
             }
             result.getPayload().put("attachmentContents", attachmentContents);
             MockFileDescriptor artifact = fileStore.reserve("result.txt", "text/plain");
-            String artifactContent = "Mock result for: " + request.getTaskText()
+            String artifactContent = "Mock result for: " + effectiveTask
                     + (attachmentContents.isEmpty() ? "" : "\nInput: " + attachmentContents.get(0));
             fileStore.put(artifact.getFileId(), artifactContent.getBytes(StandardCharsets.UTF_8));
             result.getPayload().put("artifactRefs", Collections.singletonList(artifact.getDownloadUrl()));

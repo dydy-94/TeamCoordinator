@@ -1,5 +1,7 @@
 package org.cmb.teamcoordinator.config;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "digital-team")
@@ -8,6 +10,7 @@ public class DigitalTeamProperties {
     private final AgentCore agentCore = new AgentCore();
     private final Storage storage = new Storage();
     private final Rollout rollout = new Rollout();
+    private final Prompt prompt = new Prompt();
 
     public AgentCore getAgentCore() {
         return agentCore;
@@ -20,6 +23,8 @@ public class DigitalTeamProperties {
     public Rollout getRollout() {
         return rollout;
     }
+
+    public Prompt getPrompt() { return prompt; }
 
     public static class AgentCore {
         private boolean mockEnabled = true;
@@ -100,5 +105,12 @@ public class DigitalTeamProperties {
         public void setEnabled(boolean value) { this.enabled = value; }
         public boolean isEmergencyStop() { return emergencyStop; }
         public void setEmergencyStop(boolean value) { this.emergencyStop = value; }
+    }
+
+    public static class Prompt {
+        private List<String> adminUsers = new ArrayList<>();
+
+        public List<String> getAdminUsers() { return adminUsers; }
+        public void setAdminUsers(List<String> value) { this.adminUsers = value; }
     }
 }

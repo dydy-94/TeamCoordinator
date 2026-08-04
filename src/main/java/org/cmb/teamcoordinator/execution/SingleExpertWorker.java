@@ -32,6 +32,8 @@ import org.cmb.teamcoordinator.planning.PlanningService;
 import org.cmb.teamcoordinator.project.ProjectService;
 import org.cmb.teamcoordinator.project.ProjectView;
 import org.cmb.teamcoordinator.project.RequestIdentity;
+import org.cmb.teamcoordinator.prompt.PromptService;
+import org.cmb.teamcoordinator.prompt.RenderedPrompt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -54,6 +56,7 @@ public class SingleExpertWorker {
     private final HumanRequestRepository humanRequests;
     private final ArtifactRepository artifactRepository;
     private final ArtifactService artifactService;
+    private final PromptService prompts;
 
     public SingleExpertWorker(
             ExecutionRepository executionRepository,
@@ -67,7 +70,8 @@ public class SingleExpertWorker {
             ObjectMapper objectMapper,
             HumanRequestRepository humanRequests,
             ArtifactRepository artifactRepository,
-            ArtifactService artifactService) {
+            ArtifactService artifactService,
+            PromptService prompts) {
         this.executionRepository = executionRepository;
         this.analysisService = analysisService;
         this.agentCore = agentCore;
@@ -80,6 +84,7 @@ public class SingleExpertWorker {
         this.humanRequests = humanRequests;
         this.artifactRepository = artifactRepository;
         this.artifactService = artifactService;
+        this.prompts = prompts;
     }
 
     @Scheduled(fixedDelayString = "${digital-team.execution.worker-interval-ms:500}")
@@ -207,7 +212,6 @@ public class SingleExpertWorker {
     private void startTask(DispatchWork work, TaskRecord task, String expertId) {
         AgentRunRequest runRequest = new AgentRunRequest();
         runRequest.setExpertId(expertId);
-        runRequest.setTaskText(task.getObjective());
         List<String> inputRefs = new java.util.ArrayList<>();
         for (String reference : work.getAttachmentRefs()) {
             inputRefs.add(artifactRepository.resolveStorageKey(
@@ -215,6 +219,28 @@ public class SingleExpertWorker {
         }
         inputRefs.addAll(artifactRepository.findAvailableStorageKeys(
                 task.getPlanId(), task.getDependencies()));
+        RequestIdentity identity = new RequestIdentity(work.getTenantId(), work.getUserId());
+        ProjectView project = projectService.get(identity, work.getProjectId());
+        Map<String, Object> promptContext = new HashMap<>();
+        promptContext.put("projectName", project.getName());
+        promptContext.put("projectDescription", project.getDescription());
+        promptContext.put("overallRequest", work.getText());
+        promptContext.put("taskKey", task.getTaskKey());
+        promptContext.put("objective", task.getObjective());
+        promptContext.put("expectedOutput", task.getExpectedOutput());
+        promptContext.put("acceptanceCriteria", task.getAcceptanceCriteria());
+        promptContext.put("dependencies", task.getDependencies());
+        promptContext.put("requiredCapabilities", task.getRequiredCapabilities());
+        promptContext.put("inputArtifactRefs", inputRefs);
+        promptContext.put("businessSessionId", work.getBusinessSessionId());
+        RenderedPrompt prompt = prompts.render(
+                PromptService.EXPERT_EXECUTION, promptContext, work.getTenantId(),
+                work.getProjectId(), work.getConversationId(), task.getRequestId(), expertId);
+        runRequest.setTaskText(prompt.getContent());
+        Map<String, Object> structuredInput = new HashMap<>(promptContext);
+        structuredInput.put("promptVersion", prompt.getVersion());
+        structuredInput.put("promptTemplateId", prompt.getTemplateId());
+        runRequest.setStructuredInput(structuredInput);
         runRequest.setAttachmentRefs(inputRefs);
         runRequest.setRequiredTools(
                 java.util.Collections.singletonList("upload_artifact"));

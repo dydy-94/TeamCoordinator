@@ -3,13 +3,14 @@ package org.cmb.teamcoordinator.planning;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.cmb.teamcoordinator.agentcore.ExpertRegistry;
 import org.cmb.teamcoordinator.intent.TaskIntent;
 import org.cmb.teamcoordinator.project.ProjectView;
+import org.cmb.teamcoordinator.prompt.PromptService;
+import org.cmb.teamcoordinator.prompt.RenderedPrompt;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StreamUtils;
 
 @Service
 public class PlanningService {
@@ -20,25 +21,35 @@ public class PlanningService {
     private final PlanValidator planValidator;
     private final ExpertRegistry expertRegistry;
     private final ObjectMapper objectMapper;
-    private final String prompt;
+    private final PromptService prompts;
 
     public PlanningService(
             PlanModelClient modelClient,
             PlanSchemaValidator schemaValidator,
             PlanValidator planValidator,
             ExpertRegistry expertRegistry,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            PromptService prompts) {
         this.modelClient = modelClient;
         this.schemaValidator = schemaValidator;
         this.planValidator = planValidator;
         this.expertRegistry = expertRegistry;
         this.objectMapper = objectMapper;
-        this.prompt = loadPrompt();
+        this.prompts = prompts;
     }
 
     public PlanningResult createPlan(
             TaskIntent intent, ProjectView project, int planVersion) {
-        String output = modelClient.createPlan(prompt, intent, planVersion);
+        Map<String, Object> context = new LinkedHashMap<>();
+        context.put("projectName", project.getName());
+        context.put("projectDescription", project.getDescription());
+        context.put("taskIntent", intent);
+        context.put("availableExperts", project.getExperts());
+        context.put("planVersion", planVersion);
+        RenderedPrompt prompt = prompts.render(
+                PromptService.COORDINATOR_PLANNING, context, "system", project.getId(),
+                null, "plan:" + project.getId() + ":" + planVersion, "coordinator");
+        String output = modelClient.createPlan(prompt.getContent(), intent, planVersion);
         RuntimeException lastFailure = null;
         for (int attempt = 0; attempt <= MAX_REPAIR_ATTEMPTS; attempt++) {
             try {
@@ -53,7 +64,7 @@ public class PlanningService {
                 lastFailure = ex;
                 if (attempt < MAX_REPAIR_ATTEMPTS) {
                     output = modelClient.repairPlan(
-                            prompt, intent, output, attempt + 1);
+                            prompt.getContent(), intent, output, attempt + 1);
                 }
             }
         }
@@ -71,16 +82,4 @@ public class PlanningService {
         }
     }
 
-    private String loadPrompt() {
-        try {
-            InputStream input = getClass().getResourceAsStream(
-                    "/coordinator/plan-prompt-v1.txt");
-            if (input == null) {
-                throw new IllegalStateException("Plan prompt is missing.");
-            }
-            return StreamUtils.copyToString(input, StandardCharsets.UTF_8);
-        } catch (IOException ex) {
-            throw new IllegalStateException("Could not load plan prompt.", ex);
-        }
-    }
 }

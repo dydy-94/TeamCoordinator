@@ -11,6 +11,9 @@ spring:
     enabled: true
 
 digital-team:
+  prompt:
+    admin-users:
+      - prompt-admin
   agent-core:
     artifact-tool-token: test-agentcore-tool-token
   execution:
