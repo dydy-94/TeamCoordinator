@@ -107,10 +107,10 @@ class ArtifactIntegrationTest {
 
         String artifactId = objectMapper.readTree(body).get("artifactId").asText();
         assertEquals("agent:" + run.get("expert_id"), jdbc.queryForObject(
-                "SELECT created_by FROM project_artifact WHERE id = ?",
+                "SELECT created_by FROM project_artifact WHERE business_id = ?",
                 String.class, artifactId));
         assertEquals(run.get("session_id"), jdbc.queryForObject(
-                "SELECT expert_run_id FROM project_artifact WHERE id = ?",
+                "SELECT expert_run_id FROM project_artifact WHERE business_id = ?",
                 String.class, artifactId));
         finishDispatch(projectId);
     }

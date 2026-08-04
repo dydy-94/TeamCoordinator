@@ -75,7 +75,7 @@ class MultiExpertExecutionIntegrationTest {
         assertTrue(writingResult.contains("Mock result for: Analyze"));
         assertEquals(Integer.valueOf(1), jdbc.queryForObject(
                 "SELECT COUNT(*) FROM project_artifact_lineage l "
-                        + "JOIN project_artifact a ON a.id = l.output_artifact_id "
+                        + "JOIN project_artifact a ON a.business_id = l.output_artifact_id "
                         + "WHERE a.project_id = ?",
                 Integer.class, projectId));
     }
@@ -129,14 +129,14 @@ class MultiExpertExecutionIntegrationTest {
         worker.runOnce();
 
         String oldPlanId = jdbc.queryForObject(
-                "SELECT id FROM coordinator_plan WHERE project_id = ? AND plan_version = 1",
+                "SELECT business_id FROM coordinator_plan WHERE project_id = ? AND plan_version = 1",
                 String.class, projectId);
         String dispatchId = jdbc.queryForObject(
-                "SELECT id FROM coordinator_dispatch WHERE project_id = ?",
+                "SELECT business_id FROM coordinator_dispatch WHERE project_id = ?",
                 String.class, projectId);
         DispatchWork work = executionRepository.loadWork(dispatchId);
         String intentJson = jdbc.queryForObject(
-                "SELECT intent_json FROM coordinator_plan WHERE id = ?",
+                "SELECT intent_json FROM coordinator_plan WHERE business_id = ?",
                 String.class, oldPlanId);
         TaskIntent intent = objectMapper.readValue(intentJson, TaskIntent.class);
         CoordinatorDecision decision = new CoordinatorDecision();
@@ -154,11 +154,11 @@ class MultiExpertExecutionIntegrationTest {
                 Integer.class, projectId));
         assertEquals(Integer.valueOf(2), jdbc.queryForObject(
                 "SELECT COUNT(*) FROM coordinator_task t JOIN coordinator_plan p "
-                        + "ON p.id = t.plan_id WHERE p.project_id = ? AND p.plan_version = 2 "
+                        + "ON p.business_id = t.plan_id WHERE p.project_id = ? AND p.plan_version = 2 "
                         + "AND t.reused_from_task_id IS NOT NULL",
                 Integer.class, projectId));
         assertEquals("SUPERSEDED", jdbc.queryForObject(
-                "SELECT status FROM coordinator_plan WHERE id = ?",
+                "SELECT status FROM coordinator_plan WHERE business_id = ?",
                 String.class, oldPlanId));
     }
 

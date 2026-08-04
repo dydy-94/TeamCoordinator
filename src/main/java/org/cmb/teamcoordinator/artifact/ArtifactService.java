@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.cmb.teamcoordinator.artifact.ArtifactRepository.ArtifactRecord;
+import org.cmb.teamcoordinator.agentcore.AgentRunAttachment;
 import org.cmb.teamcoordinator.common.ApiException;
 import org.cmb.teamcoordinator.execution.DispatchWork;
 import org.cmb.teamcoordinator.execution.TaskRecord;
@@ -129,6 +130,20 @@ public class ArtifactService {
                         "Agent returned an unavailable or unrelated artifact: " + artifactId);
             }
             result.add(artifactId);
+        }
+        return result;
+    }
+
+    public List<AgentRunAttachment> toAgentAttachments(List<String> storageKeys) {
+        List<AgentRunAttachment> result = new ArrayList<>();
+        for (String storageKey : storageKeys) {
+            MockFileDescriptor descriptor = fileStore.getDescriptor(storageKey);
+            if (descriptor == null) {
+                throw new IllegalStateException(
+                        "Attachment is not available in object storage: " + storageKey);
+            }
+            result.add(new AgentRunAttachment(
+                    descriptor.getFileName(), fileStore.downloadUrl(storageKey)));
         }
         return result;
     }

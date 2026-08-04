@@ -18,10 +18,9 @@ class MockAgentCoreAdapterTest {
     void submitRunCreatesReplayableEvents() {
         MockAgentCoreAdapter adapter = new MockAgentCoreAdapter(new DigitalTeamProperties());
         AgentRunRequest request = new AgentRunRequest();
-        request.setExpertId("expert-analysis");
         request.setTaskText("analyze this plan");
 
-        AgentRunResponse response = adapter.submitRun(request);
+        AgentRunResponse response = adapter.submitRun("expert-analysis", request);
         List<AgentRunEvent> events = adapter.streamEvents(response.getSessionId(), 0L);
 
         assertEquals("ACCEPTED", response.getStatus());
@@ -31,19 +30,14 @@ class MockAgentCoreAdapterTest {
     }
 
     @Test
-    void sameIdempotencyKeyReturnsSameSession() {
+    void separateSubmissionsCreateSeparateSessions() {
         MockAgentCoreAdapter adapter = new MockAgentCoreAdapter(new DigitalTeamProperties());
         AgentRunRequest request = new AgentRunRequest();
-        request.setExpertId("expert-writing");
         request.setTaskText("write a report");
-        request.setIdempotencyKey("request-1");
 
-        AgentRunResponse first = adapter.submitRun(request);
-        AgentRunResponse duplicate = adapter.submitRun(request);
-        request.setIdempotencyKey("request-2");
-        AgentRunResponse different = adapter.submitRun(request);
+        AgentRunResponse first = adapter.submitRun("expert-writing", request);
+        AgentRunResponse different = adapter.submitRun("expert-writing", request);
 
-        assertEquals(first.getSessionId(), duplicate.getSessionId());
         assertNotEquals(first.getSessionId(), different.getSessionId());
     }
 
@@ -52,21 +46,21 @@ class MockAgentCoreAdapterTest {
         MockAgentCoreAdapter adapter = new MockAgentCoreAdapter(new DigitalTeamProperties());
 
         AgentRunRequest failed = request("please fail");
-        AgentRunResponse failedRun = adapter.submitRun(failed);
+        AgentRunResponse failedRun = adapter.submitRun("expert-analysis", failed);
         assertEquals("FAILED", adapter.getRunStatus(failedRun.getSessionId()).getStatus());
 
         AgentRunRequest timedOut = request("please timeout");
-        AgentRunResponse timedOutRun = adapter.submitRun(timedOut);
+        AgentRunResponse timedOutRun = adapter.submitRun("expert-analysis", timedOut);
         assertEquals("TIMED_OUT", adapter.getRunStatus(timedOutRun.getSessionId()).getStatus());
 
-        AgentRunResponse cancelledRun = adapter.submitRun(request("long task"));
+        AgentRunResponse cancelledRun =
+                adapter.submitRun("expert-analysis", request("long task"));
         adapter.cancelRun(cancelledRun.getSessionId());
         assertEquals("CANCELLED", adapter.getRunStatus(cancelledRun.getSessionId()).getStatus());
     }
 
     private AgentRunRequest request(String taskText) {
         AgentRunRequest request = new AgentRunRequest();
-        request.setExpertId("expert-analysis");
         request.setTaskText(taskText);
         return request;
     }

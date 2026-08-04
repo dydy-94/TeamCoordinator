@@ -44,13 +44,21 @@ class MockFileFlowTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.checksum").isNotEmpty());
 
-        String runBody = mockMvc.perform(post("/mock/agentcore/runs")
+                String runBody = mockMvc.perform(post("/mock/agentcore/runs")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"expertId\":\"expert-file\",\"taskText\":\"process file\","
-                                + "\"attachmentRefs\":[\"" + fileId + "\"]}"))
+                        .content("{\"type\":\"userInput\",\"sessionId\":\"\","
+                                + "\"systemPrompt\":\"Process the file\","
+                                + "\"data\":{\"skillNames\":[],"
+                                + "\"skillOrigin\":\"skillDevelop\","
+                                + "\"contents\":[{\"type\":\"text\","
+                                + "\"value\":\"process file\"}],\"context\":[],"
+                                + "\"attachments\":[{\"fileName\":\"input.txt\","
+                                + "\"fileDownloadUrl\":\"/mock/files/" + fileId
+                                + "/content\"}]}}"))
                 .andExpect(status().isAccepted())
                 .andReturn().getResponse().getContentAsString();
-        String sessionId = objectMapper.readTree(runBody).get("sessionId").asText();
+        String sessionId = objectMapper.readTree(runBody)
+                .path("data").path("sessionId").asText();
 
         String statusBody = mockMvc.perform(get("/mock/agentcore/runs/" + sessionId))
                 .andExpect(status().isOk())

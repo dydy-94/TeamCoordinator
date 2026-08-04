@@ -115,11 +115,14 @@ public class SingleExpertWorker {
         }
         DispatchWork work = executionRepository.loadWorkForTask(
                 identity.getTenantId(), projectId, taskId);
-        AgentRunEvent event = agentCore.cancelRun(
-                task.getSessionId(), work.getBusinessSessionId());
-        if (event == null) {
+        AgentRunResponse stopped = agentCore.stopSession(task.getSessionId());
+        if (stopped == null) {
             throw ApiException.conflict("TASK_CANCEL_FAILED", "AgentCore run was not found.");
         }
+        AgentRunEvent event = new AgentRunEvent(
+                task.getSessionId(), task.getLastSequence() + 1,
+                "RUN_CANCELLED", "CANCELLED", "AgentCore session stopped.");
+        event.setEventId(task.getSessionId() + ":cancel:" + event.getSequence());
         if (executionRepository.recordEvent(identity.getTenantId(), taskId, event)) {
             applyEvent(work, task, event);
         }
@@ -211,7 +214,6 @@ public class SingleExpertWorker {
 
     private void startTask(DispatchWork work, TaskRecord task, String expertId) {
         AgentRunRequest runRequest = new AgentRunRequest();
-        runRequest.setExpertId(expertId);
         List<String> inputRefs = new java.util.ArrayList<>();
         for (String reference : work.getAttachmentRefs()) {
             inputRefs.add(artifactRepository.resolveStorageKey(
@@ -236,21 +238,14 @@ public class SingleExpertWorker {
         RenderedPrompt prompt = prompts.render(
                 PromptService.EXPERT_EXECUTION, promptContext, work.getTenantId(),
                 work.getProjectId(), work.getConversationId(), task.getRequestId(), expertId);
-        runRequest.setTaskText(prompt.getContent());
+        runRequest.setSystemPrompt(prompt.getContent());
+        runRequest.setTaskText(task.getObjective());
         Map<String, Object> structuredInput = new HashMap<>(promptContext);
         structuredInput.put("promptVersion", prompt.getVersion());
         structuredInput.put("promptTemplateId", prompt.getTemplateId());
         runRequest.setStructuredInput(structuredInput);
-        runRequest.setAttachmentRefs(inputRefs);
-        runRequest.setRequiredTools(
-                java.util.Collections.singletonList("upload_artifact"));
-        Map<String, String> toolContext = new HashMap<>();
-        toolContext.put("projectId", work.getProjectId());
-        toolContext.put("taskId", work.getConversationId());
-        runRequest.setToolContext(toolContext);
-        runRequest.setIdempotencyKey(task.getRequestId());
-        runRequest.setBusinessSessionId(work.getBusinessSessionId());
-        AgentRunResponse response = agentCore.submitRun(runRequest);
+        runRequest.setAttachments(artifactService.toAgentAttachments(inputRefs));
+        AgentRunResponse response = agentCore.submitRun(expertId, runRequest);
         executionRepository.saveSession(task.getId(), response.getSessionId());
         emit(work, ProjectEventType.TASK_STARTED, "Expert " + expertId + " accepted the task.");
     }
@@ -304,8 +299,11 @@ public class SingleExpertWorker {
                     write(event.getPayload()))) {
                 task.setStatus("WAITING_HUMAN");
                 String question = String.valueOf(event.getPayload().get("question"));
+                String agentQuestionId =
+                        String.valueOf(event.getPayload().get("questionId"));
                 String requestId = humanRequests.createExpertClarification(
-                        work.getTenantId(), work.getProjectId(), task.getId(), question);
+                        work.getTenantId(), work.getProjectId(), task.getId(),
+                        agentQuestionId, question);
                 emitHumanRequest(work, requestId, "CLARIFICATION", question);
             }
             return;

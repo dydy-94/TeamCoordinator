@@ -1,11 +1,15 @@
 package org.cmb.teamcoordinator.api;
 
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import javax.validation.Valid;
 import org.cmb.teamcoordinator.agentcore.AgentCoreAdapter;
 import org.cmb.teamcoordinator.agentcore.AgentRunEvent;
 import org.cmb.teamcoordinator.agentcore.AgentRunRequest;
 import org.cmb.teamcoordinator.agentcore.AgentRunResponse;
+import org.cmb.teamcoordinator.agentcore.AgentCoreConversationRequest;
+import org.cmb.teamcoordinator.agentcore.AgentCoreConversationResponse;
 import org.cmb.teamcoordinator.agentcore.ExpertDescriptor;
 import org.cmb.teamcoordinator.agentcore.ExpertRegistry;
 import org.springframework.http.MediaType;
@@ -38,8 +42,32 @@ public class MockAgentCoreController {
     }
 
     @PostMapping("/agentcore/runs")
-    public ResponseEntity<AgentRunResponse> submitRun(@Valid @RequestBody AgentRunRequest request) {
-        return ResponseEntity.accepted().body(agentCoreAdapter.submitRun(request));
+    public ResponseEntity<AgentCoreConversationResponse> submitRun(
+            @RequestBody AgentCoreConversationRequest request) {
+        AgentRunResponse response;
+        if ("stopSession".equals(request.getType())) {
+            response = agentCoreAdapter.stopSession(request.getSessionId());
+        } else if ("userAnswerQuestion".equals(request.getType())) {
+            response = agentCoreAdapter.answerQuestion(
+                    request.getSessionId(), request.getData().getQuestionId(),
+                    request.getData().getAnswers());
+        } else {
+            AgentRunRequest run = new AgentRunRequest();
+            run.setSystemPrompt(request.getSystemPrompt());
+            if (request.getData() != null
+                    && request.getData().getContents() != null
+                    && !request.getData().getContents().isEmpty()) {
+                run.setTaskText(request.getData().getContents().get(0).getValue());
+                run.setSkillNames(request.getData().getSkillNames());
+                run.setAttachments(request.getData().getAttachments());
+            }
+            response = agentCoreAdapter.submitRun("expert-analysis", run);
+        }
+        if (response == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.accepted()
+                .body(AgentCoreConversationResponse.success(response));
     }
 
     @PostMapping("/agentcore/runs/{sessionId}/cancel")
@@ -66,15 +94,48 @@ public class MockAgentCoreController {
         SseEmitter emitter = new SseEmitter(30_000L);
         try {
             for (AgentRunEvent event : agentCoreAdapter.streamEvents(sessionId, afterSequence)) {
-                emitter.send(SseEmitter.event()
-                        .id(String.valueOf(event.getSequence()))
-                        .name(event.getType())
-                        .data(event));
+                for (Map<String, Object> chunk : chunks(event)) {
+                    emitter.send(SseEmitter.event().data(chunk));
+                }
             }
             emitter.complete();
         } catch (Exception ex) {
             emitter.completeWithError(ex);
         }
         return emitter;
+    }
+
+    private List<Map<String, Object>> chunks(AgentRunEvent event) {
+        List<Map<String, Object>> result = new java.util.ArrayList<>();
+        if ("RUN_SUCCEEDED".equals(event.getType())) {
+            Map<String, Object> chat = base(event, event.getEventId() + ":chat", "chat");
+            chat.put("content", event.getPayload().get("resultText"));
+            chat.put("attachments", java.util.Collections.emptyList());
+            result.add(chat);
+            result.add(base(event, event.getEventId(), "end"));
+            return result;
+        }
+        String type = "RUN_WAITING_HUMAN".equals(event.getType()) ? "confirm"
+                : "RUN_FAILED".equals(event.getType()) ? "error" : "liveStatus";
+        Map<String, Object> chunk = base(event, event.getEventId(), type);
+        chunk.put("content", event.getMessage());
+        if ("confirm".equals(type)) {
+            chunk.put("questionId", event.getPayload().get("questionId"));
+            chunk.put("questions", java.util.Collections.singletonList(
+                    java.util.Collections.singletonMap(
+                            "question", event.getPayload().get("question"))));
+        }
+        result.add(chunk);
+        return result;
+    }
+
+    private Map<String, Object> base(
+            AgentRunEvent event, String eventId, String type) {
+        Map<String, Object> chunk = new LinkedHashMap<>();
+        chunk.put("type", type);
+        chunk.put("sessionId", event.getSessionId());
+        chunk.put("timestamp", System.currentTimeMillis());
+        chunk.put("eventId", eventId);
+        return chunk;
     }
 }

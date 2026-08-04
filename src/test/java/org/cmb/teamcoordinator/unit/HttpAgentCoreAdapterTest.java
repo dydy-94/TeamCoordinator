@@ -42,21 +42,23 @@ class HttpAgentCoreAdapterTest {
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(header("Content-Type", MediaType.APPLICATION_JSON_VALUE))
                 .andExpect(header("X-Agent-Token", "secret"))
-                .andExpect(header("X-Session-Id", "business-session-1"))
                 .andExpect(content().string(
-                        containsString("\"requiredTools\":[\"upload_artifact\"]")))
+                        containsString("\"type\":\"userInput\"")))
                 .andExpect(content().string(
-                        containsString("\"toolContext\":{\"taskId\":\"task-1\"}")))
+                        containsString("\"systemPrompt\":\"system instructions\"")))
+                .andExpect(content().string(
+                        containsString("\"contents\":[{\"type\":\"text\",\"value\":\"analyze\"}]")))
                 .andRespond(withSuccess(
-                        "{\"sessionId\":\"session-1\",\"status\":\"ACCEPTED\"}",
+                        "{\"returnCode\":\"SUC0000\",\"data\":{\"sessionId\":\"session-1\","
+                                + "\"conversationId\":\"conversation-1\","
+                                + "\"queuePosition\":0}}",
                         MediaType.APPLICATION_JSON));
-        String sse = "id: 1\n"
-                + "event: RUN_ACCEPTED\n"
-                + "data: {\"sessionId\":\"session-1\",\"status\":\"ACCEPTED\"}\n\n"
-                + "id: 2\n"
-                + "event: RUN_SUCCEEDED\n"
-                + "data: {\"sessionId\":\"session-1\",\"sequence\":2,"
-                + "\"status\":\"SUCCEEDED\",\"payload\":{\"resultText\":\"done\"}}\n\n";
+        String sse = "data:{\"type\":\"liveStatus\",\"content\":\"thinking\","
+                + "\"eventId\":\"event-1\"}\n\n"
+                + "data:{\"type\":\"chat\",\"content\":\"done\","
+                + "\"eventId\":\"event-2\"}\n\n"
+                + "data:{\"type\":\"end\",\"attachments\":[],"
+                + "\"eventId\":\"event-3\"}\n\n";
         server.expect(once(), requestTo(
                         "http://agentcore.test/api/runs/session-1/streamEvents?afterSequence=0"))
                 .andExpect(method(HttpMethod.GET))
@@ -74,28 +76,29 @@ class HttpAgentCoreAdapterTest {
         server.expect(once(), requestTo("http://agentcore.test/api/runs/missing"))
                 .andExpect(header("X-Session-Id", "business-session-1"))
                 .andRespond(withStatus(HttpStatus.NOT_FOUND));
-        server.expect(once(), requestTo("http://agentcore.test/api/runs/session-1/cancel"))
+        server.expect(once(), requestTo("http://agentcore.test/api/runs"))
                 .andExpect(method(HttpMethod.POST))
-                .andExpect(header("X-Session-Id", "business-session-1"))
+                .andExpect(content().string(containsString("\"type\":\"stopSession\"")))
+                .andExpect(content().string(containsString("\"sessionId\":\"session-1\"")))
                 .andRespond(withSuccess(
-                        "{\"sessionId\":\"session-1\",\"sequence\":3,"
-                                + "\"type\":\"RUN_CANCELLED\",\"status\":\"CANCELLED\"}",
+                        "{\"returnCode\":\"SUC0000\",\"data\":{\"sessionId\":\"session-1\","
+                                + "\"conversationId\":\"conversation-1\","
+                                + "\"queuePosition\":0}}",
                         MediaType.APPLICATION_JSON));
 
         AgentRunRequest request = new AgentRunRequest();
-        request.setExpertId("expert-analysis");
         request.setTaskText("analyze");
-        request.setRequiredTools(java.util.Collections.singletonList("upload_artifact"));
-        request.setToolContext(java.util.Collections.singletonMap("taskId", "task-1"));
-        request.setBusinessSessionId("business-session-1");
-        AgentRunResponse submitted = adapter.submitRun(request);
+        request.setSystemPrompt("system instructions");
+        AgentRunResponse submitted = adapter.submitRun("expert-analysis", request);
         assertEquals("session-1", submitted.getSessionId());
         List<AgentRunEvent> events = adapter.streamEvents(
                 "session-1", 0L, "business-session-1");
-        assertEquals(2, events.size());
-        assertEquals("RUN_ACCEPTED", events.get(0).getType());
+        assertEquals(3, events.size());
+        assertEquals("RUN_PROGRESS", events.get(0).getType());
         assertEquals(1L, events.get(0).getSequence());
-        assertEquals("session-1:1", events.get(0).getEventId());
+        assertEquals("event-1", events.get(0).getEventId());
+        assertEquals("RUN_SUCCEEDED", events.get(2).getType());
+        assertEquals("done", events.get(2).getPayload().get("resultText"));
         assertEquals("SUCCEEDED", adapter.getRunStatus(
                 "session-1", "business-session-1").getStatus());
         assertNull(adapter.getRunStatus("missing", "business-session-1"));

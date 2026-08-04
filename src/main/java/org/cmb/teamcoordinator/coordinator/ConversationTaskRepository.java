@@ -22,7 +22,7 @@ public class ConversationTaskRepository {
         String sessionId = "session-" + UUID.randomUUID();
         jdbc.update(
                 "INSERT INTO project_conversation "
-                        + "(id, tenant_id, project_id, session_id, title, status) "
+                        + "(business_id, tenant_id, project_id, session_id, title, status) "
                         + "VALUES (?, ?, ?, ?, ?, 'ACTIVE')",
                 taskId, identity.getTenantId(), projectId, sessionId, title);
         return get(identity.getTenantId(), projectId, taskId);
@@ -30,9 +30,9 @@ public class ConversationTaskRepository {
 
     public ConversationTaskView get(String tenantId, String projectId, String taskId) {
         List<ConversationTaskView> rows = jdbc.query(
-                "SELECT id, project_id, session_id, title, status, created_at "
+                "SELECT business_id AS id, project_id, session_id, title, status, created_at "
                         + "FROM project_conversation WHERE tenant_id = ? "
-                        + "AND project_id = ? AND id = ?",
+                        + "AND project_id = ? AND business_id = ?",
                 (rs, row) -> {
                     ConversationTaskView view = new ConversationTaskView();
                     view.setTaskId(rs.getString("id"));

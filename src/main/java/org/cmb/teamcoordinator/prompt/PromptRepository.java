@@ -46,7 +46,7 @@ public class PromptRepository {
         try {
             jdbc.update(
                     "INSERT INTO prompt_template "
-                            + "(id, prompt_key, agent_scope, scene, version, status, "
+                            + "(business_id, prompt_key, agent_scope, scene, version, status, "
                             + "template_content, variables_schema, created_by) "
                             + "VALUES (?, ?, ?, ?, ?, 'DRAFT', ?, ?, ?)",
                     id, request.getPromptKey(), request.getAgentScope(),
@@ -70,14 +70,14 @@ public class PromptRepository {
                 target.getPromptKey());
         jdbc.update(
                 "UPDATE prompt_template SET status = 'PUBLISHED', "
-                        + "published_at = CURRENT_TIMESTAMP WHERE id = ?",
+                        + "published_at = CURRENT_TIMESTAMP WHERE business_id = ?",
                 id);
         return find(id);
     }
 
     public PromptTemplateView find(String id) {
         List<PromptTemplateView> rows = jdbc.query(
-                "SELECT * FROM prompt_template WHERE id = ?",
+                "SELECT * FROM prompt_template WHERE business_id = ?",
                 (rs, rowNum) -> map(rs), id);
         return rows.isEmpty() ? null : rows.get(0);
     }
@@ -89,7 +89,7 @@ public class PromptRepository {
         try {
             jdbc.update(
                     "INSERT INTO prompt_execution "
-                            + "(id, tenant_id, project_id, conversation_id, invocation_id, "
+                            + "(business_id, tenant_id, project_id, conversation_id, invocation_id, "
                             + "agent_id, scene, prompt_template_id, prompt_version, "
                             + "rendered_prompt, variables_snapshot) "
                             + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -104,7 +104,7 @@ public class PromptRepository {
 
     private PromptTemplateView map(java.sql.ResultSet rs) throws java.sql.SQLException {
         PromptTemplateView value = new PromptTemplateView();
-        value.setId(rs.getString("id"));
+        value.setId(rs.getString("business_id"));
         value.setPromptKey(rs.getString("prompt_key"));
         value.setAgentScope(rs.getString("agent_scope"));
         value.setScene(rs.getString("scene"));

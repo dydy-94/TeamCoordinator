@@ -54,14 +54,14 @@ class SingleExpertExecutionIntegrationTest {
         String dispatchId = dispatchId(projectId);
         jdbc.update(
                 "UPDATE coordinator_dispatch SET lease_owner = 'dead-instance', "
-                        + "lease_expires_at = ? WHERE id = ?",
+                        + "lease_expires_at = ? WHERE business_id = ?",
                 Timestamp.from(Instant.now().plusSeconds(60)),
                 dispatchId);
         worker.runOnce();
         assertEquals("RUNNING", task(projectId).getStatus());
 
         jdbc.update(
-                "UPDATE coordinator_dispatch SET lease_expires_at = ? WHERE id = ?",
+                "UPDATE coordinator_dispatch SET lease_expires_at = ? WHERE business_id = ?",
                 Timestamp.from(Instant.now().minusSeconds(1)),
                 dispatchId);
         task = runUntilTerminal(projectId);
@@ -88,7 +88,7 @@ class SingleExpertExecutionIntegrationTest {
         assertEquals(Integer.valueOf(1), finalCount);
         String businessSessionId = jdbc.queryForObject(
                 "SELECT c.session_id FROM project_conversation c "
-                        + "JOIN coordinator_dispatch d ON d.conversation_id = c.id "
+                        + "JOIN coordinator_dispatch d ON d.conversation_id = c.business_id "
                         + "WHERE d.project_id = ?",
                 String.class, projectId);
         assertEquals(businessSessionId, jdbc.queryForObject(
@@ -96,10 +96,9 @@ class SingleExpertExecutionIntegrationTest {
                         + "WHERE project_id = ?",
                 String.class, projectId));
         String resultJson = jdbc.queryForObject(
-                "SELECT result_json FROM coordinator_task WHERE id = ?",
+                "SELECT result_json FROM coordinator_task WHERE business_id = ?",
                 String.class, task.getId());
-        assertTrue(resultJson.contains(
-                "\"businessSessionId\":\"" + businessSessionId + "\""));
+        assertTrue(resultJson.contains("\"resultText\":"));
     }
 
     @Test
@@ -130,7 +129,7 @@ class SingleExpertExecutionIntegrationTest {
         TaskRecord task = runUntilTaskExists(projectId);
         jdbc.update(
                 "UPDATE coordinator_task SET session_id = 'missing-run', status = 'RUNNING' "
-                        + "WHERE id = ?",
+                        + "WHERE business_id = ?",
                 task.getId());
         jdbc.update(
                 "UPDATE coordinator_dispatch SET status = 'RUNNING', lease_owner = NULL, "
@@ -174,7 +173,7 @@ class SingleExpertExecutionIntegrationTest {
 
     private TaskRecord task(String projectId) {
         String taskId = jdbc.queryForObject(
-                "SELECT id FROM coordinator_task WHERE project_id = ?",
+                "SELECT business_id FROM coordinator_task WHERE project_id = ?",
                 String.class,
                 projectId);
         return executionRepository.findTask("tenant-execution", projectId, taskId);
@@ -210,14 +209,14 @@ class SingleExpertExecutionIntegrationTest {
 
     private String dispatchId(String projectId) {
         return jdbc.queryForObject(
-                "SELECT id FROM coordinator_dispatch WHERE project_id = ?",
+                "SELECT business_id FROM coordinator_dispatch WHERE project_id = ?",
                 String.class,
                 projectId);
     }
 
     private String dispatchStatus(String dispatchId) {
         return jdbc.queryForObject(
-                "SELECT status FROM coordinator_dispatch WHERE id = ?",
+                "SELECT status FROM coordinator_dispatch WHERE business_id = ?",
                 String.class,
                 dispatchId);
     }

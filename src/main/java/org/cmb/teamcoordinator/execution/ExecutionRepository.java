@@ -31,7 +31,7 @@ public class ExecutionRepository {
     @Transactional
     public DispatchWork claimNext(String owner, int leaseSeconds) {
         List<String> ids = jdbc.queryForList(
-                "SELECT d.id FROM coordinator_dispatch d "
+                "SELECT d.business_id FROM coordinator_dispatch d "
                         + "WHERE d.status IN ('PENDING', 'RUNNING') "
                         + "AND d.available_at <= CURRENT_TIMESTAMP "
                         + "AND (d.lease_expires_at IS NULL "
@@ -53,7 +53,7 @@ public class ExecutionRepository {
                 "UPDATE coordinator_dispatch SET status = 'RUNNING', lease_owner = ?, "
                         + "lease_expires_at = ?, attempt_count = attempt_count + 1, "
                         + "updated_at = CURRENT_TIMESTAMP "
-                        + "WHERE id = ? AND (lease_expires_at IS NULL "
+                        + "WHERE business_id = ? AND (lease_expires_at IS NULL "
                         + "OR lease_expires_at < CURRENT_TIMESTAMP)",
                 owner,
                 Timestamp.from(Instant.now().plusSeconds(leaseSeconds)),
@@ -63,12 +63,12 @@ public class ExecutionRepository {
 
     public DispatchWork loadWork(String dispatchId) {
         return jdbc.queryForObject(
-                "SELECT d.id dispatch_id, d.tenant_id, d.project_id, d.conversation_id, "
+                "SELECT d.business_id dispatch_id, d.tenant_id, d.project_id, d.conversation_id, "
                         + "d.message_id, m.user_id, m.message_text, m.attachment_refs, "
                         + "c.session_id business_session_id "
-                        + "FROM coordinator_dispatch d JOIN project_message m ON m.id = d.message_id "
-                        + "JOIN project_conversation c ON c.id = d.conversation_id "
-                        + "WHERE d.id = ?",
+                        + "FROM coordinator_dispatch d JOIN project_message m ON m.business_id = d.message_id "
+                        + "JOIN project_conversation c ON c.business_id = d.conversation_id "
+                        + "WHERE d.business_id = ?",
                 (rs, rowNum) -> {
                     DispatchWork work = new DispatchWork();
                     work.setDispatchId(rs.getString("dispatch_id"));
@@ -87,7 +87,7 @@ public class ExecutionRepository {
 
     public String createPlan(DispatchWork work, CoordinatorDecision decision) {
         List<String> existing = jdbc.queryForList(
-                "SELECT id FROM coordinator_plan WHERE tenant_id = ? AND project_id = ? "
+                "SELECT business_id AS id FROM coordinator_plan WHERE tenant_id = ? AND project_id = ? "
                         + "AND message_id = ?",
                 String.class,
                 work.getTenantId(),
@@ -99,7 +99,7 @@ public class ExecutionRepository {
         String id = "plan-" + UUID.randomUUID();
         jdbc.update(
                 "INSERT INTO coordinator_plan "
-                        + "(id, tenant_id, project_id, conversation_id, message_id, analysis_id, "
+                        + "(business_id, tenant_id, project_id, conversation_id, message_id, analysis_id, "
                         + "status, intent_json) VALUES (?, ?, ?, ?, ?, ?, 'RUNNING', ?)",
                 id,
                 work.getTenantId(),
@@ -117,7 +117,7 @@ public class ExecutionRepository {
             CoordinatorDecision decision,
             PlanningResult planning) {
         List<String> existing = jdbc.queryForList(
-                "SELECT id FROM coordinator_plan WHERE tenant_id = ? AND project_id = ? "
+                "SELECT business_id AS id FROM coordinator_plan WHERE tenant_id = ? AND project_id = ? "
                         + "AND message_id = ? ORDER BY plan_version DESC",
                 String.class,
                 work.getTenantId(),
@@ -130,7 +130,7 @@ public class ExecutionRepository {
         String id = "plan-" + UUID.randomUUID();
         jdbc.update(
                 "INSERT INTO coordinator_plan "
-                        + "(id, tenant_id, project_id, conversation_id, message_id, analysis_id, "
+                        + "(business_id, tenant_id, project_id, conversation_id, message_id, analysis_id, "
                         + "plan_version, status, intent_json, plan_json, repair_count) "
                         + "VALUES (?, ?, ?, ?, ?, ?, ?, 'RUNNING', ?, ?, ?)",
                 id,
@@ -159,7 +159,7 @@ public class ExecutionRepository {
         String id = "plan-" + UUID.randomUUID();
         jdbc.update(
                 "INSERT INTO coordinator_plan "
-                        + "(id, tenant_id, project_id, conversation_id, message_id, analysis_id, "
+                        + "(business_id, tenant_id, project_id, conversation_id, message_id, analysis_id, "
                         + "plan_version, status, intent_json, plan_json, repair_count, "
                         + "supersedes_plan_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'RUNNING', ?, ?, ?, ?)",
                 id, work.getTenantId(), work.getProjectId(), work.getConversationId(),
@@ -176,7 +176,7 @@ public class ExecutionRepository {
         }
         jdbc.update(
                 "UPDATE coordinator_plan SET status = 'SUPERSEDED', "
-                        + "updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                        + "updated_at = CURRENT_TIMESTAMP WHERE business_id = ?",
                 previousPlanId);
         return id;
     }
@@ -184,7 +184,7 @@ public class ExecutionRepository {
     public List<TaskRecord> findTasksForMessage(DispatchWork work) {
         return jdbc.query(
                 taskSelect() + " FROM coordinator_task t "
-                        + "JOIN coordinator_plan p ON p.id = t.plan_id "
+                        + "JOIN coordinator_plan p ON p.business_id = t.plan_id "
                         + "WHERE p.tenant_id = ? AND p.message_id = ? "
                         + "AND p.status = 'RUNNING' ORDER BY t.created_at, t.task_key",
                 (rs, rowNum) -> mapTask(rs),
@@ -196,7 +196,7 @@ public class ExecutionRepository {
         return jdbc.update(
                 "UPDATE coordinator_task SET expert_id = ?, status = 'STARTING', "
                         + "updated_at = CURRENT_TIMESTAMP "
-                        + "WHERE id = ? AND status = 'PENDING'",
+                        + "WHERE business_id = ? AND status = 'PENDING'",
                 expertId,
                 taskId) == 1;
     }
@@ -218,7 +218,7 @@ public class ExecutionRepository {
         int updated = jdbc.update(
                 "UPDATE coordinator_task SET status = 'CORRECTING', correction_count = 1, "
                         + "result_accepted = FALSE, updated_at = CURRENT_TIMESTAMP "
-                        + "WHERE id = ? AND correction_count = 0",
+                        + "WHERE business_id = ? AND correction_count = 0",
                 original.getId());
         if (updated != 1) {
             return null;
@@ -228,7 +228,7 @@ public class ExecutionRepository {
         String requestId = original.getRequestId() + ":correction-1";
         jdbc.update(
                 "INSERT INTO coordinator_task "
-                        + "(id, tenant_id, project_id, plan_id, task_key, request_id, expert_id, "
+                        + "(business_id, tenant_id, project_id, plan_id, task_key, request_id, expert_id, "
                         + "status, objective, attachment_refs, dependencies, "
                         + "required_capabilities, expected_output, acceptance_criteria, "
                         + "correction_of, correction_count) "
@@ -253,7 +253,7 @@ public class ExecutionRepository {
     public void acceptCorrection(TaskRecord correction, String resultJson) {
         jdbc.update(
                 "UPDATE coordinator_task SET status = 'SUCCEEDED', result_json = ?, "
-                        + "result_accepted = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                        + "result_accepted = TRUE, updated_at = CURRENT_TIMESTAMP WHERE business_id = ?",
                 resultJson,
                 correction.getCorrectionOf());
     }
@@ -262,7 +262,7 @@ public class ExecutionRepository {
             DispatchWork work, String planId, String expertId, String objective) {
         String requestId = work.getMessageId() + ":single-expert";
         List<TaskRecord> existing = jdbc.query(
-                "SELECT id, plan_id, request_id, expert_id, session_id, status, last_sequence "
+                "SELECT id AS database_id, business_id, plan_id, request_id, expert_id, session_id, status, last_sequence "
                         + "FROM coordinator_task WHERE tenant_id = ? AND request_id = ?",
                 (rs, rowNum) -> mapTask(rs),
                 work.getTenantId(),
@@ -273,7 +273,7 @@ public class ExecutionRepository {
         String taskId = "task-" + UUID.randomUUID();
         jdbc.update(
                 "INSERT INTO coordinator_task "
-                        + "(id, tenant_id, project_id, plan_id, task_key, request_id, expert_id, "
+                        + "(business_id, tenant_id, project_id, plan_id, task_key, request_id, expert_id, "
                         + "status, objective, attachment_refs) "
                         + "VALUES (?, ?, ?, ?, 'single-task', ?, ?, 'PENDING', ?, ?)",
                 taskId,
@@ -295,9 +295,9 @@ public class ExecutionRepository {
 
     public TaskRecord findTaskForMessage(DispatchWork work) {
         List<TaskRecord> rows = jdbc.query(
-                "SELECT t.id, t.plan_id, t.request_id, t.expert_id, t.session_id, "
+                "SELECT t.id AS database_id, t.business_id, t.plan_id, t.request_id, t.expert_id, t.session_id, "
                         + "t.status, t.last_sequence FROM coordinator_task t "
-                        + "JOIN coordinator_plan p ON p.id = t.plan_id "
+                        + "JOIN coordinator_plan p ON p.business_id = t.plan_id "
                         + "WHERE p.tenant_id = ? AND p.message_id = ?",
                 (rs, rowNum) -> mapTask(rs),
                 work.getTenantId(),
@@ -308,7 +308,7 @@ public class ExecutionRepository {
     public void saveSession(String taskId, String sessionId) {
         jdbc.update(
                 "UPDATE coordinator_task SET session_id = ?, status = 'RUNNING', "
-                        + "updated_at = CURRENT_TIMESTAMP WHERE id = ? AND session_id IS NULL",
+                        + "updated_at = CURRENT_TIMESTAMP WHERE business_id = ? AND session_id IS NULL",
                 sessionId,
                 taskId);
     }
@@ -316,7 +316,7 @@ public class ExecutionRepository {
     public void replaceSession(String taskId, String sessionId) {
         jdbc.update(
                 "UPDATE coordinator_task SET session_id = ?, status = 'RUNNING', "
-                        + "last_sequence = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ? "
+                        + "last_sequence = 0, updated_at = CURRENT_TIMESTAMP WHERE business_id = ? "
                         + "AND status = 'WAITING_HUMAN'",
                 sessionId, taskId);
     }
@@ -326,8 +326,9 @@ public class ExecutionRepository {
         try {
             jdbc.update(
                     "INSERT INTO coordinator_task_event "
-                            + "(tenant_id, task_id, event_id, sequence, event_type, payload) "
-                            + "VALUES (?, ?, ?, ?, ?, ?)",
+                            + "(business_id, tenant_id, task_id, event_id, sequence, "
+                            + "event_type, payload) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    "task-event-" + UUID.randomUUID(),
                     tenantId,
                     taskId,
                     event.getEventId(),
@@ -345,7 +346,7 @@ public class ExecutionRepository {
         return jdbc.update(
                 "UPDATE coordinator_task SET status = ?, last_sequence = ?, result_json = ?, "
                         + "result_accepted = ?, updated_at = CURRENT_TIMESTAMP "
-                        + "WHERE id = ? AND last_sequence < ? "
+                        + "WHERE business_id = ? AND last_sequence < ? "
                         + "AND status NOT IN ('SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT')",
                 status,
                 sequence,
@@ -358,7 +359,7 @@ public class ExecutionRepository {
     public void completePlanAndDispatch(
             String planId, String dispatchId, String status, String error) {
         jdbc.update(
-                "UPDATE coordinator_plan SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                "UPDATE coordinator_plan SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE business_id = ?",
                 status,
                 planId);
         completeDispatch(dispatchId, status, error);
@@ -367,7 +368,7 @@ public class ExecutionRepository {
     public void completeDispatch(String dispatchId, String status, String error) {
         jdbc.update(
                 "UPDATE coordinator_dispatch SET status = ?, last_error = ?, lease_owner = NULL, "
-                        + "lease_expires_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                        + "lease_expires_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE business_id = ?",
                 status,
                 error,
                 dispatchId);
@@ -376,14 +377,14 @@ public class ExecutionRepository {
     public void releaseDispatch(String dispatchId) {
         jdbc.update(
                 "UPDATE coordinator_dispatch SET lease_owner = NULL, lease_expires_at = NULL, "
-                        + "updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'RUNNING'",
+                        + "updated_at = CURRENT_TIMESTAMP WHERE business_id = ? AND status = 'RUNNING'",
                 dispatchId);
     }
 
     public TaskRecord findTask(String tenantId, String projectId, String taskId) {
         List<TaskRecord> rows = jdbc.query(
-                "SELECT id, plan_id, request_id, expert_id, session_id, status, last_sequence "
-                        + "FROM coordinator_task WHERE tenant_id = ? AND project_id = ? AND id = ?",
+                "SELECT id AS database_id, business_id, plan_id, request_id, expert_id, session_id, status, last_sequence "
+                        + "FROM coordinator_task WHERE tenant_id = ? AND project_id = ? AND business_id = ?",
                 (rs, rowNum) -> mapTask(rs),
                 tenantId,
                 projectId,
@@ -393,11 +394,11 @@ public class ExecutionRepository {
 
     public DispatchWork loadWorkForTask(String tenantId, String projectId, String taskId) {
         List<String> dispatchIds = jdbc.queryForList(
-                "SELECT d.id FROM coordinator_task t "
-                        + "JOIN coordinator_plan p ON p.id = t.plan_id "
+                "SELECT d.business_id FROM coordinator_task t "
+                        + "JOIN coordinator_plan p ON p.business_id = t.plan_id "
                         + "JOIN coordinator_dispatch d ON d.message_id = p.message_id "
                         + "AND d.tenant_id = p.tenant_id "
-                        + "WHERE t.tenant_id = ? AND t.project_id = ? AND t.id = ?",
+                        + "WHERE t.tenant_id = ? AND t.project_id = ? AND t.business_id = ?",
                 String.class,
                 tenantId,
                 projectId,
@@ -407,7 +408,8 @@ public class ExecutionRepository {
 
     private TaskRecord mapTask(java.sql.ResultSet rs) throws java.sql.SQLException {
         TaskRecord task = new TaskRecord();
-        task.setId(rs.getString("id"));
+        task.setDatabaseId(rs.getLong("database_id"));
+        task.setBusinessId(rs.getString("business_id"));
         task.setPlanId(rs.getString("plan_id"));
         task.setTaskKey(column(rs, "task_key"));
         task.setRequestId(rs.getString("request_id"));
@@ -431,7 +433,7 @@ public class ExecutionRepository {
         String requestId = work.getMessageId() + ":" + task.getTaskKey();
         jdbc.update(
                 "INSERT INTO coordinator_task "
-                        + "(id, tenant_id, project_id, plan_id, task_key, request_id, expert_id, status, "
+                        + "(business_id, tenant_id, project_id, plan_id, task_key, request_id, expert_id, status, "
                         + "objective, attachment_refs, dependencies, required_capabilities, "
                         + "expected_output, acceptance_criteria) "
                         + "VALUES (?, ?, ?, ?, ?, ?, '', 'PENDING', ?, ?, ?, ?, ?, ?)",
@@ -464,7 +466,7 @@ public class ExecutionRepository {
             TaskRecord reusable) {
         jdbc.update(
                 "INSERT INTO coordinator_task "
-                        + "(id, tenant_id, project_id, plan_id, task_key, request_id, expert_id, "
+                        + "(business_id, tenant_id, project_id, plan_id, task_key, request_id, expert_id, "
                         + "session_id, status, objective, attachment_refs, result_json, "
                         + "last_sequence, dependencies, required_capabilities, expected_output, "
                         + "acceptance_criteria, result_accepted, reused_from_task_id) "
@@ -480,7 +482,7 @@ public class ExecutionRepository {
     }
 
     private String taskSelect() {
-        return "SELECT t.id, t.plan_id, t.task_key, t.request_id, t.expert_id, "
+        return "SELECT t.id AS database_id, t.business_id, t.plan_id, t.task_key, t.request_id, t.expert_id, "
                 + "t.session_id, t.status, t.objective, t.expected_output, "
                 + "t.acceptance_criteria, t.result_json, t.correction_of, "
                 + "t.correction_count, t.dependencies, t.required_capabilities, "

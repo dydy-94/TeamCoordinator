@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
-import java.util.UUID;
 import org.cmb.teamcoordinator.agentcore.AgentRunEvent;
 import org.cmb.teamcoordinator.agentcore.AgentRunRequest;
 import org.cmb.teamcoordinator.agentcore.AgentRunResponse;
@@ -35,10 +34,9 @@ class RealAgentCoreAcceptanceIT {
 
         for (int run = 0; run < 20; run++) {
             AgentRunRequest request = new AgentRunRequest();
-            request.setExpertId(required("AGENTCORE_TEST_EXPERT_ID"));
             request.setTaskText("AgentCore acceptance run " + (run + 1));
-            request.setIdempotencyKey("real-acceptance-" + UUID.randomUUID());
-            AgentRunResponse response = adapter.submitRun(request);
+            AgentRunResponse response = adapter.submitRun(
+                    required("AGENTCORE_TEST_EXPERT_ID"), request);
             assertNotNull(response);
             assertNotNull(response.getSessionId());
             List<AgentRunEvent> events =

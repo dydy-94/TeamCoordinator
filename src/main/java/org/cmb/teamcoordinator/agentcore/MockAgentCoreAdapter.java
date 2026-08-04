@@ -23,7 +23,6 @@ import org.springframework.stereotype.Component;
 public class MockAgentCoreAdapter implements AgentCoreAdapter {
 
     private final Map<String, List<AgentRunEvent>> eventsBySessionId = new ConcurrentHashMap<>();
-    private final Map<String, AgentRunResponse> responsesByIdempotencyKey = new ConcurrentHashMap<>();
     private final FileStore fileStore;
     private final ObjectMapper objectMapper;
     private final MockIntentModelClient coordinatorAgent;
@@ -47,20 +46,12 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
     }
 
     @Override
-    public AgentRunResponse submitRun(AgentRunRequest request) {
-        if (request.getIdempotencyKey() != null) {
-            AgentRunResponse existing = responsesByIdempotencyKey.get(request.getIdempotencyKey());
-            if (existing != null) {
-                return existing;
-            }
-        }
-
+    public AgentRunResponse submitRun(String targetAgentId, AgentRunRequest request) {
         String sessionId = "mock-run-" + UUID.randomUUID().toString();
         List<AgentRunEvent> events = new ArrayList<>();
         AgentRunEvent accepted = new AgentRunEvent(
                 sessionId, 1, "RUN_ACCEPTED", "ACCEPTED",
                 "Mock expert run accepted.");
-        accepted.getPayload().put("businessSessionId", request.getBusinessSessionId());
         events.add(accepted);
         events.add(new AgentRunEvent(sessionId, 2, "RUN_PROGRESS", "RUNNING", "Mock expert is processing the task."));
 
@@ -69,20 +60,17 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
         String effectiveTask = objective == null
                 ? request.getTaskText() : String.valueOf(objective);
         String normalizedTask = effectiveTask == null ? "" : effectiveTask.toLowerCase();
-        if (coordinatorAgentId.equals(request.getExpertId())) {
+        if (coordinatorAgentId.equals(targetAgentId)) {
             addCoordinatorEvents(request, sessionId, events);
             eventsBySessionId.put(sessionId, events);
-            AgentRunResponse response = new AgentRunResponse(sessionId, "ACCEPTED");
-            if (request.getIdempotencyKey() != null) {
-                responsesByIdempotencyKey.put(request.getIdempotencyKey(), response);
-            }
-            return response;
+            return new AgentRunResponse(sessionId, "ACCEPTED");
         }
         if (normalizedTask.contains("need-human")) {
             AgentRunEvent waiting = new AgentRunEvent(
                     sessionId, 3, "RUN_WAITING_HUMAN", "WAITING_HUMAN",
                     "Mock expert needs clarification.");
             waiting.getPayload().put("question", "Please provide the missing expert input.");
+            waiting.getPayload().put("questionId", "mock-question-" + sessionId);
             waiting.getPayload().put("requestType", "CLARIFICATION");
             events.add(waiting);
         } else if (normalizedTask.contains("timeout")) {
@@ -91,20 +79,19 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
             events.add(new AgentRunEvent(sessionId, 3, "RUN_FAILED", "FAILED", "Mock expert failed by requested scenario."));
         } else {
             AgentRunEvent result = new AgentRunEvent(sessionId, 3, "RUN_SUCCEEDED", "SUCCEEDED", "Mock expert completed the task.");
-            result.getPayload().put("expertId", request.getExpertId());
-            result.getPayload().put(
-                    "businessSessionId", request.getBusinessSessionId());
+            result.getPayload().put("expertId", targetAgentId);
             if (!normalizedTask.contains("invalid-result")) {
                 result.getPayload().put("resultText", "Mock result for: " + effectiveTask);
             }
-            result.getPayload().put("attachmentRefs", request.getAttachmentRefs());
             List<String> attachmentContents = new ArrayList<>();
-            for (String attachmentRef : request.getAttachmentRefs()) {
+            for (AgentRunAttachment runAttachment : request.getAttachments()) {
+                String attachmentRef = storageKey(runAttachment.getFileDownloadUrl());
                 byte[] attachment = fileStore.getContent(attachmentRef);
                 if (attachment != null) {
                     attachmentContents.add(new String(attachment, StandardCharsets.UTF_8));
                 }
             }
+            result.getPayload().put("attachmentRefs", request.getAttachments());
             result.getPayload().put("attachmentContents", attachmentContents);
             MockFileDescriptor artifact = fileStore.reserve("result.txt", "text/plain");
             String artifactContent = "Mock result for: " + effectiveTask
@@ -116,11 +103,20 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
         }
 
         eventsBySessionId.put(sessionId, events);
-        AgentRunResponse response = new AgentRunResponse(sessionId, "ACCEPTED");
-        if (request.getIdempotencyKey() != null) {
-            responsesByIdempotencyKey.put(request.getIdempotencyKey(), response);
+        return new AgentRunResponse(sessionId, "ACCEPTED");
+    }
+
+    private String storageKey(String downloadUrl) {
+        if (downloadUrl == null) {
+            return "";
         }
-        return response;
+        int marker = downloadUrl.indexOf("/mock/files/");
+        if (marker < 0) {
+            return downloadUrl;
+        }
+        String suffix = downloadUrl.substring(marker + "/mock/files/".length());
+        return suffix.endsWith("/content")
+                ? suffix.substring(0, suffix.length() - "/content".length()) : suffix;
     }
 
     private void addCoordinatorEvents(
@@ -202,5 +198,11 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
         result.getPayload().put("resultText", "Mock resumed result: " + humanResponse);
         events.add(result);
         return new AgentRunResponse(sessionId, "RUNNING");
+    }
+
+    @Override
+    public AgentRunResponse answerQuestion(
+            String sessionId, String questionId, Map<String, String> answers) {
+        return resumeRun(sessionId, String.valueOf(answers), questionId);
     }
 }

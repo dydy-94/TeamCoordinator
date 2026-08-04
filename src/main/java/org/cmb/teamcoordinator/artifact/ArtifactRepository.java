@@ -25,7 +25,7 @@ public class ArtifactRepository {
             ArtifactRecord artifact, String tenantId, String createdBy) {
         jdbc.update(
                 "INSERT INTO project_artifact "
-                        + "(id, tenant_id, project_id, task_id, expert_run_id, version, "
+                        + "(business_id, tenant_id, project_id, task_id, expert_run_id, version, "
                         + "storage_key, file_name, media_type, status, created_by) "
                         + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 artifact.id, tenantId, artifact.projectId, artifact.taskId,
@@ -35,10 +35,10 @@ public class ArtifactRepository {
 
     public ArtifactRecord find(String tenantId, String projectId, String id) {
         List<ArtifactRecord> rows = jdbc.query(
-                "SELECT * FROM project_artifact WHERE tenant_id = ? AND project_id = ? AND id = ?",
+                "SELECT * FROM project_artifact WHERE tenant_id = ? AND project_id = ? AND business_id = ?",
                 (rs, rowNum) -> {
                     ArtifactRecord record = new ArtifactRecord();
-                    record.id = rs.getString("id");
+                    record.id = rs.getString("business_id");
                     record.projectId = rs.getString("project_id");
                     record.taskId = rs.getString("task_id");
                     record.expertRunId = rs.getString("expert_run_id");
@@ -60,7 +60,7 @@ public class ArtifactRepository {
             String tenantId, String projectId, String reference) {
         List<String> keys = jdbc.queryForList(
                 "SELECT storage_key FROM project_artifact "
-                        + "WHERE tenant_id = ? AND project_id = ? AND id = ? "
+                        + "WHERE tenant_id = ? AND project_id = ? AND business_id = ? "
                         + "AND status = 'AVAILABLE'",
                 String.class, tenantId, projectId, reference);
         return keys.isEmpty() ? reference : keys.get(0);
@@ -70,7 +70,7 @@ public class ArtifactRepository {
         jdbc.update(
                 "UPDATE project_artifact SET size_bytes = ?, sha256 = ?, "
                         + "status = 'AVAILABLE', completed_at = CURRENT_TIMESTAMP "
-                        + "WHERE id = ? AND status = 'UPLOADING'",
+                        + "WHERE business_id = ? AND status = 'UPLOADING'",
                 size, sha256, id);
     }
 
@@ -78,10 +78,10 @@ public class ArtifactRepository {
             String projectId, String conversationId, String businessSessionId,
             String agentRunId, String agentId) {
         List<AgentArtifactUploadContext> rows = jdbc.query(
-                "SELECT t.tenant_id, t.id coordinator_task_id "
+                "SELECT t.tenant_id, t.business_id coordinator_task_id "
                         + "FROM coordinator_task t "
-                        + "JOIN coordinator_plan p ON p.id = t.plan_id "
-                        + "JOIN project_conversation c ON c.id = p.conversation_id "
+                        + "JOIN coordinator_plan p ON p.business_id = t.plan_id "
+                        + "JOIN project_conversation c ON c.business_id = p.conversation_id "
                         + "WHERE t.project_id = ? AND p.conversation_id = ? "
                         + "AND c.session_id = ? AND t.session_id = ? AND t.expert_id = ? "
                         + "AND t.status IN ('RUNNING', 'WAITING_HUMAN')",
@@ -98,7 +98,7 @@ public class ArtifactRepository {
         Integer count = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM project_artifact WHERE tenant_id = ? "
                         + "AND project_id = ? AND task_id = ? AND expert_run_id = ? "
-                        + "AND id = ? AND status = 'AVAILABLE'",
+                        + "AND business_id = ? AND status = 'AVAILABLE'",
                 Integer.class, tenantId, projectId, coordinatorTaskId, agentRunId, artifactId);
         return count != null && count == 1;
     }
@@ -115,9 +115,9 @@ public class ArtifactRepository {
         args.addAll(dependencyKeys);
         return jdbc.queryForList(
                 "SELECT a.storage_key FROM project_artifact a "
-                        + "JOIN coordinator_task t ON t.id = a.task_id "
+                        + "JOIN coordinator_task t ON t.business_id = a.task_id "
                         + "WHERE t.plan_id = ? AND t.task_key IN (" + placeholders + ") "
-                        + "AND a.status = 'AVAILABLE' ORDER BY a.id",
+                        + "AND a.status = 'AVAILABLE' ORDER BY a.business_id",
                 String.class, args.toArray());
     }
 
@@ -135,8 +135,8 @@ public class ArtifactRepository {
         jdbc.update(
                 "INSERT INTO project_artifact_lineage "
                         + "(output_artifact_id, input_artifact_id) "
-                        + "SELECT ?, a.id FROM project_artifact a "
-                        + "JOIN coordinator_task t ON t.id = a.task_id "
+                        + "SELECT ?, a.business_id FROM project_artifact a "
+                        + "JOIN coordinator_task t ON t.business_id = a.task_id "
                         + "WHERE t.plan_id = ? AND t.task_key IN (" + placeholders + ") "
                         + "AND a.status = 'AVAILABLE'",
                 args.toArray());

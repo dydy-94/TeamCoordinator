@@ -1,10 +1,13 @@
 package org.cmb.teamcoordinator.agentcore;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.cmb.teamcoordinator.config.DigitalTeamProperties;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpEntity;
@@ -48,13 +51,14 @@ public class HttpAgentCoreAdapter implements AgentCoreAdapter {
     }
 
     @Override
-    public AgentRunResponse submitRun(AgentRunRequest request) {
-        ResponseEntity<AgentRunResponse> response = restTemplate.exchange(
+    public AgentRunResponse submitRun(String targetAgentId, AgentRunRequest request) {
+        ResponseEntity<AgentCoreConversationResponse> response = restTemplate.exchange(
                 uri(properties.getSubmitPath()),
                 HttpMethod.POST,
-                new HttpEntity<>(request, jsonHeaders(request.getBusinessSessionId())),
-                AgentRunResponse.class);
-        return response.getBody();
+                new HttpEntity<>(
+                        AgentCoreConversationRequest.userInput(request), jsonHeaders(null)),
+                AgentCoreConversationResponse.class);
+        return requireResponse(response);
     }
 
     @Override
@@ -77,7 +81,8 @@ public class HttpAgentCoreAdapter implements AgentCoreAdapter {
                 HttpMethod.GET,
                 new HttpEntity<Void>(headers),
                 String.class);
-        return parseSse(response.getBody());
+        return parseSse(
+                response.getBody(), sessionId, afterSequence == null ? 0L : afterSequence);
     }
 
     @Override
@@ -107,12 +112,26 @@ public class HttpAgentCoreAdapter implements AgentCoreAdapter {
     @Override
     public AgentRunEvent cancelRun(String sessionId, String businessSessionId) {
         try {
-            ResponseEntity<AgentRunEvent> response = restTemplate.exchange(
-                    uri(path(properties.getCancelPath(), sessionId)),
+            AgentRunResponse response = stopSession(sessionId);
+            return new AgentRunEvent(
+                    sessionId, 0, "RUN_CANCELLED",
+                    response == null ? "FAILED" : "CANCELLED", "AgentCore session stopped.");
+        } catch (HttpClientErrorException.NotFound ex) {
+            return null;
+        }
+    }
+
+    @Override
+    public AgentRunResponse stopSession(String sessionId) {
+        try {
+            ResponseEntity<AgentCoreConversationResponse> response = restTemplate.exchange(
+                    uri(properties.getSubmitPath()),
                     HttpMethod.POST,
-                    new HttpEntity<Void>(jsonHeaders(businessSessionId)),
-                    AgentRunEvent.class);
-            return response.getBody();
+                    new HttpEntity<>(
+                            AgentCoreConversationRequest.stopSession(sessionId),
+                            jsonHeaders(null)),
+                    AgentCoreConversationResponse.class);
+            return requireResponse(response);
         } catch (HttpClientErrorException.NotFound ex) {
             return null;
         }
@@ -128,32 +147,40 @@ public class HttpAgentCoreAdapter implements AgentCoreAdapter {
     public AgentRunResponse resumeRun(
             String sessionId, String humanResponse, String idempotencyKey,
             String businessSessionId) {
-        java.util.Map<String, String> body = new java.util.HashMap<>();
-        body.put("human_response", humanResponse);
-        body.put("idempotency_key", idempotencyKey);
-        ResponseEntity<AgentRunResponse> response = restTemplate.exchange(
-                uri(path(properties.getResumePath(), sessionId)),
-                HttpMethod.POST,
-                new HttpEntity<>(body, jsonHeaders(businessSessionId)),
-                AgentRunResponse.class);
-        return response.getBody();
+        Map<String, String> answers = new LinkedHashMap<>();
+        answers.put("answer", humanResponse);
+        return answerQuestion(sessionId, idempotencyKey, answers);
     }
 
-    private List<AgentRunEvent> parseSse(String body) {
+    @Override
+    public AgentRunResponse answerQuestion(
+            String sessionId, String questionId, Map<String, String> answers) {
+        ResponseEntity<AgentCoreConversationResponse> response = restTemplate.exchange(
+                uri(properties.getSubmitPath()),
+                HttpMethod.POST,
+                new HttpEntity<>(
+                        AgentCoreConversationRequest.answerQuestion(
+                                sessionId, questionId, answers),
+                        jsonHeaders(null)),
+                AgentCoreConversationResponse.class);
+        return requireResponse(response);
+    }
+
+    private List<AgentRunEvent> parseSse(String body, String sessionId, long afterSequence) {
         if (body == null || body.trim().isEmpty()) {
             return Collections.emptyList();
         }
         List<AgentRunEvent> result = new ArrayList<>();
+        StringBuilder streamedText = new StringBuilder();
+        String latestChat = null;
+        long sequence = afterSequence;
         String normalized = body.replace("\r\n", "\n");
         for (String block : normalized.split("\\n\\n")) {
             String id = null;
-            String type = null;
             StringBuilder data = new StringBuilder();
             for (String line : block.split("\\n")) {
                 if (line.startsWith("id:")) {
                     id = line.substring(3).trim();
-                } else if (line.startsWith("event:")) {
-                    type = line.substring(6).trim();
                 } else if (line.startsWith("data:")) {
                     if (data.length() > 0) {
                         data.append('\n');
@@ -165,16 +192,23 @@ public class HttpAgentCoreAdapter implements AgentCoreAdapter {
                 continue;
             }
             try {
-                AgentRunEvent event =
-                        objectMapper.readValue(data.toString(), AgentRunEvent.class);
-                if (event.getType() == null) {
-                    event.setType(type);
+                JsonNode raw = objectMapper.readTree(data.toString());
+                String rawType = text(raw, "type");
+                if ("textDelta".equals(rawType)) {
+                    streamedText.append(text(raw, "text"));
+                } else if ("chat".equals(rawType) && raw.hasNonNull("content")) {
+                    latestChat = raw.get("content").asText();
                 }
-                if (event.getSequence() == 0 && id != null) {
-                    event.setSequence(Long.parseLong(id));
+                AgentRunEvent event = toRunEvent(raw, sessionId, ++sequence);
+                if ("RUN_SUCCEEDED".equals(event.getType())) {
+                    String resultText = latestChat != null ? latestChat : streamedText.toString();
+                    event.getPayload().put("resultText", resultText);
                 }
-                if (event.getEventId() == null) {
-                    event.setEventId(event.getSessionId() + ":" + event.getSequence());
+                if (event.getEventId() == null || event.getEventId().trim().isEmpty()) {
+                    event.setEventId(id);
+                }
+                if (event.getEventId() == null || event.getEventId().trim().isEmpty()) {
+                    throw new IllegalStateException("AgentCore SSE event did not contain eventId.");
                 }
                 result.add(event);
             } catch (Exception ex) {
@@ -182,6 +216,62 @@ public class HttpAgentCoreAdapter implements AgentCoreAdapter {
             }
         }
         return result;
+    }
+
+    private AgentRunEvent toRunEvent(JsonNode raw, String queriedSessionId, long sequence) {
+        String rawType = text(raw, "type");
+        String type = "RUN_PROGRESS";
+        String status = "RUNNING";
+        String message = raw.hasNonNull("content")
+                ? raw.get("content").asText() : rawType;
+        if ("confirm".equals(rawType)) {
+            type = "RUN_WAITING_HUMAN";
+            status = "WAITING_HUMAN";
+        } else if ("error".equals(rawType)) {
+            type = "RUN_FAILED";
+            status = "FAILED";
+        } else if ("end".equals(rawType)) {
+            type = "RUN_SUCCEEDED";
+            status = "SUCCEEDED";
+        } else if ("taskInQueue".equals(rawType)) {
+            status = "QUEUED";
+        }
+        AgentRunEvent event = new AgentRunEvent(
+                raw.hasNonNull("sessionId") ? text(raw, "sessionId") : queriedSessionId,
+                sequence, type, status, message);
+        event.setEventId(text(raw, "eventId"));
+        Map<String, Object> payload = objectMapper.convertValue(raw, Map.class);
+        payload.put("agentCoreType", rawType);
+        if ("confirm".equals(rawType)) {
+            payload.put("questionId", text(raw, "questionId"));
+            payload.put("question", summarizeQuestions(raw.get("questions")));
+            payload.put("requestType", "QUESTION");
+        }
+        event.setPayload(payload);
+        return event;
+    }
+
+    private String summarizeQuestions(JsonNode questions) {
+        if (questions == null || !questions.isArray()) {
+            return "AgentCore requires user input.";
+        }
+        List<String> values = new ArrayList<>();
+        for (JsonNode question : questions) {
+            values.add(text(question, "question"));
+        }
+        return String.join("\n", values);
+    }
+
+    private String text(JsonNode node, String field) {
+        return node != null && node.hasNonNull(field) ? node.get(field).asText() : null;
+    }
+
+    private AgentRunResponse requireResponse(
+            ResponseEntity<AgentCoreConversationResponse> response) {
+        if (response.getBody() == null) {
+            throw new IllegalStateException("AgentCore returned an empty response.");
+        }
+        return response.getBody().toRunResponse();
     }
 
     private HttpHeaders jsonHeaders(String businessSessionId) {

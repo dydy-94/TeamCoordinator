@@ -5,7 +5,8 @@ import java.util.List;
 
 public class TaskRecord {
 
-    private String id;
+    private Long databaseId;
+    private String businessId;
     private String planId;
     private String taskKey;
     private String requestId;
@@ -22,8 +23,12 @@ public class TaskRecord {
     private List<String> requiredCapabilities = new ArrayList<>();
     private long lastSequence;
 
-    public String getId() { return id; }
-    public void setId(String value) { this.id = value; }
+    public Long getDatabaseId() { return databaseId; }
+    public void setDatabaseId(Long value) { this.databaseId = value; }
+    public String getBusinessId() { return businessId; }
+    public void setBusinessId(String value) { this.businessId = value; }
+    public String getId() { return businessId; }
+    public void setId(String value) { this.businessId = value; }
     public String getPlanId() { return planId; }
     public void setPlanId(String value) { this.planId = value; }
     public String getTaskKey() { return taskKey; }

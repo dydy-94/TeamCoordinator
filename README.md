@@ -88,9 +88,9 @@ The local worker interval defaults to 500 ms and can be changed with
 `EXECUTION_WORKER_INTERVAL_MS`. Tasks can be cancelled with
 `DELETE /api/v1/projects/{projectId}/expert-tasks/{expertTaskId}`.
 
-The business Task `sessionId` is sent as `X-Session-Id` on every Coordinator
-and expert AgentCore request. AgentCore's returned run `sessionId` is separate
-and is used only to query that individual run.
+The business Task `sessionId` remains Coordinator-owned context. AgentCore's
+returned `sessionId` is separate and is used for stream queries, stop requests,
+and human answers for that individual run.
 
 ### Real AgentCore
 

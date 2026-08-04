@@ -10,6 +10,8 @@ import org.cmb.teamcoordinator.agentcore.AgentCoreAdapter;
 import org.cmb.teamcoordinator.agentcore.AgentRunEvent;
 import org.cmb.teamcoordinator.agentcore.AgentRunRequest;
 import org.cmb.teamcoordinator.agentcore.AgentRunResponse;
+import org.cmb.teamcoordinator.artifact.ArtifactRepository;
+import org.cmb.teamcoordinator.artifact.ArtifactService;
 import org.cmb.teamcoordinator.config.DigitalTeamProperties;
 import org.cmb.teamcoordinator.prompt.PromptService;
 import org.cmb.teamcoordinator.prompt.RenderedPrompt;
@@ -26,16 +28,21 @@ public class CoordinatorAgentClient {
     private final ObjectMapper objectMapper;
     private final String coordinatorAgentId;
     private final PromptService prompts;
+    private final ArtifactRepository artifacts;
+    private final ArtifactService artifactService;
 
     public CoordinatorAgentClient(
             AgentCoreAdapter agentCore, CoordinatorAgentRunRepository runs,
             ObjectMapper objectMapper, DigitalTeamProperties properties,
-            PromptService prompts) {
+            PromptService prompts, ArtifactRepository artifacts,
+            ArtifactService artifactService) {
         this.agentCore = agentCore;
         this.runs = runs;
         this.objectMapper = objectMapper;
         this.coordinatorAgentId = properties.getAgentCore().getCoordinatorAgentId();
         this.prompts = prompts;
+        this.artifacts = artifacts;
+        this.artifactService = artifactService;
     }
 
     public Result execute(
@@ -79,7 +86,6 @@ public class CoordinatorAgentClient {
             RequestIdentity identity, String projectId,
             CoordinatorAgentRun run, IntentAnalysisContext context) {
         AgentRunRequest request = new AgentRunRequest();
-        request.setExpertId(coordinatorAgentId);
         Map<String, Object> input = new LinkedHashMap<>();
         input.put("operation", run.getStage());
         input.put("context", objectMapper.convertValue(
@@ -89,14 +95,18 @@ public class CoordinatorAgentClient {
                 PromptService.COORDINATOR_EXECUTION, input,
                 identity.getTenantId(), projectId, null,
                 run.getId() + ":" + run.getStage(), coordinatorAgentId);
-        request.setTaskText(prompt.getContent());
+        request.setSystemPrompt(prompt.getContent());
+        request.setTaskText(context.getText());
         input.put("promptVersion", prompt.getVersion());
         input.put("promptTemplateId", prompt.getTemplateId());
         request.setStructuredInput(input);
-        request.setAttachmentRefs(context.getAttachmentRefs());
-        request.setIdempotencyKey(run.getId() + ":" + run.getStage());
-        request.setBusinessSessionId(run.getBusinessSessionId());
-        AgentRunResponse response = agentCore.submitRun(request);
+        List<String> storageKeys = new java.util.ArrayList<>();
+        for (String reference : context.getAttachmentRefs()) {
+            storageKeys.add(artifacts.resolveStorageKey(
+                    identity.getTenantId(), projectId, reference));
+        }
+        request.setAttachments(artifactService.toAgentAttachments(storageKeys));
+        AgentRunResponse response = agentCore.submitRun(coordinatorAgentId, request);
         runs.saveSession(run.getId(), run.getStage(), response.getSessionId());
     }
 

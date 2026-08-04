@@ -28,12 +28,12 @@ public class MessageEventRepository {
             RequestIdentity identity, String projectId, String taskId,
             MessageRequest request) {
         List<MessageAcceptedResponse> rows = jdbc.query(
-                "SELECT m.id, m.conversation_id, c.session_id, m.status "
+                "SELECT m.business_id AS id, m.conversation_id, c.session_id, m.status "
                         + "FROM project_message m JOIN project_conversation c "
-                        + "ON c.id = m.conversation_id "
+                        + "ON c.business_id = m.conversation_id "
                         + "WHERE m.tenant_id = ? AND m.project_id = ? "
                         + "AND m.conversation_id = ? "
-                        + "AND (m.client_message_id = ? OR m.idempotency_key = ?) LIMIT 1",
+                        + "AND m.client_message_id = ? LIMIT 1",
                 (rs, rowNum) -> new MessageAcceptedResponse(
                         rs.getString("id"),
                         rs.getString("conversation_id"),
@@ -42,8 +42,7 @@ public class MessageEventRepository {
                 identity.getTenantId(),
                 projectId,
                 taskId,
-                request.getClientMessageId(),
-                request.getIdempotencyKey());
+                request.getClientMessageId());
         return rows.isEmpty() ? null : rows.get(0);
     }
 
@@ -55,16 +54,15 @@ public class MessageEventRepository {
             MessageRequest request) {
         jdbc.update(
                 "INSERT INTO project_message "
-                        + "(id, tenant_id, project_id, conversation_id, user_id, client_message_id, "
-                        + "idempotency_key, message_text, attachment_refs, status) "
-                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        + "(business_id, tenant_id, project_id, conversation_id, user_id, client_message_id, "
+                        + "message_text, attachment_refs, status) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 messageId,
                 identity.getTenantId(),
                 projectId,
                 conversationId,
                 identity.getUserId(),
                 request.getClientMessageId(),
-                request.getIdempotencyKey(),
                 request.getText(),
                 writeJson(request.getAttachmentRefs()),
                 "ACCEPTED");
@@ -123,7 +121,7 @@ public class MessageEventRepository {
         event.setCreatedAt(Instant.now());
         jdbc.update(
                 "INSERT INTO project_event "
-                        + "(id, tenant_id, project_id, conversation_id, message_id, sequence, "
+                        + "(business_id, tenant_id, project_id, conversation_id, message_id, sequence, "
                         + "event_type, visibility, payload) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 event.getId(),
                 identity.getTenantId(),
@@ -144,7 +142,7 @@ public class MessageEventRepository {
             String messageId) {
         jdbc.update(
                 "INSERT INTO coordinator_dispatch "
-                        + "(id, tenant_id, project_id, conversation_id, message_id, status) "
+                        + "(business_id, tenant_id, project_id, conversation_id, message_id, status) "
                         + "VALUES (?, ?, ?, ?, ?, ?)",
                 "dispatch-" + UUID.randomUUID(),
                 identity.getTenantId(),
@@ -163,7 +161,7 @@ public class MessageEventRepository {
             String tenantId, String projectId, String taskId,
             long afterSequence, int limit) {
         return jdbc.query(
-                "SELECT id, project_id, conversation_id, message_id, sequence, event_type, "
+                "SELECT business_id AS id, project_id, conversation_id, message_id, sequence, event_type, "
                         + "payload, created_at FROM project_event "
                         + "WHERE tenant_id = ? AND project_id = ? AND visibility = 'PUBLIC' "
                         + "AND conversation_id = ? "

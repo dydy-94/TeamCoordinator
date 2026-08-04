@@ -31,7 +31,7 @@ public class IntentAnalysisRepository {
             boolean repaired) {
         jdbc.update(
                 "INSERT INTO coordinator_analysis "
-                        + "(id, tenant_id, project_id, user_id, input_snapshot, model_name, "
+                        + "(business_id, tenant_id, project_id, user_id, input_snapshot, model_name, "
                         + "prompt_version, schema_version, decision_type, decision_json, repaired) "
                         + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 analysisId,

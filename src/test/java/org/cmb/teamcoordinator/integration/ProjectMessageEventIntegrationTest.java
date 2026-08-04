@@ -157,7 +157,7 @@ class ProjectMessageEventIntegrationTest {
         assertEquals(first.getDispatchId(), retriedFirst.getDispatchId());
         jdbc.update(
                 "UPDATE coordinator_dispatch SET status = 'COMPLETED', "
-                        + "lease_owner = NULL, lease_expires_at = NULL WHERE id = ?",
+                        + "lease_owner = NULL, lease_expires_at = NULL WHERE business_id = ?",
                 first.getDispatchId());
 
         DispatchWork second = executionRepository.claimNext("instance-b", 30);
@@ -174,10 +174,10 @@ class ProjectMessageEventIntegrationTest {
         submit(projectId, secondTask, "task-two-message", "second task only");
 
         String firstSession = jdbc.queryForObject(
-                "SELECT session_id FROM project_conversation WHERE id = ?",
+                "SELECT session_id FROM project_conversation WHERE business_id = ?",
                 String.class, firstTask);
         String secondSession = jdbc.queryForObject(
-                "SELECT session_id FROM project_conversation WHERE id = ?",
+                "SELECT session_id FROM project_conversation WHERE business_id = ?",
                 String.class, secondTask);
         assertTrue(!firstSession.equals(secondSession));
 

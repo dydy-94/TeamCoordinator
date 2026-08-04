@@ -50,12 +50,12 @@ public class WorkspaceController {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("project", projectService.get(identity, projectId));
         result.put("task", jdbc.queryForMap(
-                "SELECT id, session_id, title, status, created_at "
+                "SELECT business_id AS id, session_id, title, status, created_at "
                         + "FROM project_conversation WHERE tenant_id = ? "
-                        + "AND project_id = ? AND id = ?",
+                        + "AND project_id = ? AND business_id = ?",
                 identity.getTenantId(), projectId, taskId));
         result.put("messages", jdbc.queryForList(
-                "SELECT id, user_id, message_text, attachment_refs, status, created_at "
+                "SELECT business_id AS id, user_id, message_text, attachment_refs, status, created_at "
                         + "FROM project_message WHERE tenant_id = ? AND project_id = ? "
                         + "AND conversation_id = ? ORDER BY created_at",
                 identity.getTenantId(), projectId, taskId));
@@ -65,27 +65,27 @@ public class WorkspaceController {
                         + "AND conversation_id = ? ORDER BY sequence",
                 identity.getTenantId(), projectId, taskId));
         result.put("plans", jdbc.queryForList(
-                "SELECT id, plan_version, status, created_at FROM coordinator_plan "
+                "SELECT business_id AS id, plan_version, status, created_at FROM coordinator_plan "
                         + "WHERE tenant_id = ? AND project_id = ? "
                         + "AND conversation_id = ? ORDER BY plan_version",
                 identity.getTenantId(), projectId, taskId));
         result.put("tasks", jdbc.queryForList(
-                "SELECT t.id, t.plan_id, t.task_key, t.expert_id, t.status, "
+                "SELECT t.business_id AS id, t.plan_id, t.task_key, t.expert_id, t.status, "
                         + "t.objective, t.dependencies, "
                         + "t.created_at FROM coordinator_task t "
-                        + "JOIN coordinator_plan p ON p.id = t.plan_id "
+                        + "JOIN coordinator_plan p ON p.business_id = t.plan_id "
                         + "WHERE t.tenant_id = ? AND t.project_id = ? "
                         + "AND p.conversation_id = ? ORDER BY t.created_at, t.task_key",
                 identity.getTenantId(), projectId, taskId));
         result.put("humanRequests", jdbc.queryForList(
-                "SELECT h.id, h.task_id, h.request_type, h.question, h.status, "
+                "SELECT h.business_id AS id, h.task_id, h.request_type, h.question, h.status, "
                         + "h.decision, h.expires_at FROM human_request h "
-                        + "JOIN project_message m ON m.id = h.message_id "
+                        + "JOIN project_message m ON m.business_id = h.message_id "
                         + "WHERE h.tenant_id = ? AND h.project_id = ? "
                         + "AND m.conversation_id = ? ORDER BY h.created_at",
                 identity.getTenantId(), projectId, taskId));
         result.put("artifacts", jdbc.queryForList(
-                "SELECT id, task_id, version, file_name, media_type, size_bytes, sha256, status "
+                "SELECT business_id AS id, task_id, version, file_name, media_type, size_bytes, sha256, status "
                         + "FROM project_artifact WHERE tenant_id = ? AND project_id = ? "
                         + "ORDER BY created_at",
                 identity.getTenantId(), projectId));

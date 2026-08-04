@@ -4,36 +4,19 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import javax.validation.constraints.NotBlank;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class AgentRunRequest {
 
-    @NotBlank
-    private String expertId;
-
-    @NotBlank
     private String taskText;
 
+    private String systemPrompt;
+
+    private List<String> skillNames = new ArrayList<>();
+
+    private List<AgentRunAttachment> attachments = new ArrayList<>();
+
     private Map<String, Object> structuredInput;
-
-    private List<String> attachmentRefs = new ArrayList<>();
-
-    private List<String> requiredTools = new ArrayList<>();
-
-    private Map<String, String> toolContext;
-
-    private String idempotencyKey;
-
-    @JsonIgnore
-    private String businessSessionId;
-
-    public String getExpertId() {
-        return expertId;
-    }
-
-    public void setExpertId(String expertId) {
-        this.expertId = expertId;
-    }
 
     public String getTaskText() {
         return taskText;
@@ -41,6 +24,26 @@ public class AgentRunRequest {
 
     public void setTaskText(String taskText) {
         this.taskText = taskText;
+    }
+
+    public String getSystemPrompt() { return systemPrompt; }
+    public void setSystemPrompt(String value) { this.systemPrompt = value; }
+    public List<String> getSkillNames() { return skillNames; }
+    public void setSkillNames(List<String> value) {
+        this.skillNames = value == null ? new ArrayList<>() : value;
+    }
+    public List<AgentRunAttachment> getAttachments() { return attachments; }
+    public void setAttachments(List<AgentRunAttachment> value) {
+        this.attachments = value == null ? new ArrayList<>() : value;
+    }
+
+    @JsonIgnore
+    public String getContextText() {
+        try {
+            return new ObjectMapper().writeValueAsString(structuredInput);
+        } catch (Exception ex) {
+            throw new IllegalStateException("Could not serialize AgentCore context.", ex);
+        }
     }
 
     public Map<String, Object> getStructuredInput() {
@@ -51,27 +54,4 @@ public class AgentRunRequest {
         this.structuredInput = structuredInput;
     }
 
-    public List<String> getAttachmentRefs() {
-        return attachmentRefs;
-    }
-
-    public void setAttachmentRefs(List<String> attachmentRefs) {
-        this.attachmentRefs = attachmentRefs;
-    }
-
-    public List<String> getRequiredTools() { return requiredTools; }
-    public void setRequiredTools(List<String> value) { this.requiredTools = value; }
-    public Map<String, String> getToolContext() { return toolContext; }
-    public void setToolContext(Map<String, String> value) { this.toolContext = value; }
-
-    public String getIdempotencyKey() {
-        return idempotencyKey;
-    }
-
-    public void setIdempotencyKey(String idempotencyKey) {
-        this.idempotencyKey = idempotencyKey;
-    }
-
-    public String getBusinessSessionId() { return businessSessionId; }
-    public void setBusinessSessionId(String value) { this.businessSessionId = value; }
 }

@@ -37,7 +37,7 @@ class HumanRequestIntegrationTest {
         submit(projectId, "处理一下");
         runUntilWaiting(projectId);
         String requestId = jdbc.queryForObject(
-                "SELECT id FROM human_request WHERE project_id = ?",
+                "SELECT business_id FROM human_request WHERE project_id = ?",
                 String.class, projectId);
 
         respond(projectId, requestId,
@@ -69,7 +69,7 @@ class HumanRequestIntegrationTest {
         submit(projectId, "分析 need-human");
         runUntilTaskStatus(projectId, "WAITING_HUMAN");
         String requestId = jdbc.queryForObject(
-                "SELECT id FROM human_request WHERE project_id = ? AND task_id IS NOT NULL",
+                "SELECT business_id FROM human_request WHERE project_id = ? AND task_id IS NOT NULL",
                 String.class, projectId);
         String sessionId = jdbc.queryForObject(
                 "SELECT session_id FROM coordinator_task WHERE project_id = ?",
@@ -98,7 +98,7 @@ class HumanRequestIntegrationTest {
         String requestId = "human-" + UUID.randomUUID();
         jdbc.update(
                 "INSERT INTO human_request "
-                        + "(id, tenant_id, project_id, request_type, question, allowed_roles, "
+                        + "(business_id, tenant_id, project_id, request_type, question, allowed_roles, "
                         + "input_schema, status) VALUES (?, 'tenant-human', ?, 'APPROVAL', "
                         + "'Approve release?', 'OWNER', '{\"type\":\"object\"}', 'PENDING')",
                 requestId, projectId);
@@ -116,7 +116,7 @@ class HumanRequestIntegrationTest {
                 "{\"decision\":\"REJECT\",\"response\":{},"
                         + "\"idempotencyKey\":\"approval-2\"}", 409);
         assertEquals("APPROVE", jdbc.queryForObject(
-                "SELECT decision FROM human_request WHERE id = ?",
+                "SELECT decision FROM human_request WHERE business_id = ?",
                 String.class, requestId));
     }
 
@@ -178,7 +178,7 @@ class HumanRequestIntegrationTest {
 
     private String requestStatus(String requestId) {
         return jdbc.queryForObject(
-                "SELECT status FROM human_request WHERE id = ?",
+                "SELECT status FROM human_request WHERE business_id = ?",
                 String.class, requestId);
     }
 

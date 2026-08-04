@@ -4,7 +4,8 @@ import java.time.Instant;
 
 public class ProjectRecord {
 
-    private String id;
+    private Long databaseId;
+    private String businessId;
     private String tenantId;
     private String name;
     private String description;
@@ -13,8 +14,12 @@ public class ProjectRecord {
     private Instant createdAt;
     private Instant updatedAt;
 
-    public String getId() { return id; }
-    public void setId(String id) { this.id = id; }
+    public Long getDatabaseId() { return databaseId; }
+    public void setDatabaseId(Long value) { this.databaseId = value; }
+    public String getBusinessId() { return businessId; }
+    public void setBusinessId(String value) { this.businessId = value; }
+    public String getId() { return businessId; }
+    public void setId(String value) { this.businessId = value; }
     public String getTenantId() { return tenantId; }
     public void setTenantId(String tenantId) { this.tenantId = tenantId; }
     public String getName() { return name; }

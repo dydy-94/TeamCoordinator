@@ -2,7 +2,8 @@ package org.cmb.teamcoordinator.intent;
 
 public class CoordinatorAgentRun {
 
-    private String id;
+    private Long databaseId;
+    private String businessId;
     private String sessionId;
     private String stage;
     private String status;
@@ -12,8 +13,12 @@ public class CoordinatorAgentRun {
     private String outputJson;
     private String businessSessionId;
 
-    public String getId() { return id; }
-    public void setId(String value) { this.id = value; }
+    public Long getDatabaseId() { return databaseId; }
+    public void setDatabaseId(Long value) { this.databaseId = value; }
+    public String getBusinessId() { return businessId; }
+    public void setBusinessId(String value) { this.businessId = value; }
+    public String getId() { return businessId; }
+    public void setId(String value) { this.businessId = value; }
     public String getSessionId() { return sessionId; }
     public void setSessionId(String value) { this.sessionId = value; }
     public String getStage() { return stage; }

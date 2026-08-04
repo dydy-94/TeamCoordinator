@@ -106,11 +106,10 @@ public class HumanRequestService {
                     identity.getTenantId(), projectId, record.taskId);
             String answer = request.getResponse().path("answer").asText();
             AgentRunResponse resumed = tryResume(
-                    task.getSessionId(), answer, request.getIdempotencyKey(),
-                    work.getBusinessSessionId());
+                    task.getSessionId(), record.agentQuestionId,
+                    answers(request.getResponse()));
             if (resumed == null) {
                 AgentRunRequest run = new AgentRunRequest();
-                run.setExpertId(task.getExpertId());
                 Map<String, Object> promptContext = new LinkedHashMap<>();
                 promptContext.put("objective", task.getObjective());
                 promptContext.put("expectedOutput", task.getExpectedOutput());
@@ -121,17 +120,10 @@ public class HumanRequestService {
                         PromptService.EXPERT_RESUME, promptContext,
                         identity.getTenantId(), projectId, work.getConversationId(),
                         request.getIdempotencyKey() + ":new-run", task.getExpertId());
-                run.setTaskText(prompt.getContent());
+                run.setSystemPrompt(prompt.getContent());
+                run.setTaskText(answer);
                 run.setStructuredInput(promptContext);
-                run.setRequiredTools(
-                        java.util.Collections.singletonList("upload_artifact"));
-                Map<String, String> toolContext = new LinkedHashMap<>();
-                toolContext.put("projectId", projectId);
-                toolContext.put("taskId", work.getConversationId());
-                run.setToolContext(toolContext);
-                run.setIdempotencyKey(request.getIdempotencyKey() + ":new-run");
-                run.setBusinessSessionId(work.getBusinessSessionId());
-                resumed = agentCore.submitRun(run);
+                resumed = agentCore.submitRun(task.getExpertId(), run);
                 executionRepository.replaceSession(
                         task.getId(), resumed.getSessionId());
             } else {
@@ -146,14 +138,20 @@ public class HumanRequestService {
     }
 
     private AgentRunResponse tryResume(
-            String sessionId, String answer, String idempotencyKey,
-            String businessSessionId) {
+            String sessionId, String questionId, Map<String, String> answers) {
         try {
-            return agentCore.resumeRun(
-                    sessionId, answer, idempotencyKey, businessSessionId);
+            return agentCore.answerQuestion(sessionId, questionId, answers);
         } catch (RuntimeException ex) {
             return null;
         }
+    }
+
+    private Map<String, String> answers(JsonNode response) {
+        JsonNode source = response.has("answers") ? response.get("answers") : response;
+        Map<String, String> result = new LinkedHashMap<>();
+        source.fields().forEachRemaining(
+                entry -> result.put(entry.getKey(), entry.getValue().asText()));
+        return result;
     }
 
     @Scheduled(fixedDelayString = "${digital-team.human.timeout-scan-ms:5000}")

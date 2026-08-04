@@ -29,13 +29,21 @@ class MockAgentCoreControllerTest {
     void submitRunThenStreamEventsAsSse() throws Exception {
         MvcResult result = mockMvc.perform(post("/mock/agentcore/runs")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"expertId\":\"expert-analysis\",\"taskText\":\"analyze\"}"))
+                        .content("{\"type\":\"userInput\",\"sessionId\":\"\","
+                                + "\"systemPrompt\":\"Analyze the request\","
+                                + "\"data\":{\"skillNames\":[],"
+                                + "\"skillOrigin\":\"skillDevelop\","
+                                + "\"contents\":[{\"type\":\"text\","
+                                + "\"value\":\"analyze\"}],\"context\":[],"
+                                + "\"attachments\":[]}}"))
                 .andExpect(status().isAccepted())
-                .andExpect(jsonPath("$.sessionId", startsWith("mock-run-")))
+                .andExpect(jsonPath("$.returnCode").value("SUC0000"))
+                .andExpect(jsonPath("$.data.sessionId", startsWith("mock-run-")))
                 .andReturn();
 
         String body = result.getResponse().getContentAsString();
-        String sessionId = body.substring(body.indexOf("mock-run-"), body.indexOf("\",\"status"));
+        String sessionId = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(body).path("data").path("sessionId").asText();
 
         mockMvc.perform(get("/mock/agentcore/runs/" + sessionId + "/streamEvents")
                         .contentType(MediaType.APPLICATION_JSON))

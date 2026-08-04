@@ -21,17 +21,10 @@ public class MessageRequest {
     @Size(max = 10)
     private List<String> attachmentRefs = new ArrayList<>();
 
-    @NotBlank
-    @Size(max = 128)
-    @JsonProperty("idempotency_key")
-    private String idempotencyKey;
-
     public String getClientMessageId() { return clientMessageId; }
     public void setClientMessageId(String clientMessageId) { this.clientMessageId = clientMessageId; }
     public String getText() { return text; }
     public void setText(String text) { this.text = text; }
     public List<String> getAttachmentRefs() { return attachmentRefs; }
     public void setAttachmentRefs(List<String> attachmentRefs) { this.attachmentRefs = attachmentRefs; }
-    public String getIdempotencyKey() { return idempotencyKey; }
-    public void setIdempotencyKey(String idempotencyKey) { this.idempotencyKey = idempotencyKey; }
 }

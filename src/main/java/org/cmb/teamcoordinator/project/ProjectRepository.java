@@ -5,6 +5,7 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
@@ -20,7 +21,7 @@ public class ProjectRepository {
 
     public void insertProject(ProjectRecord project) {
         jdbc.update(
-                "INSERT INTO project (id, tenant_id, name, description, status, created_by) "
+                "INSERT INTO project (business_id, tenant_id, name, description, status, created_by) "
                         + "VALUES (?, ?, ?, ?, ?, ?)",
                 project.getId(),
                 project.getTenantId(),
@@ -32,9 +33,9 @@ public class ProjectRepository {
 
     public ProjectRecord findVisible(String tenantId, String projectId, String userId) {
         List<ProjectRecord> rows = jdbc.query(
-                "SELECT p.* FROM project p JOIN project_member m ON m.project_id = p.id "
+                "SELECT p.* FROM project p JOIN project_member m ON m.project_id = p.business_id "
                         + "AND m.tenant_id = p.tenant_id "
-                        + "WHERE p.tenant_id = ? AND p.id = ? AND m.user_id = ?",
+                        + "WHERE p.tenant_id = ? AND p.business_id = ? AND m.user_id = ?",
                 projectMapper(),
                 tenantId,
                 projectId,
@@ -80,7 +81,7 @@ public class ProjectRepository {
             ProjectStatus status) {
         jdbc.update(
                 "UPDATE project SET name = ?, description = ?, status = ?, updated_at = CURRENT_TIMESTAMP "
-                        + "WHERE tenant_id = ? AND id = ?",
+                        + "WHERE tenant_id = ? AND business_id = ?",
                 name,
                 description,
                 status.name(),
@@ -176,8 +177,9 @@ public class ProjectRepository {
             String detail) {
         jdbc.update(
                 "INSERT INTO permission_audit_log "
-                        + "(tenant_id, project_id, actor_user_id, action, target_id, detail) "
-                        + "VALUES (?, ?, ?, ?, ?, ?)",
+                        + "(business_id, tenant_id, project_id, actor_user_id, action, "
+                        + "target_id, detail) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "audit-" + UUID.randomUUID(),
                 identity.getTenantId(),
                 projectId,
                 identity.getUserId(),
@@ -192,7 +194,8 @@ public class ProjectRepository {
 
     private ProjectRecord mapProject(ResultSet rs) throws SQLException {
         ProjectRecord project = new ProjectRecord();
-        project.setId(rs.getString("id"));
+        project.setDatabaseId(rs.getLong("id"));
+        project.setBusinessId(rs.getString("business_id"));
         project.setTenantId(rs.getString("tenant_id"));
         project.setName(rs.getString("name"));
         project.setDescription(rs.getString("description"));
