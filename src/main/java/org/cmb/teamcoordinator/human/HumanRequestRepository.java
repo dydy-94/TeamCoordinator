@@ -113,6 +113,18 @@ public class HumanRequestRepository {
         return rows.isEmpty() ? null : rows.get(0);
     }
 
+    public HumanRequestRecord findPendingForTask(
+            String tenantId, String projectId, String taskId) {
+        List<HumanRequestRecord> rows = jdbc.query(
+                "SELECT * FROM human_request WHERE tenant_id = ? AND project_id = ? "
+                        + "AND task_id = ? AND status = 'PENDING' "
+                        + "AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP) "
+                        + "ORDER BY created_at LIMIT 1",
+                (rs, rowNum) -> map(rs),
+                tenantId, projectId, taskId);
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
     public int resolve(
             String tenantId,
             String id,
@@ -199,23 +211,23 @@ public class HumanRequestRepository {
         }
     }
 
-    static final class HumanRequestRecord {
-        String id;
-        String tenantId;
-        String analysisId;
-        String taskId;
-        String messageId;
-        String dispatchId;
-        String projectId;
-        HumanRequestType type;
-        String question;
-        String agentQuestionId;
-        String allowedRoles;
-        String inputSchema;
-        String status;
-        HumanDecision decision;
-        JsonNode response;
-        String responseIdempotencyKey;
-        Instant expiresAt;
+    public static final class HumanRequestRecord {
+        public String id;
+        public String tenantId;
+        public String analysisId;
+        public String taskId;
+        public String messageId;
+        public String dispatchId;
+        public String projectId;
+        public HumanRequestType type;
+        public String question;
+        public String agentQuestionId;
+        public String allowedRoles;
+        public String inputSchema;
+        public String status;
+        public HumanDecision decision;
+        public JsonNode response;
+        public String responseIdempotencyKey;
+        public Instant expiresAt;
     }
 }

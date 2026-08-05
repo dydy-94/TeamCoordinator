@@ -1,12 +1,15 @@
 package org.cmb.teamcoordinator.coordinator;
 
 import java.io.IOException;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Supplier;
+import org.cmb.teamcoordinator.agentcore.AgentCoreAdapter;
+import org.cmb.teamcoordinator.agentcore.AgentEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -20,11 +23,14 @@ public class ProjectEventStreamHub {
     private static final int POLL_BATCH_SIZE = 200;
 
     private final MessageEventRepository repository;
+    private final AgentCoreAdapter agentCore;
     private final Map<TaskKey, CopyOnWriteArrayList<Subscriber>> subscribers =
             new ConcurrentHashMap<>();
 
-    public ProjectEventStreamHub(MessageEventRepository repository) {
+    public ProjectEventStreamHub(MessageEventRepository repository,
+                                  AgentCoreAdapter agentCore) {
         this.repository = repository;
+        this.agentCore = agentCore;
     }
 
     public SseEmitter subscribe(
@@ -45,7 +51,15 @@ public class ProjectEventStreamHub {
         try {
             synchronized (subscriber) {
                 for (ProjectEvent event : replaySupplier.get()) {
-                    send(subscriber, event);
+                    if (event.getType() == ProjectEventType.AGENT_RUN_MARKER
+                            && event.getPayload() != null
+                            && event.getPayload().has("sessionId")) {
+                        replayAgentEvents(subscriber,
+                                event.getPayload().get("sessionId").asText(),
+                                event.getSequence());
+                    } else {
+                        send(subscriber, event);
+                    }
                 }
             }
         } catch (IOException | RuntimeException ex) {
@@ -92,18 +106,55 @@ public class ProjectEventStreamHub {
                         afterSequence,
                         POLL_BATCH_SIZE);
                 for (ProjectEvent event : events) {
+                        if (event.getType() == ProjectEventType.AGENT_RUN_MARKER
+                                && event.getPayload() != null
+                                && event.getPayload().has("sessionId")) {
+                            // Cross-instance: another Coordinator inserted a
+                            // marker. Fetch agent events from AgentCore and
+                            // push to each subscriber.
+                            String sessionId =
+                                    event.getPayload().get("sessionId").asText();
+                            for (Subscriber subscriber : projectSubscribers) {
+                                replayAgentEvents(subscriber, sessionId,
+                                        event.getSequence());
+                            }
+                            continue;
+                        }
                         publish(
                                 entry.getKey().tenantId,
                                 entry.getKey().projectId,
                                 entry.getKey().taskId,
                                 event);
                 }
-            } catch (RuntimeException ex) {
+            } catch (RuntimeException | IOException ex) {
                 LOGGER.warn(
                         "Could not poll project events for project {}.",
                         entry.getKey().projectId,
                         ex);
             }
+        }
+    }
+
+    /**
+     * Replay agent events from AgentCore for a marker encountered during
+     * SSE replay. Each agent event gets its own SSE frame with the
+     * agent event's type as the event name.
+     */
+    private void replayAgentEvents(Subscriber subscriber, String sessionId,
+                                    long markerSequence) throws IOException {
+        List<AgentEvent> events = agentCore.streamEvents(sessionId, 0L);
+        if (events == null || events.isEmpty()) {
+            return;
+        }
+        events.sort(Comparator.comparingLong(AgentEvent::getSequence));
+        for (AgentEvent ae : events) {
+            if (ae.getSequence() <= subscriber.lastSequence) {
+                continue;
+            }
+            subscriber.emitter.send(SseEmitter.event()
+                    .id(Long.toString(markerSequence))
+                    .name(ae.getType())
+                    .data(ae));
         }
     }
 
@@ -121,10 +172,16 @@ public class ProjectEventStreamHub {
         if (event.getSequence() <= subscriber.lastSequence) {
             return;
         }
-        subscriber.emitter.send(SseEmitter.event()
-                .id(Long.toString(event.getSequence()))
-                .name(event.getType().name())
-                .data(event));
+        SseEmitter.SseEventBuilder builder = SseEmitter.event()
+                .id(Long.toString(event.getSequence()));
+        if (event.getAgentEvent() != null) {
+            builder.name(event.getAgentEvent().getType())
+                   .data(event.getAgentEvent());
+        } else {
+            builder.name(event.getType().name())
+                   .data(event);
+        }
+        subscriber.emitter.send(builder);
         subscriber.lastSequence = event.getSequence();
     }
 

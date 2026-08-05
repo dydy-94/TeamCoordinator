@@ -10,6 +10,7 @@ public class DispatchWork {
     private String projectId;
     private String conversationId;
     private String businessSessionId;
+    private String coordinatorSessionId;
     private String messageId;
     private String userId;
     private String text;
@@ -25,6 +26,8 @@ public class DispatchWork {
     public void setConversationId(String value) { this.conversationId = value; }
     public String getBusinessSessionId() { return businessSessionId; }
     public void setBusinessSessionId(String value) { this.businessSessionId = value; }
+    public String getCoordinatorSessionId() { return coordinatorSessionId; }
+    public void setCoordinatorSessionId(String value) { this.coordinatorSessionId = value; }
     public String getMessageId() { return messageId; }
     public void setMessageId(String value) { this.messageId = value; }
     public String getUserId() { return userId; }

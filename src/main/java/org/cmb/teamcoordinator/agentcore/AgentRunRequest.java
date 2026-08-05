@@ -18,6 +18,16 @@ public class AgentRunRequest {
 
     private Map<String, Object> structuredInput;
 
+    /**
+     * When non-null, submit within this existing AgentCore conversation
+     * instead of creating a new one. Must be the sessionId from a previous
+     * {@code submitRun()} call to the same agent within the same task.
+     */
+    private String conversationSessionId;
+
+    public String getConversationSessionId() { return conversationSessionId; }
+    public void setConversationSessionId(String v) { this.conversationSessionId = v; }
+
     public String getTaskText() {
         return taskText;
     }

@@ -62,14 +62,16 @@ class MockFileFlowTest {
 
         String statusBody = mockMvc.perform(get("/mock/agentcore/runs/" + sessionId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.payload.attachmentRefs", hasSize(1)))
-                .andExpect(jsonPath("$.payload.attachmentContents[0]").value("input data"))
-                .andExpect(jsonPath("$.payload.artifactRefs[0]", startsWith("/mock/files/")))
+                .andExpect(jsonPath("$.attachments", hasSize(1)))
+                .andExpect(jsonPath("$.attachments[0].fileName").value("result.txt"))
+                .andExpect(jsonPath("$.attachments[0].path", startsWith("mock-file-")))
                 .andReturn().getResponse().getContentAsString();
-        String artifactUrl = objectMapper.readTree(statusBody).get("payload").get("artifactRefs").get(0).asText();
+        String artifactFileId = objectMapper.readTree(statusBody)
+                .get("attachments").get(0).get("path").asText();
+        String artifactUrl = "/mock/files/" + artifactFileId + "/content";
 
         mockMvc.perform(get(artifactUrl))
                 .andExpect(status().isOk())
-                .andExpect(content().string("Mock result for: process file\nInput: input data"));
+                .andExpect(content().string("Task completed: process file\nInput: input data"));
     }
 }

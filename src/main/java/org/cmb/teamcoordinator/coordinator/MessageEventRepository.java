@@ -2,6 +2,7 @@ package org.cmb.teamcoordinator.coordinator;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.cmb.teamcoordinator.agentcore.AgentEvent;
 import org.cmb.teamcoordinator.persistence.MyBatisRow;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -195,7 +196,16 @@ public class MessageEventRepository {
         event.setMessageId(rs.getString("message_id"));
         event.setSequence(rs.getLong("sequence"));
         event.setType(ProjectEventType.valueOf(rs.getString("event_type")));
-        event.setPayload(readJson(rs.getString("payload")));
+        JsonNode payload = readJson(rs.getString("payload"));
+        event.setPayload(payload);
+        // Reconstruct AgentEvent for consistent SSE emission on replay
+        if (payload != null && payload.has("type") && payload.has("agentId")) {
+            try {
+                event.setAgentEvent(objectMapper.treeToValue(payload, AgentEvent.class));
+            } catch (Exception ignored) {
+                // Not an AgentEvent payload — use legacy format
+            }
+        }
         Timestamp createdAt = rs.getTimestamp("created_at");
         event.setCreatedAt(createdAt == null ? null : createdAt.toInstant());
         return event;

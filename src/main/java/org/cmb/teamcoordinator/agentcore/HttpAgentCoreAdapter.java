@@ -1,7 +1,7 @@
 package org.cmb.teamcoordinator.agentcore;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -62,12 +62,12 @@ public class HttpAgentCoreAdapter implements AgentCoreAdapter {
     }
 
     @Override
-    public List<AgentRunEvent> streamEvents(String sessionId, Long afterSequence) {
+    public List<AgentEvent> streamEvents(String sessionId, Long afterSequence) {
         return streamEvents(sessionId, afterSequence, null);
     }
 
     @Override
-    public List<AgentRunEvent> streamEvents(
+    public List<AgentEvent> streamEvents(
             String sessionId, Long afterSequence, String businessSessionId) {
         UriComponentsBuilder builder =
                 UriComponentsBuilder.fromUri(uri(path(properties.getStreamPath(), sessionId)));
@@ -86,36 +86,41 @@ public class HttpAgentCoreAdapter implements AgentCoreAdapter {
     }
 
     @Override
-    public AgentRunEvent getRunStatus(String sessionId) {
+    public AgentEvent getRunStatus(String sessionId) {
         return getRunStatus(sessionId, null);
     }
 
     @Override
-    public AgentRunEvent getRunStatus(String sessionId, String businessSessionId) {
+    public AgentEvent getRunStatus(String sessionId, String businessSessionId) {
         try {
-            ResponseEntity<AgentRunEvent> response = restTemplate.exchange(
+            ResponseEntity<JsonNode> response = restTemplate.exchange(
                     uri(path(properties.getStatusPath(), sessionId)),
                     HttpMethod.GET,
                     new HttpEntity<Void>(jsonHeaders(businessSessionId)),
-                    AgentRunEvent.class);
-            return response.getBody();
+                    JsonNode.class);
+            JsonNode body = response.getBody();
+            return body == null ? null : toAgentEvent(body, sessionId, 0L);
         } catch (HttpClientErrorException.NotFound ex) {
             return null;
         }
     }
 
     @Override
-    public AgentRunEvent cancelRun(String sessionId) {
+    public AgentEvent cancelRun(String sessionId) {
         return cancelRun(sessionId, null);
     }
 
     @Override
-    public AgentRunEvent cancelRun(String sessionId, String businessSessionId) {
+    public AgentEvent cancelRun(String sessionId, String businessSessionId) {
         try {
             AgentRunResponse response = stopSession(sessionId);
-            return new AgentRunEvent(
-                    sessionId, 0, "RUN_CANCELLED",
-                    response == null ? "FAILED" : "CANCELLED", "AgentCore session stopped.");
+            AgentEvent event = new AgentEvent();
+            event.setSessionId(sessionId);
+            event.setType("RUN_CANCELLED");
+            event.setStatus(response == null ? "FAILED" : "CANCELLED");
+            event.setContent("AgentCore session stopped.");
+            event.setTimestamp(System.currentTimeMillis());
+            return event;
         } catch (HttpClientErrorException.NotFound ex) {
             return null;
         }
@@ -166,11 +171,13 @@ public class HttpAgentCoreAdapter implements AgentCoreAdapter {
         return requireResponse(response);
     }
 
-    private List<AgentRunEvent> parseSse(String body, String sessionId, long afterSequence) {
+    // ── SSE Parsing ─────────────────────────────────────────────────────
+
+    private List<AgentEvent> parseSse(String body, String sessionId, long afterSequence) {
         if (body == null || body.trim().isEmpty()) {
             return Collections.emptyList();
         }
-        List<AgentRunEvent> result = new ArrayList<>();
+        List<AgentEvent> result = new ArrayList<>();
         StringBuilder streamedText = new StringBuilder();
         String latestChat = null;
         long sequence = afterSequence;
@@ -193,74 +200,302 @@ public class HttpAgentCoreAdapter implements AgentCoreAdapter {
             }
             try {
                 JsonNode raw = objectMapper.readTree(data.toString());
-                String rawType = text(raw, "type");
-                if ("textDelta".equals(rawType)) {
-                    streamedText.append(text(raw, "text"));
-                } else if ("chat".equals(rawType) && raw.hasNonNull("content")) {
-                    latestChat = raw.get("content").asText();
-                }
-                AgentRunEvent event = toRunEvent(raw, sessionId, ++sequence);
-                if ("RUN_SUCCEEDED".equals(event.getType())) {
-                    String resultText = latestChat != null ? latestChat : streamedText.toString();
-                    event.getPayload().put("resultText", resultText);
-                }
+                AgentEvent event = toAgentEvent(raw, sessionId, ++sequence);
                 if (event.getEventId() == null || event.getEventId().trim().isEmpty()) {
                     event.setEventId(id);
                 }
+                // Accumulate streaming text
+                if ("textDelta".equals(event.getType()) && event.getText() != null) {
+                    streamedText.append(event.getText());
+                }
+                // Track latest chat content
+                if ("chat".equals(event.getType()) && event.getContent() != null) {
+                    latestChat = event.getContent();
+                }
+                // On end, inject accumulated result text if chat didn't provide it
+                if ("end".equals(event.getType())) {
+                    String resultText = latestChat != null
+                            ? latestChat : streamedText.toString();
+                    if (event.getContent() == null && !resultText.isEmpty()) {
+                        event.setContent(resultText);
+                    }
+                }
                 if (event.getEventId() == null || event.getEventId().trim().isEmpty()) {
-                    throw new IllegalStateException("AgentCore SSE event did not contain eventId.");
+                    throw new IllegalStateException(
+                            "AgentCore SSE event did not contain eventId.");
                 }
                 result.add(event);
             } catch (Exception ex) {
-                throw new IllegalStateException("Could not parse AgentCore SSE event.", ex);
+                throw new IllegalStateException(
+                        "Could not parse AgentCore SSE event.", ex);
             }
         }
         return result;
     }
 
-    private AgentRunEvent toRunEvent(JsonNode raw, String queriedSessionId, long sequence) {
+    /**
+     * Convert a raw AgentCore SSE JSON node to an AgentEvent, preserving the
+     * original {@code type} and mapping all known fields.
+     */
+    private AgentEvent toAgentEvent(JsonNode raw, String queriedSessionId, long sequence) {
         String rawType = text(raw, "type");
-        String type = "RUN_PROGRESS";
-        String status = "RUNNING";
-        String message = raw.hasNonNull("content")
-                ? raw.get("content").asText() : rawType;
-        if ("confirm".equals(rawType)) {
-            type = "RUN_WAITING_HUMAN";
-            status = "WAITING_HUMAN";
-        } else if ("error".equals(rawType)) {
-            type = "RUN_FAILED";
-            status = "FAILED";
-        } else if ("end".equals(rawType)) {
-            type = "RUN_SUCCEEDED";
-            status = "SUCCEEDED";
-        } else if ("taskInQueue".equals(rawType)) {
-            status = "QUEUED";
-        }
-        AgentRunEvent event = new AgentRunEvent(
-                raw.hasNonNull("sessionId") ? text(raw, "sessionId") : queriedSessionId,
-                sequence, type, status, message);
+        AgentEvent event = new AgentEvent();
+        event.setType(rawType != null ? rawType : "unknown");
+        event.setSessionId(
+                raw.hasNonNull("sessionId") ? text(raw, "sessionId") : queriedSessionId);
         event.setEventId(text(raw, "eventId"));
-        Map<String, Object> payload = objectMapper.convertValue(raw, Map.class);
-        payload.put("agentCoreType", rawType);
-        if ("confirm".equals(rawType)) {
-            payload.put("questionId", text(raw, "questionId"));
-            payload.put("question", summarizeQuestions(raw.get("questions")));
-            payload.put("requestType", "QUESTION");
+        event.setSequence(sequence);
+        event.setTimestamp(raw.hasNonNull("timestamp") ? raw.get("timestamp").asLong() : 0L);
+
+        // Map fields per type
+        switch (rawType == null ? "" : rawType) {
+            case "chat":
+                event.setContent(text(raw, "content"));
+                if (raw.hasNonNull("fileType")) {
+                    event.setFileType(text(raw, "fileType"));
+                }
+                if (raw.hasNonNull("attachments")) {
+                    event.setAttachments(parseAttachments(raw.get("attachments")));
+                }
+                if (raw.hasNonNull("suggestions")) {
+                    event.setSuggestions(parseStringList(raw.get("suggestions")));
+                }
+                if (raw.hasNonNull("usage")) {
+                    event.setUsage(parseUsage(raw.get("usage")));
+                }
+                if (raw.hasNonNull("parentToolUseId")) {
+                    event.setParentToolUseId(text(raw, "parentToolUseId"));
+                }
+                break;
+            case "textDelta":
+                event.setText(text(raw, "text"));
+                break;
+            case "streamStart":
+                event.setBlockType(text(raw, "blockType"));
+                break;
+            case "streamEnd":
+                event.setTotalTime(raw.hasNonNull("totalTime")
+                        ? raw.get("totalTime").asInt() : null);
+                break;
+            case "thinkingStart":
+                event.setBlockType(text(raw, "blockType"));
+                break;
+            case "thinkingDelta":
+                event.setText(text(raw, "text"));
+                break;
+            case "thinking":
+                event.setText(text(raw, "text"));
+                if (raw.hasNonNull("usage")) {
+                    event.setUsage(parseUsage(raw.get("usage")));
+                }
+                break;
+            case "thinkingEnd":
+                event.setTotalTime(raw.hasNonNull("totalTime")
+                        ? raw.get("totalTime").asInt() : null);
+                break;
+            case "planUpdate":
+                if (raw.hasNonNull("tasks")) {
+                    event.setTasks(parsePlanTasks(raw.get("tasks")));
+                }
+                break;
+            case "newPlanStep":
+                event.setContent(text(raw, "content"));
+                break;
+            case "confirm":
+                event.setContent(text(raw, "content"));
+                event.setQuestionId(text(raw, "questionId"));
+                if (raw.hasNonNull("questions")) {
+                    event.setQuestions(parseQuestions(raw.get("questions")));
+                }
+                break;
+            case "end":
+                event.setContent(text(raw, "content"));
+                if (raw.hasNonNull("fileType")) {
+                    event.setFileType(text(raw, "fileType"));
+                }
+                if (raw.hasNonNull("attachments")) {
+                    event.setAttachments(parseAttachments(raw.get("attachments")));
+                }
+                if (raw.hasNonNull("usage")) {
+                    event.setUsage(parseUsage(raw.get("usage")));
+                }
+                break;
+            case "error":
+                event.setContent(text(raw, "content"));
+                break;
+            case "taskInQueue":
+                event.setContent(text(raw, "content"));
+                break;
+            case "liveStatus":
+                event.setContent(text(raw, "content"));
+                break;
+            case "toolUsed":
+                event.setContent(text(raw, "content"));
+                event.setTool(text(raw, "tool"));
+                event.setToolUseId(text(raw, "toolUseId"));
+                event.setParentToolUseId(text(raw, "parentToolUseId"));
+                if (raw.hasNonNull("input")) {
+                    event.setInput(objectMapper.convertValue(
+                            raw.get("input"), Map.class));
+                }
+                break;
+            case "toolResult":
+                event.setTool(text(raw, "toolName"));
+                event.setToolUseId(text(raw, "toolUseId"));
+                event.setParentToolUseId(text(raw, "parentToolUseId"));
+                event.setOutput(text(raw, "output"));
+                if (raw.hasNonNull("input")) {
+                    event.setInput(objectMapper.convertValue(
+                            raw.get("input"), Map.class));
+                }
+                break;
+            case "subagentThinking":
+                event.setText(text(raw, "text"));
+                event.setParentToolUseId(text(raw, "parentToolUseId"));
+                if (raw.hasNonNull("usage")) {
+                    event.setUsage(parseUsage(raw.get("usage")));
+                }
+                break;
+            case "subagentChat":
+                event.setContent(text(raw, "content"));
+                event.setParentToolUseId(text(raw, "parentToolUseId"));
+                if (raw.hasNonNull("usage")) {
+                    event.setUsage(parseUsage(raw.get("usage")));
+                }
+                break;
+            case "subagentToolUsed":
+                event.setContent(text(raw, "content"));
+                event.setTool(text(raw, "tool"));
+                event.setToolUseId(text(raw, "toolUseId"));
+                event.setParentToolUseId(text(raw, "parentToolUseId"));
+                if (raw.hasNonNull("input")) {
+                    event.setInput(objectMapper.convertValue(
+                            raw.get("input"), Map.class));
+                }
+                break;
+            case "subagentToolResult":
+                event.setTool(text(raw, "toolName"));
+                event.setToolUseId(text(raw, "toolUseId"));
+                event.setParentToolUseId(text(raw, "parentToolUseId"));
+                event.setOutput(text(raw, "output"));
+                if (raw.hasNonNull("input")) {
+                    event.setInput(objectMapper.convertValue(
+                            raw.get("input"), Map.class));
+                }
+                break;
+            case "file":
+                event.setFileName(text(raw, "fileName"));
+                event.setContentType(text(raw, "contentType"));
+                event.setPath(text(raw, "path"));
+                break;
+            case "directory":
+                event.setName(text(raw, "name"));
+                event.setPath(text(raw, "path"));
+                break;
+            case "streamingFile":
+                event.setFileName(text(raw, "fileName"));
+                event.setContentType(text(raw, "contentType"));
+                event.setPath(text(raw, "path"));
+                event.setToolUseId(text(raw, "toolUseId"));
+                event.setParentToolUseId(text(raw, "parentToolUseId"));
+                break;
+            case "sidebarDisplay":
+                event.setMode(text(raw, "mode"));
+                break;
+            case "weblink":
+                event.setContent(text(raw, "content"));
+                event.setPath(text(raw, "path"));
+                break;
+            case "reconnect":
+                event.setContent(text(raw, "content"));
+                event.setPath(text(raw, "path"));
+                break;
+            case "clearBoundary":
+            case "compactBoundary":
+                // Pass through with timestamp only
+                break;
+            default:
+                // Unknown types: capture generic content/message
+                event.setContent(text(raw, "content"));
+                if (event.getContent() == null) {
+                    event.setContent(text(raw, "message"));
+                }
+                break;
         }
-        event.setPayload(payload);
         return event;
     }
 
-    private String summarizeQuestions(JsonNode questions) {
-        if (questions == null || !questions.isArray()) {
-            return "AgentCore requires user input.";
+    // ── JSON helpers ────────────────────────────────────────────────────
+
+    private List<AgentEvent.AttachmentInfo> parseAttachments(JsonNode array) {
+        List<AgentEvent.AttachmentInfo> result = new ArrayList<>();
+        for (JsonNode item : array) {
+            AgentEvent.AttachmentInfo info = new AgentEvent.AttachmentInfo();
+            info.setFileName(text(item, "fileName"));
+            info.setContentType(text(item, "contentType"));
+            info.setPathType(text(item, "pathType"));
+            info.setPath(text(item, "path"));
+            result.add(info);
         }
-        List<String> values = new ArrayList<>();
-        for (JsonNode question : questions) {
-            values.add(text(question, "question"));
-        }
-        return String.join("\n", values);
+        return result;
     }
+
+    private List<String> parseStringList(JsonNode array) {
+        List<String> result = new ArrayList<>();
+        for (JsonNode item : array) {
+            result.add(item.asText());
+        }
+        return result;
+    }
+
+    private AgentEvent.UsageInfo parseUsage(JsonNode node) {
+        AgentEvent.UsageInfo usage = new AgentEvent.UsageInfo();
+        if (node.hasNonNull("input_tokens")) {
+            usage.setInputTokens(node.get("input_tokens").asInt());
+        }
+        if (node.hasNonNull("output_tokens")) {
+            usage.setOutputTokens(node.get("output_tokens").asInt());
+        }
+        return usage;
+    }
+
+    private List<AgentEvent.PlanTaskStatus> parsePlanTasks(JsonNode array) {
+        List<AgentEvent.PlanTaskStatus> result = new ArrayList<>();
+        for (JsonNode item : array) {
+            AgentEvent.PlanTaskStatus task = new AgentEvent.PlanTaskStatus();
+            task.setStatus(text(item, "status"));
+            task.setTitle(text(item, "title"));
+            task.setStartedAt(item.hasNonNull("startedAt")
+                    ? item.get("startedAt").asLong() : 0L);
+            result.add(task);
+        }
+        return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<AgentEvent.Question> parseQuestions(JsonNode array) {
+        List<AgentEvent.Question> result = new ArrayList<>();
+        for (JsonNode item : array) {
+            AgentEvent.Question q = new AgentEvent.Question();
+            q.setQuestion(text(item, "question"));
+            q.setHeader(text(item, "header"));
+            q.setMultiSelect(item.hasNonNull("multiSelect") && item.get("multiSelect").asBoolean());
+            if (item.hasNonNull("options")) {
+                List<AgentEvent.Option> options = new ArrayList<>();
+                for (JsonNode opt : item.get("options")) {
+                    AgentEvent.Option o = new AgentEvent.Option();
+                    o.setLabel(text(opt, "label"));
+                    o.setDescription(text(opt, "description"));
+                    options.add(o);
+                }
+                q.setOptions(options);
+            }
+            result.add(q);
+        }
+        return result;
+    }
+
+    // ── General helpers ─────────────────────────────────────────────────
 
     private String text(JsonNode node, String field) {
         return node != null && node.hasNonNull(field) ? node.get(field).asText() : null;

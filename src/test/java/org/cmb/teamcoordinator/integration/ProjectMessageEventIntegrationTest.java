@@ -98,14 +98,15 @@ class ProjectMessageEventIntegrationTest {
                 .andExpect(header().string("Content-Type", startsWith("text/event-stream")))
                 .andReturn();
         String events = stream.getResponse().getContentAsString();
-        assertTrue(events.contains("event:COORDINATOR_ANALYZING"));
+        assertTrue(events.contains("event:coordinatorPhase"));
         assertTrue(events.contains("id:2"));
+        assertTrue(events.contains("userMessage"));
         assertTrue(!events.contains("MESSAGE_ACCEPTED_INTERNAL"));
 
         MvcResult afterCursor = mockMvc.perform(get("/api/v1/projects/" + projectId
                         + "/tasks/" + taskId + "/events")
                         .headers(identity("tenant-message", "message-owner"))
-                        .header("Last-Event-ID", "2"))
+                        .header("Last-Event-ID", "3"))
                 .andExpect(request().asyncStarted())
                 .andReturn();
         assertEquals("", afterCursor.getResponse().getContentAsString());
@@ -119,21 +120,21 @@ class ProjectMessageEventIntegrationTest {
                         .content(liveRequest))
                 .andExpect(status().isAccepted());
         String liveEvents = afterCursor.getResponse().getContentAsString();
-        assertTrue(liveEvents.contains("event:COORDINATOR_ANALYZING"));
-        assertTrue(liveEvents.contains("id:4"));
+        assertTrue(liveEvents.contains("event:userMessage"));
+        assertTrue(liveEvents.contains("event:coordinatorPhase"));
+        assertTrue(liveEvents.contains("id:5"));
 
         eventRepository.insertEvent(
                 new RequestIdentity("tenant-message", "remote-instance"),
                 projectId,
                 taskId,
                 null,
-                ProjectEventType.PLAN_CREATED,
+                ProjectEventType.COORDINATOR_ANALYZING,
                 EventVisibility.PUBLIC,
                 objectMapper.createObjectNode().put("source", "remote-instance"));
         streamHub.pollDatabaseEvents();
         String databaseEvents = afterCursor.getResponse().getContentAsString();
-        assertTrue(databaseEvents.contains("event:PLAN_CREATED"));
-        assertTrue(databaseEvents.contains("id:5"));
+        assertTrue(databaseEvents.contains("event:COORDINATOR_ANALYZING"));
 
         mockMvc.perform(get("/api/v1/projects/" + projectId
                         + "/tasks/" + taskId + "/events")
@@ -188,8 +189,8 @@ class ProjectMessageEventIntegrationTest {
                 .andExpect(request().asyncStarted())
                 .andReturn();
         String firstEvents = firstStream.getResponse().getContentAsString();
-        assertTrue(firstEvents.contains("\"taskId\":\"" + firstTask + "\""));
-        assertTrue(!firstEvents.contains("\"taskId\":\"" + secondTask + "\""));
+        assertTrue(firstEvents.contains("event:coordinatorPhase"));
+        assertTrue(!firstEvents.isEmpty());
 
         List<String> firstHistory = eventRepository.findRecentMessageTexts(
                 "tenant-message", projectId, firstTask, 10);

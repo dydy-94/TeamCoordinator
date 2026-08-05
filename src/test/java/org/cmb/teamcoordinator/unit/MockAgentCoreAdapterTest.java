@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import java.util.List;
-import org.cmb.teamcoordinator.agentcore.AgentRunEvent;
+import org.cmb.teamcoordinator.agentcore.AgentEvent;
 import org.cmb.teamcoordinator.agentcore.AgentRunRequest;
 import org.cmb.teamcoordinator.agentcore.AgentRunResponse;
 import org.cmb.teamcoordinator.agentcore.MockAgentCoreAdapter;
@@ -21,12 +21,12 @@ class MockAgentCoreAdapterTest {
         request.setTaskText("analyze this plan");
 
         AgentRunResponse response = adapter.submitRun("expert-analysis", request);
-        List<AgentRunEvent> events = adapter.streamEvents(response.getSessionId(), 0L);
+        List<AgentEvent> events = adapter.streamEvents(response.getSessionId(), 0L);
 
         assertEquals("ACCEPTED", response.getStatus());
         assertFalse(events.isEmpty());
-        assertEquals("RUN_ACCEPTED", events.get(0).getType());
-        assertEquals("RUN_SUCCEEDED", events.get(events.size() - 1).getType());
+        assertEquals("taskInQueue", events.get(0).getType());
+        assertEquals("end", events.get(events.size() - 1).getType());
     }
 
     @Test
@@ -47,16 +47,17 @@ class MockAgentCoreAdapterTest {
 
         AgentRunRequest failed = request("please fail");
         AgentRunResponse failedRun = adapter.submitRun("expert-analysis", failed);
-        assertEquals("FAILED", adapter.getRunStatus(failedRun.getSessionId()).getStatus());
+        assertEquals("error", adapter.getRunStatus(failedRun.getSessionId()).getType());
 
         AgentRunRequest timedOut = request("please timeout");
         AgentRunResponse timedOutRun = adapter.submitRun("expert-analysis", timedOut);
-        assertEquals("TIMED_OUT", adapter.getRunStatus(timedOutRun.getSessionId()).getStatus());
+        assertEquals("error", adapter.getRunStatus(timedOutRun.getSessionId()).getType());
 
         AgentRunResponse cancelledRun =
                 adapter.submitRun("expert-analysis", request("long task"));
         adapter.cancelRun(cancelledRun.getSessionId());
-        assertEquals("CANCELLED", adapter.getRunStatus(cancelledRun.getSessionId()).getStatus());
+        assertEquals("RUN_CANCELLED",
+                adapter.getRunStatus(cancelledRun.getSessionId()).getType());
     }
 
     private AgentRunRequest request(String taskText) {

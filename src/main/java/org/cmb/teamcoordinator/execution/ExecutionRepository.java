@@ -7,7 +7,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
-import org.cmb.teamcoordinator.agentcore.AgentRunEvent;
+import org.cmb.teamcoordinator.agentcore.AgentEvent;
 import org.cmb.teamcoordinator.intent.CoordinatorDecision;
 import org.cmb.teamcoordinator.planning.CoordinatorPlanSpec;
 import org.cmb.teamcoordinator.planning.PlannedTask;
@@ -65,7 +65,8 @@ public class ExecutionRepository {
         return jdbc.queryForObject(
                 "SELECT d.business_id dispatch_id, d.tenant_id, d.project_id, d.conversation_id, "
                         + "d.message_id, m.user_id, m.message_text, m.attachment_refs, "
-                        + "c.session_id business_session_id "
+                        + "c.session_id business_session_id, "
+                        + "c.coordinator_session_id "
                         + "FROM coordinator_dispatch d JOIN project_message m ON m.business_id = d.message_id "
                         + "JOIN project_conversation c ON c.business_id = d.conversation_id "
                         + "WHERE d.business_id = ?",
@@ -76,6 +77,7 @@ public class ExecutionRepository {
                     work.setProjectId(rs.getString("project_id"));
                     work.setConversationId(rs.getString("conversation_id"));
                     work.setBusinessSessionId(rs.getString("business_session_id"));
+                    work.setCoordinatorSessionId(rs.getString("coordinator_session_id"));
                     work.setMessageId(rs.getString("message_id"));
                     work.setUserId(rs.getString("user_id"));
                     work.setText(rs.getString("message_text"));
@@ -321,8 +323,38 @@ public class ExecutionRepository {
                 sessionId, taskId);
     }
 
+    public String findExpertSession(
+            String tenantId, String projectId, String conversationId, String expertId) {
+        List<String> rows = jdbc.queryForList(
+                "SELECT session_id FROM project_conversation_expert_session "
+                        + "WHERE tenant_id = ? AND project_id = ? "
+                        + "AND conversation_id = ? AND expert_id = ?",
+                String.class, tenantId, projectId, conversationId, expertId);
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
+    public void saveExpertSession(
+            String tenantId, String projectId, String conversationId,
+            String expertId, String sessionId) {
+        jdbc.update(
+                "INSERT INTO project_conversation_expert_session "
+                        + "(id, tenant_id, project_id, conversation_id, expert_id, session_id) "
+                        + "VALUES (?, ?, ?, ?, ?, ?) "
+                        + "ON DUPLICATE KEY UPDATE session_id = VALUES(session_id)",
+                "exp-session-" + UUID.randomUUID(), tenantId, projectId,
+                conversationId, expertId, sessionId);
+    }
+
+    public void saveCoordinatorSession(String conversationId, String sessionId) {
+        jdbc.update(
+                "UPDATE project_conversation SET coordinator_session_id = ? "
+                        + "WHERE business_id = ? "
+                        + "AND coordinator_session_id IS NULL",
+                sessionId, conversationId);
+    }
+
     @Transactional
-    public boolean recordEvent(String tenantId, String taskId, AgentRunEvent event) {
+    public boolean recordEvent(String tenantId, String taskId, AgentEvent event) {
         try {
             jdbc.update(
                     "INSERT INTO coordinator_task_event "

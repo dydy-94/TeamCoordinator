@@ -52,4 +52,9 @@ public class IntentAnalysisRepository {
         return humanRequests.createCoordinatorClarification(
                 analysisId, identity, projectId, question);
     }
+
+    public org.cmb.teamcoordinator.human.HumanRequestRepository.HumanRequestRecord
+            findPendingHumanRequest(String tenantId, String projectId, String taskId) {
+        return humanRequests.findPendingForTask(tenantId, projectId, taskId);
+    }
 }

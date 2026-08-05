@@ -123,6 +123,8 @@ public class HumanRequestService {
                 run.setSystemPrompt(prompt.getContent());
                 run.setTaskText(answer);
                 run.setStructuredInput(promptContext);
+                // Reuse existing session to continue the agent conversation
+                run.setConversationSessionId(task.getSessionId());
                 resumed = agentCore.submitRun(task.getExpertId(), run);
                 executionRepository.replaceSession(
                         task.getId(), resumed.getSessionId());

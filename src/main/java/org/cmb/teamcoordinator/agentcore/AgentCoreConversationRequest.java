@@ -15,7 +15,8 @@ public class AgentCoreConversationRequest {
     public static AgentCoreConversationRequest userInput(AgentRunRequest run) {
         AgentCoreConversationRequest request = new AgentCoreConversationRequest();
         request.type = "userInput";
-        request.sessionId = "";
+        request.sessionId = run.getConversationSessionId() != null
+                ? run.getConversationSessionId() : "";
         request.systemPrompt = run.getSystemPrompt();
         Data input = new Data();
         input.skillNames = run.getSkillNames();

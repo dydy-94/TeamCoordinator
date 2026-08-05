@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
-import org.cmb.teamcoordinator.agentcore.AgentRunEvent;
+import org.cmb.teamcoordinator.agentcore.AgentEvent;
 import org.cmb.teamcoordinator.agentcore.AgentRunRequest;
 import org.cmb.teamcoordinator.agentcore.AgentRunResponse;
 import org.cmb.teamcoordinator.agentcore.HttpAgentCoreAdapter;
@@ -39,11 +39,11 @@ class RealAgentCoreAcceptanceIT {
                     required("AGENTCORE_TEST_EXPERT_ID"), request);
             assertNotNull(response);
             assertNotNull(response.getSessionId());
-            List<AgentRunEvent> events =
+            List<AgentEvent> events =
                     adapter.streamEvents(response.getSessionId(), 0L);
             assertFalse(events.isEmpty());
-            AgentRunEvent terminal = events.get(events.size() - 1);
-            assertNotNull(terminal.getStatus());
+            AgentEvent terminal = events.get(events.size() - 1);
+            assertNotNull(terminal.getType());
         }
     }
 

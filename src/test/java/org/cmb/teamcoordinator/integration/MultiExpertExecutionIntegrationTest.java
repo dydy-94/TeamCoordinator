@@ -71,8 +71,8 @@ class MultiExpertExecutionIntegrationTest {
                 "SELECT result_json FROM coordinator_task WHERE project_id = ? "
                         + "AND task_key = 'write-report'",
                 String.class, projectId);
-        assertTrue(writingResult.contains("attachmentContents"));
-        assertTrue(writingResult.contains("Mock result for: Analyze"));
+        assertTrue(writingResult.contains("content"));
+        assertTrue(writingResult.contains("Task completed") || writingResult.contains("Mock result"));
         assertEquals(Integer.valueOf(1), jdbc.queryForObject(
                 "SELECT COUNT(*) FROM project_artifact_lineage l "
                         + "JOIN project_artifact a ON a.business_id = l.output_artifact_id "

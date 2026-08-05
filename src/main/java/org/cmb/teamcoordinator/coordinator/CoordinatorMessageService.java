@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.List;
 import java.util.UUID;
+import org.cmb.teamcoordinator.agentcore.AgentEvent;
+import org.cmb.teamcoordinator.intent.CoordinatorAgentClient;
 import org.cmb.teamcoordinator.project.ProjectService;
 import org.cmb.teamcoordinator.project.RequestIdentity;
 import org.springframework.dao.DuplicateKeyException;
@@ -64,9 +66,30 @@ public class CoordinatorMessageService {
                 EventVisibility.INTERNAL,
                 internalPayload);
 
-        ObjectNode publicPayload = objectMapper.createObjectNode();
-        publicPayload.put("messageId", messageId);
-        publicPayload.put("text", "Coordinator is analyzing the request.");
+        // Emit userMessage so all SSE subscribers see who sent what,
+        // in the same AgentEvent wire format as all other events.
+        AgentEvent userMessage = AgentEvent.of("userMessage");
+        userMessage.setAgentId(identity.getUserId());
+        userMessage.setContent(request.getText());
+        userMessage.setSessionId(messageId);
+        ObjectNode userPayload = objectMapper.convertValue(userMessage, ObjectNode.class);
+        ProjectEvent userEvent = repository.insertEvent(
+                identity,
+                projectId,
+                taskId,
+                messageId,
+                ProjectEventType.COORDINATOR_ANALYZING,
+                EventVisibility.PUBLIC,
+                userPayload);
+        userEvent.setAgentEvent(userMessage);
+        publishAfterCommit(identity, projectId, taskId, userEvent);
+
+        AgentEvent analyzing = AgentEvent.of("coordinatorPhase");
+        analyzing.setAgentId(CoordinatorAgentClient.COORDINATOR_AGENT_ID);
+        analyzing.setStatus("analyzing");
+        analyzing.setContent("Coordinator is analyzing the request.");
+        analyzing.setTimestamp(System.currentTimeMillis());
+        ObjectNode publicPayload = objectMapper.convertValue(analyzing, ObjectNode.class);
         ProjectEvent publicEvent = repository.insertEvent(
                 identity,
                 projectId,
@@ -75,6 +98,7 @@ public class CoordinatorMessageService {
                 ProjectEventType.COORDINATOR_ANALYZING,
                 EventVisibility.PUBLIC,
                 publicPayload);
+        publicEvent.setAgentEvent(analyzing);
         repository.insertDispatch(identity, projectId, taskId, messageId);
         publishAfterCommit(identity, projectId, taskId, publicEvent);
         return new MessageAcceptedResponse(

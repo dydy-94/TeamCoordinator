@@ -6,8 +6,9 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import org.cmb.teamcoordinator.agentcore.AgentCoreAdapter;
-import org.cmb.teamcoordinator.agentcore.AgentRunEvent;
+import org.cmb.teamcoordinator.agentcore.AgentEvent;
 import org.cmb.teamcoordinator.agentcore.AgentRunRequest;
 import org.cmb.teamcoordinator.agentcore.AgentRunResponse;
 import org.cmb.teamcoordinator.artifact.ArtifactRepository;
@@ -45,35 +46,69 @@ public class CoordinatorAgentClient {
         this.artifactService = artifactService;
     }
 
+    /**
+     * Execute a coordinator agent run, forwarding intermediate events to
+     * {@code eventSink} so they can be relayed to the task SSE stream.
+     *
+     * @param coordinatorSessionId task-level coordinator session for context reuse
+     *                             across messages; may be {@code null} for the
+     *                             first message in a task
+     * @param eventSink optional consumer for non-terminal agent events;
+     *                  may be {@code null} for callers that only need the
+     *                  final decision (e.g. direct intent analysis)
+     */
     public Result execute(
             RequestIdentity identity, String projectId, String messageId, String runKey,
-            String businessSessionId, IntentAnalysisContext context) {
+            String businessSessionId, String coordinatorSessionId,
+            IntentAnalysisContext context,
+            Consumer<AgentEvent> eventSink) {
         CoordinatorAgentRun run = runs.createOrLoad(
                 identity, projectId, messageId, runKey, write(context), businessSessionId);
         if ("SUCCEEDED".equals(run.getStatus()) || "FAILED".equals(run.getStatus())) {
-            return new Result(true, run.getOutputJson(), "REPAIR".equals(run.getStage()));
+            String sid = run.getSessionId();
+            return new Result(true, run.getOutputJson(), sid, "REPAIR".equals(run.getStage()));
         }
-        if (run.getSessionId() == null) {
-            submit(identity, projectId, run, context);
+        // Submit if no session yet, or if repairing (need new events within same conversation)
+        if (run.getSessionId() == null || "REPAIR".equals(run.getStage())) {
+            submit(identity, projectId, run, context, coordinatorSessionId);
             run = runs.find(identity.getTenantId(), runKey);
         }
 
-        List<AgentRunEvent> events = agentCore.streamEvents(
+        List<AgentEvent> events = agentCore.streamEvents(
                 run.getSessionId(), run.getLastSequence(), run.getBusinessSessionId());
-        events.sort(Comparator.comparingLong(AgentRunEvent::getSequence));
-        for (AgentRunEvent event : events) {
-            if ("RUN_SUCCEEDED".equals(event.getType())) {
-                String output = output(event);
+        events.sort(Comparator.comparingLong(AgentEvent::getSequence));
+        for (AgentEvent event : events) {
+            // Forward intermediate events to the task SSE stream
+            if (eventSink != null) {
+                event.setAgentId(coordinatorAgentId);
+                eventSink.accept(event);
+            }
+
+            if ("end".equals(event.getType())) {
+                String output = event.getContent();
                 runs.complete(run.getId(), event.getSequence(), output);
-                return new Result(true, output, "REPAIR".equals(run.getStage()));
+                return new Result(true, output, run.getSessionId(),
+                        "REPAIR".equals(run.getStage()));
             }
             if (isFailure(event)) {
-                runs.fail(run.getId(), null);
-                return new Result(true, null, "REPAIR".equals(run.getStage()));
+                runs.fail(run.getId(), event.getContent());
+                return new Result(true, null, run.getSessionId(),
+                        "REPAIR".equals(run.getStage()));
             }
             runs.advance(run.getId(), event);
         }
-        return new Result(false, null, "REPAIR".equals(run.getStage()));
+        return new Result(false, null, run.getSessionId(),
+                "REPAIR".equals(run.getStage()));
+    }
+
+    /**
+     * Execute without forwarding events (for direct intent analysis calls).
+     */
+    public Result execute(
+            RequestIdentity identity, String projectId, String messageId, String runKey,
+            String businessSessionId, IntentAnalysisContext context) {
+        return execute(identity, projectId, messageId, runKey,
+                businessSessionId, null, context, null);
     }
 
     public void prepareRepair(
@@ -84,7 +119,8 @@ public class CoordinatorAgentClient {
 
     private void submit(
             RequestIdentity identity, String projectId,
-            CoordinatorAgentRun run, IntentAnalysisContext context) {
+            CoordinatorAgentRun run, IntentAnalysisContext context,
+            String coordinatorSessionId) {
         AgentRunRequest request = new AgentRunRequest();
         Map<String, Object> input = new LinkedHashMap<>();
         input.put("operation", run.getStage());
@@ -106,46 +142,47 @@ public class CoordinatorAgentClient {
                     identity.getTenantId(), projectId, reference));
         }
         request.setAttachments(artifactService.toAgentAttachments(storageKeys));
+        // Session reuse priority:
+        // 1. Repair: reuse the run's own session (same message, same run)
+        // 2. Cross-message: reuse task-level coordinator session for context continuity
+        if (run.getSessionId() != null) {
+            request.setConversationSessionId(run.getSessionId());
+        } else if (coordinatorSessionId != null) {
+            request.setConversationSessionId(coordinatorSessionId);
+        }
         AgentRunResponse response = agentCore.submitRun(coordinatorAgentId, request);
         runs.saveSession(run.getId(), run.getStage(), response.getSessionId());
     }
 
-    private String output(AgentRunEvent event) {
-        Object decision = event.getPayload().get("decision");
-        if (decision != null) {
-            return decision instanceof String ? (String) decision : write(decision);
-        }
-        Object resultText = event.getPayload().get("resultText");
-        return resultText == null ? null : String.valueOf(resultText);
-    }
-
-    private boolean isFailure(AgentRunEvent event) {
-        return "RUN_FAILED".equals(event.getType())
-                || "RUN_CANCELLED".equals(event.getType())
-                || "RUN_TIMED_OUT".equals(event.getType());
+    private boolean isFailure(AgentEvent event) {
+        return "error".equals(event.getType());
     }
 
     private String write(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
         } catch (Exception ex) {
-            throw new IllegalStateException("Could not serialize coordinator run.", ex);
+            throw new IllegalStateException(
+                    "Could not serialize coordinator run.", ex);
         }
     }
 
     public static class Result {
         private final boolean complete;
         private final String output;
+        private final String sessionId;
         private final boolean repaired;
 
-        Result(boolean complete, String output, boolean repaired) {
+        Result(boolean complete, String output, String sessionId, boolean repaired) {
             this.complete = complete;
             this.output = output;
+            this.sessionId = sessionId;
             this.repaired = repaired;
         }
 
         public boolean isComplete() { return complete; }
         public String getOutput() { return output; }
+        public String getSessionId() { return sessionId; }
         public boolean isRepaired() { return repaired; }
     }
 }

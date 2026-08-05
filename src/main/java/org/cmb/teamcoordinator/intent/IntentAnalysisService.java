@@ -2,14 +2,15 @@ package org.cmb.teamcoordinator.intent;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
 import javax.validation.ConstraintViolation;
 import javax.validation.Validator;
+import org.cmb.teamcoordinator.agentcore.AgentEvent;
 import org.cmb.teamcoordinator.agentcore.ExpertDescriptor;
 import org.cmb.teamcoordinator.agentcore.ExpertRegistry;
 import org.cmb.teamcoordinator.artifact.ArtifactRepository;
@@ -34,7 +35,6 @@ public class IntentAnalysisService {
     private final ExpertRegistry expertRegistry;
     private final ArtifactRepository artifactRepository;
     private final FileStore fileStore;
-    private final IntentModelClient modelClient;
     private final CoordinatorAgentClient coordinatorAgent;
     private final DecisionSchemaValidator schemaValidator;
     private final ObjectMapper objectMapper;
@@ -47,7 +47,6 @@ public class IntentAnalysisService {
             ExpertRegistry expertRegistry,
             ArtifactRepository artifactRepository,
             FileStore fileStore,
-            IntentModelClient modelClient,
             CoordinatorAgentClient coordinatorAgent,
             DecisionSchemaValidator schemaValidator,
             ObjectMapper objectMapper,
@@ -58,7 +57,6 @@ public class IntentAnalysisService {
         this.expertRegistry = expertRegistry;
         this.artifactRepository = artifactRepository;
         this.fileStore = fileStore;
-        this.modelClient = modelClient;
         this.coordinatorAgent = coordinatorAgent;
         this.schemaValidator = schemaValidator;
         this.objectMapper = objectMapper;
@@ -70,7 +68,7 @@ public class IntentAnalysisService {
         String runKey = "direct-" + UUID.randomUUID();
         CoordinatorDecision decision = analyze(
                 identity, projectId, null, null, runKey,
-                "direct-session-" + UUID.randomUUID(), request);
+                "direct-session-" + UUID.randomUUID(), null, request, null);
         if (decision == null) {
             throw new IllegalStateException("Coordinator AgentCore run is still in progress.");
         }
@@ -80,21 +78,32 @@ public class IntentAnalysisService {
     public CoordinatorDecision analyzeForDispatch(
             RequestIdentity identity, String projectId, String taskId,
             String messageId, String businessSessionId,
-            IntentAnalysisRequest request) {
+            String coordinatorSessionId,
+            IntentAnalysisRequest request,
+            Consumer<AgentEvent> eventSink) {
         return analyze(
                 identity, projectId, taskId, messageId, "message-" + messageId,
-                businessSessionId, request);
+                businessSessionId, coordinatorSessionId, request, eventSink);
+    }
+
+    public CoordinatorDecision analyzeForDispatch(
+            RequestIdentity identity, String projectId, String taskId,
+            String messageId, String businessSessionId,
+            IntentAnalysisRequest request) {
+        return analyzeForDispatch(identity, projectId, taskId, messageId,
+                businessSessionId, null, request, null);
     }
 
     private CoordinatorDecision analyze(
             RequestIdentity identity, String projectId, String taskId,
             String messageId, String runKey, String businessSessionId,
-            IntentAnalysisRequest request) {
+            String coordinatorSessionId,
+            IntentAnalysisRequest request, Consumer<AgentEvent> eventSink) {
         projectService.requireTaskInitiator(identity, projectId);
         IntentAnalysisContext context = buildContext(identity, projectId, taskId, request);
         CoordinatorAgentClient.Result agentResult = coordinatorAgent.execute(
                 identity, projectId, messageId, runKey,
-                businessSessionId, context);
+                businessSessionId, coordinatorSessionId, context, eventSink);
         if (!agentResult.isComplete()) {
             return null;
         }
@@ -105,7 +114,7 @@ public class IntentAnalysisService {
             coordinatorAgent.prepareRepair(identity, runKey, output);
             agentResult = coordinatorAgent.execute(
                     identity, projectId, messageId, runKey,
-                    businessSessionId, context);
+                    businessSessionId, coordinatorSessionId, context, null);
             if (!agentResult.isComplete()) {
                 return null;
             }
@@ -114,6 +123,7 @@ public class IntentAnalysisService {
             repaired = parsed != null;
         }
         CoordinatorDecision decision = parsed == null ? fallbackDecision() : parsed.decision;
+        decision.setCoordinatorSessionId(agentResult.getSessionId());
         String decisionJson = write(decision);
         String analysisId = "analysis-" + UUID.randomUUID();
         analysisRepository.insertAnalysis(
@@ -159,7 +169,26 @@ public class IntentAnalysisService {
             }
         }
         context.setAttachments(attachments);
+
+        // Inject pending human-request state so the Coordinator can decide
+        // whether a new message answers a waiting question or is a new request.
+        if (taskId != null) {
+            injectPendingState(identity.getTenantId(), projectId, taskId, context);
+        }
+
         return context;
+    }
+
+    private void injectPendingState(
+            String tenantId, String projectId, String taskId,
+            IntentAnalysisContext context) {
+        org.cmb.teamcoordinator.human.HumanRequestRepository.HumanRequestRecord pending =
+                analysisRepository.findPendingHumanRequest(tenantId, projectId, taskId);
+        if (pending != null) {
+            boolean isExpert = pending.taskId != null;
+            context.setPendingStatus(isExpert ? "EXPERT_WAITING" : "COORDINATOR_WAITING");
+            context.setPendingQuestion(pending.question);
+        }
     }
 
     private List<ExpertDescriptor> enabledExperts(ProjectView project) {

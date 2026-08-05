@@ -3,13 +3,18 @@ package org.cmb.teamcoordinator.execution;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
 import org.cmb.teamcoordinator.agentcore.AgentCoreAdapter;
-import org.cmb.teamcoordinator.agentcore.AgentRunEvent;
+import org.cmb.teamcoordinator.agentcore.AgentEvent;
 import org.cmb.teamcoordinator.agentcore.AgentRunRequest;
 import org.cmb.teamcoordinator.agentcore.AgentRunResponse;
 import org.cmb.teamcoordinator.coordinator.EventVisibility;
@@ -18,6 +23,7 @@ import org.cmb.teamcoordinator.coordinator.ProjectEvent;
 import org.cmb.teamcoordinator.coordinator.ProjectEventStreamHub;
 import org.cmb.teamcoordinator.coordinator.ProjectEventType;
 import org.cmb.teamcoordinator.common.ApiException;
+import org.cmb.teamcoordinator.intent.CoordinatorAgentClient;
 import org.cmb.teamcoordinator.intent.CoordinatorDecision;
 import org.cmb.teamcoordinator.intent.DecisionType;
 import org.cmb.teamcoordinator.intent.IntentAnalysisRequest;
@@ -39,10 +45,36 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+/**
+ * 系统的执行引擎，通过500ms 定时轮询驱动所有任务，
+ * SingleExpertWorker
+ */
 @Component
 public class SingleExpertWorker {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SingleExpertWorker.class);
+
+    /** AgentCore event types that indicate progress but don't change task terminal state. */
+    private static final Set<String> PROGRESS_EVENT_TYPES = new HashSet<>(Arrays.asList(
+            "liveStatus", "taskInQueue",
+            "textDelta", "streamStart", "streamEnd",
+            "thinkingStart", "thinkingDelta", "thinking", "thinkingEnd",
+            "toolUsed", "toolResult",
+            "planUpdate", "newPlanStep",
+            "subagentThinking", "subagentChat", "subagentToolUsed", "subagentToolResult",
+            "file", "directory", "streamingFile",
+            "sidebarDisplay", "weblink",
+            "clearBoundary", "compactBoundary", "reconnect"
+    ));
+
+    // ── Coordinator phase constants ────────────────────────────────────
+    private static final String PHASE_PLANNING    = "planning";
+    private static final String PHASE_DISPATCHING = "dispatching";
+    private static final String PHASE_ANSWERING   = "answering";
+    private static final String PHASE_WAITING     = "waiting_human";
+    private static final String PHASE_COMPLETED   = "completed";
+    private static final String PHASE_FAILED      = "failed";
+
     private final String instanceId = "coordinator-" + UUID.randomUUID();
     private final ExecutionRepository executionRepository;
     private final IntentAnalysisService analysisService;
@@ -87,6 +119,9 @@ public class SingleExpertWorker {
         this.prompts = prompts;
     }
 
+    /**
+     * 领取任务， 回调用process()
+     */
     @Scheduled(fixedDelayString = "${digital-team.execution.worker-interval-ms:500}")
     public void runOnce() {
         DispatchWork work = executionRepository.claimNext(instanceId, 30);
@@ -99,10 +134,19 @@ public class SingleExpertWorker {
             LOGGER.warn("Single expert dispatch {} failed.", work.getDispatchId(), ex);
             executionRepository.completeDispatch(
                     work.getDispatchId(), "FAILED", abbreviate(ex.getMessage()));
-            emit(work, ProjectEventType.TASK_FAILED, "Coordinator could not execute the task.");
+            emitAgentEvent(work,
+                    AgentEvent.content("error", "Coordinator could not execute the task.",
+                            "coordinator"));
         }
     }
 
+    /**
+     * 调用agentcore的stopSession停止掉AgentCore run，合成RUN_CANCELLED事件，并应用到任务记录。
+     * @param identity
+     * @param projectId
+     * @param taskId
+     * @return
+     */
     public TaskRecord cancel(RequestIdentity identity, String projectId, String taskId) {
         projectService.get(identity, projectId);
         TaskRecord task = executionRepository.findTask(
@@ -117,18 +161,24 @@ public class SingleExpertWorker {
                 identity.getTenantId(), projectId, taskId);
         AgentRunResponse stopped = agentCore.stopSession(task.getSessionId());
         if (stopped == null) {
-            throw ApiException.conflict("TASK_CANCEL_FAILED", "AgentCore run was not found.");
+            throw ApiException.conflict("TASK_CANCEL_FAILED",
+                    "AgentCore run was not found.");
         }
-        AgentRunEvent event = new AgentRunEvent(
-                task.getSessionId(), task.getLastSequence() + 1,
-                "RUN_CANCELLED", "CANCELLED", "AgentCore session stopped.");
+        AgentEvent event = AgentEvent.of("RUN_CANCELLED");
+        event.setSessionId(task.getSessionId());
+        event.setSequence(task.getLastSequence() + 1);
         event.setEventId(task.getSessionId() + ":cancel:" + event.getSequence());
-        if (executionRepository.recordEvent(identity.getTenantId(), taskId, event)) {
-            applyEvent(work, task, event);
-        }
+        event.setContent("AgentCore session stopped.");
+        event.setTimestamp(System.currentTimeMillis());
+        applyEvent(work, task, event);
         return executionRepository.findTask(identity.getTenantId(), projectId, taskId);
     }
 
+    // ── Dispatch processing ─────────────────────────────────────────────
+    /**
+     * 新消息处理 + 决策分支
+     * @param work
+     */
     private void process(DispatchWork work) {
         List<TaskRecord> tasks = executionRepository.findTasksForMessage(work);
         if (!tasks.isEmpty()) {
@@ -140,54 +190,112 @@ public class SingleExpertWorker {
         IntentAnalysisRequest request = new IntentAnalysisRequest();
         request.setText(work.getText());
         request.setAttachmentRefs(work.getAttachmentRefs());
+
+        // Build event sink that forwards coordinator agent events to the task SSE
+        Consumer<AgentEvent> coordinatorEventSink = event -> {
+            event.setAgentId(CoordinatorAgentClient.COORDINATOR_AGENT_ID);
+            publishAgentEvent(work, event);
+        };
+        // 意图分析（传入 task 级 coordinator session 以保持跨消息上下文连续）
         CoordinatorDecision decision = analysisService.analyzeForDispatch(
                 identity, work.getProjectId(), work.getConversationId(),
-                work.getMessageId(), work.getBusinessSessionId(), request);
+                work.getMessageId(), work.getBusinessSessionId(),
+                work.getCoordinatorSessionId(),
+                request, coordinatorEventSink);
         if (decision == null) {
             executionRepository.releaseDispatch(work.getDispatchId());
             return;
         }
+        // Persist coordinator session for cross-message context continuity
+        if (decision.getCoordinatorSessionId() != null) {
+            executionRepository.saveCoordinatorSession(
+                    work.getConversationId(), decision.getCoordinatorSessionId());
+        }
         if (decision.getDecisionType() == DecisionType.ANSWER) {
-            emit(work, ProjectEventType.FINAL_RESPONSE, decision.getAnswer());
+            emitPhase(work, PHASE_ANSWERING, "Coordinator is preparing a direct answer.");
+            publishAgentEvent(work,
+                    AgentEvent.content("chat", decision.getAnswer(),
+                            CoordinatorAgentClient.COORDINATOR_AGENT_ID));
+            emitPhase(work, PHASE_COMPLETED, "Request completed.");
             executionRepository.completeDispatch(work.getDispatchId(), "COMPLETED", null);
             return;
         }
         if (decision.getDecisionType() == DecisionType.ASK_HUMAN) {
+            emitPhase(work, PHASE_WAITING, "Coordinator needs clarification from the user.");
             humanRequests.linkDispatch(
                     decision.getHumanRequestId(), work.getMessageId(), work.getDispatchId());
-            emitHumanRequest(
-                    work, decision.getHumanRequestId(), "CLARIFICATION",
-                    decision.getQuestion());
+            AgentEvent confirmEvent = AgentEvent.of("confirm");
+            confirmEvent.setAgentId(CoordinatorAgentClient.COORDINATOR_AGENT_ID);
+            confirmEvent.setQuestionId(decision.getHumanRequestId());
+            confirmEvent.setContent(decision.getQuestion());
+            List<AgentEvent.Question> questions = new ArrayList<>();
+            AgentEvent.Question q = new AgentEvent.Question();
+            q.setQuestion(decision.getQuestion());
+            q.setHeader("补充信息");
+            q.setMultiSelect(false);
+            questions.add(q);
+            confirmEvent.setQuestions(questions);
+            publishAgentEvent(work, confirmEvent);
             executionRepository.completeDispatch(work.getDispatchId(), "WAITING_HUMAN", null);
             return;
         }
 
         TaskIntent intent = decision.getTaskIntent();
         ProjectView project = projectService.get(identity, work.getProjectId());
+        emitPhase(work, PHASE_PLANNING, "Coordinator is creating an execution plan.");
         PlanningResult planning = planningService.createPlan(intent, project, 1);
         executionRepository.createPlan(work, decision, planning);
-        emit(work, ProjectEventType.PLAN_CREATED,
-                "Plan V1 created with " + planning.getPlan().getTasks().size() + " tasks.");
+
+        // Emit plan update
+        AgentEvent planEvent = AgentEvent.of("planUpdate");
+        planEvent.setAgentId(CoordinatorAgentClient.COORDINATOR_AGENT_ID);
+        List<AgentEvent.PlanTaskStatus> planTasks = new ArrayList<>();
+        for (org.cmb.teamcoordinator.planning.PlannedTask pt
+                : planning.getPlan().getTasks()) {
+            AgentEvent.PlanTaskStatus pts = new AgentEvent.PlanTaskStatus();
+            pts.setStatus("todo");
+            pts.setTitle(pt.getObjective());
+            pts.setStartedAt(0L);
+            planTasks.add(pts);
+        }
+        planEvent.setTasks(planTasks);
+        publishAgentEvent(work, planEvent);
+
+        emitPhase(work, PHASE_DISPATCHING, "Dispatching tasks to experts.");
         advancePlan(work, executionRepository.findTasksForMessage(work));
     }
 
+    // ── Plan advancement ────────────────────────────────────────────────
+    /**
+     * 核心方法，计划推进引擎。根据任务状态推进计划，包括处理成功、失败以及继续推进未完成的任务。
+     * @param work 当前的调度工作
+     * @param tasks 当前调度工作下的任务列表
+     */
     private void advancePlan(DispatchWork work, List<TaskRecord> tasks) {
+        // 消费各 RUNNING任务的AgentCore事件
         for (TaskRecord task : tasks) {
             if (task.getSessionId() != null && !isTerminal(task.getStatus())) {
                 consumeEvents(work, task);
             }
         }
+        // 重新获取任务列表，检查是否所有任务都已完成或失败
         tasks = executionRepository.findTasksForMessage(work);
         if (allSucceeded(tasks)) {
             TaskRecord last = tasks.get(tasks.size() - 1);
             String resultText = resultText(last);
-            emit(work, ProjectEventType.FINAL_RESPONSE, resultText);
+            emitPhase(work, PHASE_ANSWERING, "All expert tasks completed, preparing final response.");
+            publishAgentEvent(work,
+                    AgentEvent.content("chat", resultText,
+                            CoordinatorAgentClient.COORDINATOR_AGENT_ID));
+            emitPhase(work, PHASE_COMPLETED, "Request completed.");
             executionRepository.completePlanAndDispatch(
                     last.getPlanId(), work.getDispatchId(), "COMPLETED", null);
             return;
         }
         if (hasFailed(tasks)) {
             TaskRecord failed = firstFailed(tasks);
+            emitPhase(work, PHASE_FAILED,
+                    "Expert task " + failed.getTaskKey() + " failed.");
             executionRepository.completePlanAndDispatch(
                     failed.getPlanId(), work.getDispatchId(), "FAILED",
                     "Expert task " + failed.getTaskKey() + " failed.");
@@ -196,6 +304,7 @@ public class SingleExpertWorker {
         Map<String, TaskRecord> byKey = index(tasks);
         RequestIdentity identity = new RequestIdentity(work.getTenantId(), work.getUserId());
         ProjectView project = projectService.get(identity, work.getProjectId());
+        // 遍历任务列表，启动所有满足条件的PENDING任务
         boolean started = false;
         for (TaskRecord task : tasks) {
             if ("PENDING".equals(task.getStatus()) && dependenciesSucceeded(task, byKey)) {
@@ -207,11 +316,19 @@ public class SingleExpertWorker {
                 }
             }
         }
+        // 如果有任务被启动，或者并非所有任务都已成功，则释放调度锁
         if (started || !allSucceeded(tasks)) {
             executionRepository.releaseDispatch(work.getDispatchId());
         }
     }
 
+    // ── Task start ──────────────────────────────────────────────────────
+    /**
+     * 启动专家任务，调用AgentCore执行，并将任务状态更新为RUNNING。
+     * @param work
+     * @param task
+     * @param expertId
+     */
     private void startTask(DispatchWork work, TaskRecord task, String expertId) {
         AgentRunRequest runRequest = new AgentRunRequest();
         List<String> inputRefs = new java.util.ArrayList<>();
@@ -245,35 +362,68 @@ public class SingleExpertWorker {
         structuredInput.put("promptTemplateId", prompt.getTemplateId());
         runRequest.setStructuredInput(structuredInput);
         runRequest.setAttachments(artifactService.toAgentAttachments(inputRefs));
+        // Reuse existing expert session within this task for context continuity
+        String existingExpertSession = executionRepository.findExpertSession(
+                work.getTenantId(), work.getProjectId(),
+                work.getConversationId(), expertId);
+        if (existingExpertSession != null) {
+            runRequest.setConversationSessionId(existingExpertSession);
+        }
         AgentRunResponse response = agentCore.submitRun(expertId, runRequest);
         executionRepository.saveSession(task.getId(), response.getSessionId());
-        emit(work, ProjectEventType.TASK_STARTED, "Expert " + expertId + " accepted the task.");
+
+        // Insert AGENT_RUN_MARKER for replay: when a reconnecting client sees
+        // this marker, it fetches the agent's events from AgentCore in real time.
+        ObjectNode markerPayload = objectMapper.createObjectNode();
+        markerPayload.put("sessionId", response.getSessionId());
+        markerPayload.put("expertId", expertId);
+        eventRepository.insertEvent(
+                identity, work.getProjectId(), work.getConversationId(),
+                work.getMessageId(), ProjectEventType.AGENT_RUN_MARKER,
+                EventVisibility.PUBLIC, markerPayload);
+
+        // Emit newPlanStep for task start
+        AgentEvent stepEvent = AgentEvent.of("newPlanStep");
+        stepEvent.setAgentId(expertId);
+        stepEvent.setContent("Expert " + expertId + " accepted the task.");
+        stepEvent.setTimestamp(System.currentTimeMillis());
+        publishAgentEvent(work, stepEvent);
     }
 
+    // ── Event consumption ───────────────────────────────────────────────
+    /**
+     * 消费AgentCore事件
+     * @param work
+     * @param task
+     */
     private void consumeEvents(DispatchWork work, TaskRecord task) {
-        List<AgentRunEvent> events = new ArrayList<>(
+        List<AgentEvent> events = new ArrayList<>(
                 agentCore.streamEvents(
                         task.getSessionId(), task.getLastSequence(),
                         work.getBusinessSessionId()));
         if (events.isEmpty() && agentCore.getRunStatus(
                 task.getSessionId(), work.getBusinessSessionId()) == null) {
-            AgentRunEvent lost = new AgentRunEvent(
-                    task.getSessionId(),
-                    task.getLastSequence() + 1,
-                    "RUN_FAILED",
-                    "FAILED",
-                    "Expert run no longer exists in AgentCore.");
+            AgentEvent lost = AgentEvent.of("error");
+            lost.setSessionId(task.getSessionId());
+            lost.setSequence(task.getLastSequence() + 1);
             lost.setEventId(task.getSessionId() + ":lost");
+            lost.setContent("Expert run no longer exists in AgentCore.");
+            lost.setAgentId(task.getExpertId());
+            lost.setTimestamp(System.currentTimeMillis());
             events.add(lost);
         }
-        events.sort(Comparator.comparingLong(AgentRunEvent::getSequence));
-        for (AgentRunEvent event : events) {
+        events.sort(Comparator.comparingLong(AgentEvent::getSequence));
+        for (AgentEvent event : events) {
+            // Ensure event has agentId set
+            if (event.getAgentId() == null) {
+                event.setAgentId(task.getExpertId());
+            }
             if (event.getEventId() == null) {
                 event.setEventId(event.getSessionId() + ":" + event.getSequence());
             }
-            if (!executionRepository.recordEvent(work.getTenantId(), task.getId(), event)) {
-                continue;
-            }
+            // Dedup by cursor: AgentCore streamEvents(afterSequence) already
+            // filters out events with sequence <= lastSequence. No DB storage
+            // needed — AgentCore persists its own event history.
             applyEvent(work, task, event);
             task.setLastSequence(Math.max(task.getLastSequence(), event.getSequence()));
         }
@@ -282,80 +432,160 @@ public class SingleExpertWorker {
         }
     }
 
-    private void applyEvent(DispatchWork work, TaskRecord task, AgentRunEvent event) {
+    /**
+     * Apply a single agent event to the task's state machine while
+     * transparently forwarding it to the task SSE stream.
+     *
+     * @param work The current dispatch work context
+     * @param task The task record to update
+     * @param event The agent event to apply
+     */
+    private void applyEvent(DispatchWork work, TaskRecord task, AgentEvent event) {
+        // Forward agent events live-only — no DB persistence.
+        // Replay is handled by AGENT_RUN_MARKER → AgentCore re-fetch.
+        publishAgentEventLive(work, event);
+
         String type = event.getType();
-        if ("RUN_ACCEPTED".equals(type) || "RUN_PROGRESS".equals(type)) {
-            boolean advanced = executionRepository.advanceTask(
+
+        // State machine: progress events keep task RUNNING
+        if (PROGRESS_EVENT_TYPES.contains(type)) {
+            executionRepository.advanceTask(
                     task.getId(), event.getSequence(), "RUNNING", null);
-            if (advanced && "RUN_PROGRESS".equals(type)) {
-                task.setStatus("RUNNING");
-                emit(work, ProjectEventType.TASK_PROGRESS_UPDATED, event.getMessage());
-            }
             return;
         }
-        if ("RUN_WAITING_HUMAN".equals(type)) {
+
+        // Human-in-the-loop
+        if ("confirm".equals(type)) {
             if (executionRepository.advanceTask(
                     task.getId(), event.getSequence(), "WAITING_HUMAN",
-                    write(event.getPayload()))) {
+                    writeMap(event))) {
                 task.setStatus("WAITING_HUMAN");
-                String question = String.valueOf(event.getPayload().get("question"));
-                String agentQuestionId =
-                        String.valueOf(event.getPayload().get("questionId"));
-                String requestId = humanRequests.createExpertClarification(
+                String question = event.getContent() != null
+                        ? event.getContent() : "Agent requires input.";
+                String questionId = event.getQuestionId() != null
+                        ? event.getQuestionId() : "agent-question-" + task.getId();
+                humanRequests.createExpertClarification(
                         work.getTenantId(), work.getProjectId(), task.getId(),
-                        agentQuestionId, question);
-                emitHumanRequest(work, requestId, "CLARIFICATION", question);
+                        questionId, question);
             }
             return;
         }
-        if ("RUN_SUCCEEDED".equals(type)) {
-            Object resultValue = event.getPayload().get("resultText");
-            String resultText = resultValue == null ? null : String.valueOf(resultValue);
+
+        // Success: chat or end
+        if ("chat".equals(type) || "end".equals(type)) {
+            // Skip if already terminal or if a correction is in progress
+            // (failResult already created a correction task and end should
+            // not override the CORRECTING status back to SUCCEEDED).
+            if (isTerminal(task.getStatus())
+                    || "CORRECTING".equals(task.getStatus())) {
+                return;
+            }
+            String resultText = event.getContent();
             if (resultText == null || resultText.trim().isEmpty()) {
-                failResult(work, task, event, "Expert result did not contain resultText.");
+                failResult(work, task, event, "Expert result did not contain content.");
                 return;
             }
             List<String> artifactIds = registerArtifacts(work, task, event);
             if (executionRepository.advanceTask(
-                    task.getId(), event.getSequence(), "SUCCEEDED", write(event.getPayload()))) {
+                    task.getId(), event.getSequence(), "SUCCEEDED",
+                    writeMap(event))) {
                 task.setStatus("SUCCEEDED");
-                emit(work, ProjectEventType.TASK_SUCCEEDED, "Expert task completed.");
+                // Persist expert session so future messages in this task
+                // can reuse it for context continuity.
+                executionRepository.saveExpertSession(
+                        work.getTenantId(), work.getProjectId(),
+                        work.getConversationId(),
+                        task.getExpertId(), task.getSessionId());
                 if (!artifactIds.isEmpty()) {
-                    emit(work, ProjectEventType.ARTIFACT_CREATED, write(artifactIds));
+                    AgentEvent artifactEvent = AgentEvent.of("ARTIFACT_CREATED");
+                    artifactEvent.setAgentId(task.getExpertId());
+                    artifactEvent.setContent(write(artifactIds));
+                    publishAgentEvent(work, artifactEvent);
                 }
                 if (task.getCorrectionOf() != null) {
-                    executionRepository.acceptCorrection(task, write(event.getPayload()));
+                    executionRepository.acceptCorrection(task, writeMap(event));
                 }
             }
             return;
         }
-        String status = "RUN_TIMED_OUT".equals(type) ? "TIMED_OUT"
-                : "RUN_CANCELLED".equals(type) ? "CANCELLED" : "FAILED";
-        if (executionRepository.advanceTask(
-                task.getId(), event.getSequence(), status, write(event.getPayload()))) {
-            task.setStatus(status);
-            emit(work, ProjectEventType.TASK_FAILED, event.getMessage());
-            executionRepository.completePlanAndDispatch(
-                    task.getPlanId(), work.getDispatchId(), status, event.getMessage());
+
+        // Failure
+        if ("error".equals(type)) {
+            String status = event.getStatus() != null ? event.getStatus() : "FAILED";
+            if ("TIMED_OUT".equals(status) || "CANCELLED".equals(status) || "FAILED".equals(status)) {
+                // already set by the agent
+            } else {
+                status = "FAILED";
+            }
+            if (executionRepository.advanceTask(
+                    task.getId(), event.getSequence(), status, writeMap(event))) {
+                task.setStatus(status);
+                executionRepository.completePlanAndDispatch(
+                        task.getPlanId(), work.getDispatchId(), status, event.getContent());
+            }
+            return;
         }
+
+        // Synthetic: RUN_CANCELLED (from cancel() or stopSession)
+        if ("RUN_CANCELLED".equals(type)) {
+            if (executionRepository.advanceTask(
+                    task.getId(), event.getSequence(), "CANCELLED", writeMap(event))) {
+                task.setStatus("CANCELLED");
+                executionRepository.completePlanAndDispatch(
+                        task.getPlanId(), work.getDispatchId(),
+                        "CANCELLED", event.getContent());
+            }
+            return;
+        }
+
+        // Unknown: log and mark running
+        executionRepository.advanceTask(
+                task.getId(), event.getSequence(), "RUNNING", null);
     }
 
+    // ── Artifact registration ───────────────────────────────────────────
+
     private void failResult(
-            DispatchWork work, TaskRecord task, AgentRunEvent event, String message) {
+            DispatchWork work, TaskRecord task, AgentEvent event, String message) {
         TaskRecord correction = executionRepository.createCorrection(work, task);
         if (correction != null) {
             task.setStatus("CORRECTING");
-            emit(work, ProjectEventType.TASK_FAILED,
-                    message + " A correction task was scheduled.");
+            AgentEvent correctionEvent = AgentEvent.of("newPlanStep");
+            correctionEvent.setAgentId(task.getExpertId());
+            correctionEvent.setContent(message + " A correction task was scheduled.");
+            publishAgentEvent(work, correctionEvent);
             return;
         }
         executionRepository.advanceTask(
-                task.getId(), event.getSequence(), "FAILED", write(event.getPayload()));
+                task.getId(), event.getSequence(), "FAILED", writeMap(event));
         task.setStatus("FAILED");
-        emit(work, ProjectEventType.TASK_FAILED, message);
+        AgentEvent failEvent = AgentEvent.of("error");
+        failEvent.setAgentId(task.getExpertId());
+        failEvent.setContent(message);
+        publishAgentEvent(work, failEvent);
         executionRepository.completePlanAndDispatch(
                 task.getPlanId(), work.getDispatchId(), "FAILED", message);
     }
+
+    private List<String> registerArtifacts(
+            DispatchWork work, TaskRecord task, AgentEvent event) {
+        // Extract artifact file IDs from attachments in chat/end events
+        if (event.getAttachments() != null) {
+            List<String> result = new ArrayList<>();
+            for (AgentEvent.AttachmentInfo att : event.getAttachments()) {
+                if (att.getPath() != null) {
+                    result.add(artifactService.registerExpertArtifact(
+                            work, task, att.getPath()));
+                }
+            }
+            if (!result.isEmpty()) {
+                return result;
+            }
+        }
+        return Collections.emptyList();
+    }
+
+    // ── Helpers ─────────────────────────────────────────────────────────
 
     private Map<String, TaskRecord> index(List<TaskRecord> tasks) {
         Map<String, TaskRecord> result = new HashMap<>();
@@ -406,68 +636,70 @@ public class SingleExpertWorker {
     private String resultText(TaskRecord task) {
         try {
             return objectMapper.readTree(task.getResultJson())
-                    .path("resultText").asText("Expert tasks completed.");
+                    .path("content").asText("Expert tasks completed.");
         } catch (Exception ex) {
             return "Expert tasks completed.";
         }
     }
 
-    private List<String> registerArtifacts(
-            DispatchWork work, TaskRecord task, AgentRunEvent event) {
-        Object registered = event.getPayload().get("artifactIds");
-        if (registered instanceof List) {
-            return artifactService.acceptAgentArtifacts(
-                    work, task, (List<?>) registered);
-        }
-        Object value = event.getPayload().get("artifactFileIds");
-        if (!(value instanceof List)) {
-            return java.util.Collections.emptyList();
-        }
-        List<String> result = new java.util.ArrayList<>();
-        for (Object storageKey : (List<?>) value) {
-            result.add(artifactService.registerExpertArtifact(
-                    work, task, String.valueOf(storageKey)));
-        }
-        return result;
+    /** Emit a coordinator phase transition event. */
+    private void emitPhase(DispatchWork work, String phase, String detail) {
+        AgentEvent event = AgentEvent.of("coordinatorPhase");
+        event.setAgentId(CoordinatorAgentClient.COORDINATOR_AGENT_ID);
+        event.setContent(detail);
+        event.setStatus(phase);
+        publishAgentEvent(work, event);
     }
 
-    private void emit(DispatchWork work, ProjectEventType type, String text) {
-        RequestIdentity identity = new RequestIdentity(work.getTenantId(), work.getUserId());
-        ObjectNode payload = objectMapper.createObjectNode();
-        payload.put("messageId", work.getMessageId());
-        payload.put("text", text);
-        ProjectEvent event = eventRepository.insertEvent(
+    // Monotonic counter for live-only events (not persisted, no sequence allocation)
+    private long liveEventCounter;
+
+    /**
+     * Push an AgentEvent to live SSE subscribers — no DB persistence.
+     * Agent events are re-fetched from AgentCore during replay via AGENT_RUN_MARKER.
+     */
+    private void publishAgentEventLive(DispatchWork work, AgentEvent event) {
+        if (event.getTimestamp() == 0L) {
+            event.setTimestamp(System.currentTimeMillis());
+        }
+        ProjectEvent projectEvent = new ProjectEvent();
+        projectEvent.setProjectId(work.getProjectId());
+        projectEvent.setConversationId(work.getConversationId());
+        projectEvent.setMessageId(work.getMessageId());
+        projectEvent.setSequence(++liveEventCounter);
+        projectEvent.setType(ProjectEventType.COORDINATOR_ANALYZING);
+        projectEvent.setAgentEvent(event);
+        streamHub.publish(
+                work.getTenantId(), work.getProjectId(),
+                work.getConversationId(), projectEvent);
+    }
+
+    /**
+     * Publish an AgentEvent to the task SSE stream AND persist in
+     * project_event for replay. Used for Coordinator-generated events.
+     */
+    private void publishAgentEvent(DispatchWork work, AgentEvent event) {
+        if (event.getTimestamp() == 0L) {
+            event.setTimestamp(System.currentTimeMillis());
+        }
+        RequestIdentity identity = new RequestIdentity(
+                work.getTenantId(), work.getUserId());
+        ProjectEvent projectEvent = eventRepository.insertEvent(
                 identity,
                 work.getProjectId(),
                 work.getConversationId(),
                 work.getMessageId(),
-                type,
+                ProjectEventType.COORDINATOR_ANALYZING,
                 EventVisibility.PUBLIC,
-                payload);
+                objectMapper.convertValue(event, ObjectNode.class));
+        projectEvent.setAgentEvent(event);
         streamHub.publish(
                 work.getTenantId(), work.getProjectId(),
-                work.getConversationId(), event);
+                work.getConversationId(), projectEvent);
     }
 
-    private void emitHumanRequest(
-            DispatchWork work, String requestId, String requestType, String question) {
-        RequestIdentity identity = new RequestIdentity(work.getTenantId(), work.getUserId());
-        ObjectNode payload = objectMapper.createObjectNode();
-        payload.put("messageId", work.getMessageId());
-        payload.put("humanRequestId", requestId);
-        payload.put("requestType", requestType);
-        payload.put("text", question);
-        ProjectEvent event = eventRepository.insertEvent(
-                identity,
-                work.getProjectId(),
-                work.getConversationId(),
-                work.getMessageId(),
-                ProjectEventType.TASK_WAITING_HUMAN,
-                EventVisibility.PUBLIC,
-                payload);
-        streamHub.publish(
-                work.getTenantId(), work.getProjectId(),
-                work.getConversationId(), event);
+    private void emitAgentEvent(DispatchWork work, AgentEvent event) {
+        publishAgentEvent(work, event);
     }
 
     private boolean isTerminal(String status) {
@@ -481,7 +713,16 @@ public class SingleExpertWorker {
         try {
             return objectMapper.writeValueAsString(value);
         } catch (Exception ex) {
-            throw new IllegalStateException("Could not serialize expert result.", ex);
+            throw new IllegalStateException(
+                    "Could not serialize expert result.", ex);
+        }
+    }
+
+    private String writeMap(AgentEvent event) {
+        try {
+            return objectMapper.writeValueAsString(event);
+        } catch (Exception ex) {
+            return "{}";
         }
     }
 

@@ -2,7 +2,7 @@ package org.cmb.teamcoordinator.intent;
 
 import java.util.List;
 import java.util.UUID;
-import org.cmb.teamcoordinator.agentcore.AgentRunEvent;
+import org.cmb.teamcoordinator.agentcore.AgentEvent;
 import org.cmb.teamcoordinator.project.RequestIdentity;
 import org.springframework.dao.DuplicateKeyException;
 import org.cmb.teamcoordinator.persistence.MyBatisExecutor;
@@ -57,18 +57,29 @@ public class CoordinatorAgentRunRepository {
     }
 
     public boolean saveSession(String id, String stage, String sessionId) {
-        return jdbc.update(
+        int updated = jdbc.update(
                 "UPDATE coordinator_agent_run SET session_id = ?, stage = ?, status = 'RUNNING', "
                         + "last_sequence = 0, updated_at = CURRENT_TIMESTAMP "
                         + "WHERE business_id = ? AND session_id IS NULL",
-                sessionId, stage, id) == 1;
+                sessionId, stage, id);
+        if (updated == 0) {
+            // Session already exists (conversation reuse) — update stage/status
+            // but preserve last_sequence so repair can skip old events
+            updated = jdbc.update(
+                    "UPDATE coordinator_agent_run SET stage = ?, status = 'RUNNING', "
+                            + "updated_at = CURRENT_TIMESTAMP "
+                            + "WHERE business_id = ? AND session_id = ?",
+                    stage, id, sessionId);
+        }
+        return updated == 1;
     }
 
-    public void advance(String id, AgentRunEvent event) {
+    public void advance(String id, AgentEvent event) {
+        String status = event.getStatus() != null ? event.getStatus() : "RUNNING";
         jdbc.update(
                 "UPDATE coordinator_agent_run SET last_sequence = ?, status = ?, "
                         + "updated_at = CURRENT_TIMESTAMP WHERE business_id = ? AND last_sequence < ?",
-                event.getSequence(), event.getStatus(), id, event.getSequence());
+                event.getSequence(), status, id, event.getSequence());
     }
 
     public void complete(String id, long sequence, String output) {
@@ -79,9 +90,12 @@ public class CoordinatorAgentRunRepository {
     }
 
     public void prepareRepair(String id, String invalidOutput) {
+        // Keep last_sequence so that when the repaired run re-uses the same
+        // session, streamEvents(afterSequence) skips the original invalid
+        // events and only returns the new repair events.
         jdbc.update(
-                "UPDATE coordinator_agent_run SET session_id = NULL, stage = 'REPAIR', "
-                        + "status = 'PENDING', last_sequence = 0, invalid_output = ?, "
+                "UPDATE coordinator_agent_run SET stage = 'REPAIR', "
+                        + "status = 'PENDING', invalid_output = ?, "
                         + "output_json = NULL, updated_at = CURRENT_TIMESTAMP WHERE business_id = ?",
                 invalidOutput, id);
     }

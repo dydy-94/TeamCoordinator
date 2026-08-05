@@ -20,6 +20,8 @@ public class CoordinatorDecision {
     private String analysisId;
     @JsonProperty("human_request_id")
     private String humanRequestId;
+    /** Task-level AgentCore session ID for context continuity across messages. */
+    private transient String coordinatorSessionId;
 
     public DecisionType getDecisionType() { return decisionType; }
     public void setDecisionType(DecisionType decisionType) { this.decisionType = decisionType; }
@@ -33,4 +35,6 @@ public class CoordinatorDecision {
     public void setAnalysisId(String analysisId) { this.analysisId = analysisId; }
     public String getHumanRequestId() { return humanRequestId; }
     public void setHumanRequestId(String value) { this.humanRequestId = value; }
+    public String getCoordinatorSessionId() { return coordinatorSessionId; }
+    public void setCoordinatorSessionId(String value) { this.coordinatorSessionId = value; }
 }

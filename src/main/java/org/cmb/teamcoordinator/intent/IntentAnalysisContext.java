@@ -14,6 +14,12 @@ public class IntentAnalysisContext {
     private List<ExpertDescriptor> experts = new ArrayList<>();
     private List<MockFileDescriptor> attachments = new ArrayList<>();
     private List<String> attachmentRefs = new ArrayList<>();
+    /** Non-null when this task has a pending human request (expert confirm or coordinator ask). */
+    private String pendingStatus;
+    /** The question being asked by the waiting expert or coordinator. */
+    private String pendingQuestion;
+    /** Expert ID when pendingStatus is EXPERT_WAITING. */
+    private String pendingExpertName;
 
     public String getProjectName() { return projectName; }
     public void setProjectName(String projectName) { this.projectName = projectName; }
@@ -29,4 +35,10 @@ public class IntentAnalysisContext {
     public void setAttachments(List<MockFileDescriptor> value) { this.attachments = value; }
     public List<String> getAttachmentRefs() { return attachmentRefs; }
     public void setAttachmentRefs(List<String> value) { this.attachmentRefs = value; }
+    public String getPendingStatus() { return pendingStatus; }
+    public void setPendingStatus(String value) { this.pendingStatus = value; }
+    public String getPendingQuestion() { return pendingQuestion; }
+    public void setPendingQuestion(String value) { this.pendingQuestion = value; }
+    public String getPendingExpertName() { return pendingExpertName; }
+    public void setPendingExpertName(String value) { this.pendingExpertName = value; }
 }

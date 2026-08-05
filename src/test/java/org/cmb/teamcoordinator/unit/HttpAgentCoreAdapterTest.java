@@ -13,7 +13,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
-import org.cmb.teamcoordinator.agentcore.AgentRunEvent;
+import org.cmb.teamcoordinator.agentcore.AgentEvent;
 import org.cmb.teamcoordinator.agentcore.AgentRunRequest;
 import org.cmb.teamcoordinator.agentcore.AgentRunResponse;
 import org.cmb.teamcoordinator.agentcore.HttpAgentCoreAdapter;
@@ -71,7 +71,7 @@ class HttpAgentCoreAdapterTest {
                 .andExpect(header("X-Session-Id", "business-session-1"))
                 .andRespond(withSuccess(
                         "{\"sessionId\":\"session-1\",\"sequence\":2,"
-                                + "\"type\":\"RUN_SUCCEEDED\",\"status\":\"SUCCEEDED\"}",
+                                + "\"type\":\"end\",\"content\":\"done\"}",
                         MediaType.APPLICATION_JSON));
         server.expect(once(), requestTo("http://agentcore.test/api/runs/missing"))
                 .andExpect(header("X-Session-Id", "business-session-1"))
@@ -91,19 +91,19 @@ class HttpAgentCoreAdapterTest {
         request.setSystemPrompt("system instructions");
         AgentRunResponse submitted = adapter.submitRun("expert-analysis", request);
         assertEquals("session-1", submitted.getSessionId());
-        List<AgentRunEvent> events = adapter.streamEvents(
+        List<AgentEvent> events = adapter.streamEvents(
                 "session-1", 0L, "business-session-1");
         assertEquals(3, events.size());
-        assertEquals("RUN_PROGRESS", events.get(0).getType());
+        assertEquals("liveStatus", events.get(0).getType());
         assertEquals(1L, events.get(0).getSequence());
         assertEquals("event-1", events.get(0).getEventId());
-        assertEquals("RUN_SUCCEEDED", events.get(2).getType());
-        assertEquals("done", events.get(2).getPayload().get("resultText"));
-        assertEquals("SUCCEEDED", adapter.getRunStatus(
-                "session-1", "business-session-1").getStatus());
+        assertEquals("end", events.get(2).getType());
+        assertEquals("done", events.get(2).getContent());
+        assertEquals("end", adapter.getRunStatus(
+                "session-1", "business-session-1").getType());
         assertNull(adapter.getRunStatus("missing", "business-session-1"));
-        assertEquals("CANCELLED", adapter.cancelRun(
-                "session-1", "business-session-1").getStatus());
+        assertEquals("RUN_CANCELLED", adapter.cancelRun(
+                "session-1", "business-session-1").getType());
         server.verify();
     }
 }

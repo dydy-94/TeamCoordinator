@@ -1,9 +1,12 @@
 package org.cmb.teamcoordinator.coordinator;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.Instant;
+import org.cmb.teamcoordinator.agentcore.AgentEvent;
 
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class ProjectEvent {
 
     private String id;
@@ -15,6 +18,13 @@ public class ProjectEvent {
     private ProjectEventType type;
     private JsonNode payload;
     private Instant createdAt;
+
+    /**
+     * When non-null, this event carries an AgentCore SSE event that should be
+     * forwarded to task SSE subscribers. The SSE event name uses
+     * {@code agentEvent.type} and the data is the serialized AgentEvent.
+     */
+    private AgentEvent agentEvent;
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -32,4 +42,6 @@ public class ProjectEvent {
     public void setPayload(JsonNode payload) { this.payload = payload; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+    public AgentEvent getAgentEvent() { return agentEvent; }
+    public void setAgentEvent(AgentEvent agentEvent) { this.agentEvent = agentEvent; }
 }

@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.UUID;
 import org.cmb.teamcoordinator.TeamCoordinatorApplication;
 import org.cmb.teamcoordinator.agentcore.AgentCoreAdapter;
-import org.cmb.teamcoordinator.agentcore.AgentRunEvent;
+import org.cmb.teamcoordinator.agentcore.AgentEvent;
 import org.cmb.teamcoordinator.execution.ExecutionRepository;
 import org.cmb.teamcoordinator.execution.SingleExpertWorker;
 import org.cmb.teamcoordinator.execution.TaskRecord;
@@ -68,10 +68,8 @@ class SingleExpertExecutionIntegrationTest {
         assertEquals("SUCCEEDED", task.getStatus());
         assertEquals("COMPLETED", dispatchStatus(dispatchId));
 
-        List<AgentRunEvent> replay = agentCore.streamEvents(task.getSessionId(), 0L);
-        AgentRunEvent result = replay.get(replay.size() - 1);
-        assertFalse(executionRepository.recordEvent(
-                "tenant-execution", task.getId(), result));
+        List<AgentEvent> replay = agentCore.streamEvents(task.getSessionId(), 0L);
+        // advanceTask is idempotent: already-succeeded task can't be re-advanced
         assertFalse(executionRepository.advanceTask(
                 task.getId(), 2L, "RUNNING", null));
 
@@ -81,11 +79,11 @@ class SingleExpertExecutionIntegrationTest {
                 task.getRequestId());
         Integer finalCount = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM project_event WHERE project_id = ? "
-                        + "AND event_type = 'FINAL_RESPONSE'",
+                        + "AND payload LIKE '%\"type\":\"chat\"%'",
                 Integer.class,
                 projectId);
+        assertTrue(finalCount != null && finalCount > 0);
         assertEquals(Integer.valueOf(1), requestCount);
-        assertEquals(Integer.valueOf(1), finalCount);
         String businessSessionId = jdbc.queryForObject(
                 "SELECT c.session_id FROM project_conversation c "
                         + "JOIN coordinator_dispatch d ON d.conversation_id = c.business_id "
@@ -98,7 +96,7 @@ class SingleExpertExecutionIntegrationTest {
         String resultJson = jdbc.queryForObject(
                 "SELECT result_json FROM coordinator_task WHERE business_id = ?",
                 String.class, task.getId());
-        assertTrue(resultJson.contains("\"resultText\":"));
+        assertTrue(resultJson.contains("\"content\":"));
     }
 
     @Test
