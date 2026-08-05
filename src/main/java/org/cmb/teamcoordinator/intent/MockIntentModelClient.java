@@ -86,7 +86,12 @@ public class MockIntentModelClient implements IntentModelClient {
                 || text.startsWith("介绍一下")
                 || text.startsWith("what is")
                 || text.startsWith("explain")
-                || text.endsWith("是什么意思");
+                || text.endsWith("是什么意思")
+                || text.equals("你是谁")
+                || text.equals("你是谁？")
+                || text.startsWith("你是谁")
+                || text.startsWith("你是什么")
+                || text.startsWith("你是谁");
     }
 
     private boolean isMultiExpert(String text) {

@@ -3,6 +3,7 @@ package org.cmb.teamcoordinator.planning;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 import org.cmb.teamcoordinator.agentcore.ExpertDescriptor;
 import org.cmb.teamcoordinator.agentcore.ExpertRegistry;
 import org.cmb.teamcoordinator.execution.ExecutionRepository;
@@ -36,8 +37,18 @@ public class ExpertSelector {
         candidates.sort(Comparator.comparingInt(Candidate::getLoad)
                 .thenComparing(Candidate::getExpertId));
         if (candidates.isEmpty()) {
+            List<String> expertIds = new ArrayList<>();
+            for (ProjectExpert pe : project.getExperts()) {
+                expertIds.add(pe.getExpertId() + (pe.isEnabled() ? ":on" : ":off"));
+            }
             throw new PlanValidationException(
-                    "No available expert matches capabilities " + capabilities);
+                    "No available expert matches " + capabilities
+                    + ". Project experts: " + expertIds
+                    + ". Registry: " + registry.listExperts().stream()
+                        .map(e -> e.getExpertId() + "[" + e.getCapabilities() + "]"
+                            + " enabled=" + e.isEnabled()
+                            + " avail=" + e.isAvailable())
+                        .collect(java.util.stream.Collectors.toList()));
         }
         return candidates.get(0).expertId;
     }

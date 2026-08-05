@@ -34,6 +34,14 @@ public class ProjectController {
     }
 
     /**
+     * 列出当前用户可见的项目。
+     */
+    @GetMapping
+    public java.util.List<ProjectView> list(HttpServletRequest request) {
+        return projectService.list(identity(request));
+    }
+
+    /**
      * 创建项目
      * @param servletRequest
      * @param request

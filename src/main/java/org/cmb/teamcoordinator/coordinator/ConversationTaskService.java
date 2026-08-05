@@ -1,5 +1,6 @@
 package org.cmb.teamcoordinator.coordinator;
 
+import java.util.List;
 import org.cmb.teamcoordinator.common.ApiException;
 import org.cmb.teamcoordinator.project.ProjectService;
 import org.cmb.teamcoordinator.project.RequestIdentity;
@@ -22,6 +23,20 @@ public class ConversationTaskService {
             CreateConversationTaskRequest request) {
         projects.requireTaskInitiator(identity, projectId);
         return tasks.create(identity, projectId, request.getTitle());
+    }
+
+    public List<ConversationTaskView> list(
+            RequestIdentity identity, String projectId) {
+        projects.requireTaskInitiator(identity, projectId);
+        return tasks.listByProject(identity.getTenantId(), projectId);
+    }
+
+    public void delete(
+            RequestIdentity identity, String projectId, String taskId) {
+        projects.requireTaskInitiator(identity, projectId);
+        if (!tasks.delete(identity.getTenantId(), projectId, taskId)) {
+            throw ApiException.notFound("TASK_NOT_FOUND", "Conversation task was not found.");
+        }
     }
 
     public ConversationTaskView require(

@@ -79,7 +79,7 @@ class SingleExpertExecutionIntegrationTest {
                 task.getRequestId());
         Integer finalCount = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM project_event WHERE project_id = ? "
-                        + "AND payload LIKE '%\"type\":\"chat\"%'",
+                        + "AND payload LIKE '%\"type\":\"coordinatorChat\"%'",
                 Integer.class,
                 projectId);
         assertTrue(finalCount != null && finalCount > 0);

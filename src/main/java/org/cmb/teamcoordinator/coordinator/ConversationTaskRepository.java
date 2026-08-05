@@ -1,6 +1,7 @@
 package org.cmb.teamcoordinator.coordinator;
 
 import java.sql.Timestamp;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.cmb.teamcoordinator.project.RequestIdentity;
@@ -26,6 +27,31 @@ public class ConversationTaskRepository {
                         + "VALUES (?, ?, ?, ?, ?, 'ACTIVE')",
                 taskId, identity.getTenantId(), projectId, sessionId, title);
         return get(identity.getTenantId(), projectId, taskId);
+    }
+
+    public java.util.List<ConversationTaskView> listByProject(
+            String tenantId, String projectId) {
+        return jdbc.query(
+                "SELECT business_id AS id, project_id, session_id, title, status, created_at "
+                        + "FROM project_conversation WHERE tenant_id = ? "
+                        + "AND project_id = ? ORDER BY created_at DESC",
+                (rs, row) -> {
+                    ConversationTaskView view = new ConversationTaskView();
+                    view.setTaskId(rs.getString("id"));
+                    view.setProjectId(rs.getString("project_id"));
+                    view.setSessionId(rs.getString("session_id"));
+                    view.setTitle(rs.getString("title"));
+                    view.setStatus(rs.getString("status"));
+                    Timestamp created = rs.getTimestamp("created_at");
+                    view.setCreatedAt(created == null ? null : created.toInstant());
+                    return view;
+                }, tenantId, projectId);
+    }
+
+    public boolean delete(String tenantId, String projectId, String taskId) {
+        return jdbc.update(
+                "DELETE FROM project_conversation WHERE tenant_id = ? AND project_id = ? AND business_id = ?",
+                tenantId, projectId, taskId) > 0;
     }
 
     public ConversationTaskView get(String tenantId, String projectId, String taskId) {

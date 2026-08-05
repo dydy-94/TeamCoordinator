@@ -8,6 +8,7 @@ import org.cmb.teamcoordinator.coordinator.CreateConversationTaskRequest;
 import org.cmb.teamcoordinator.project.IdentityProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -29,6 +30,16 @@ public class ConversationTaskController {
     }
 
     /**
+     * 列出项目下所有任务
+     */
+    @GetMapping
+    public java.util.List<ConversationTaskView> list(
+            HttpServletRequest servletRequest,
+            @PathVariable String projectId) {
+        return tasks.list(identities.currentIdentity(servletRequest), projectId);
+    }
+
+    /**
      * 创建任务
      * @param servletRequest
      * @param projectId
@@ -42,6 +53,18 @@ public class ConversationTaskController {
             @Valid @RequestBody CreateConversationTaskRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(tasks.create(
                 identities.currentIdentity(servletRequest), projectId, request));
+    }
+
+    /**
+     * 删除任务
+     */
+    @DeleteMapping("/{taskId}")
+    public ResponseEntity<Void> delete(
+            HttpServletRequest servletRequest,
+            @PathVariable String projectId,
+            @PathVariable String taskId) {
+        tasks.delete(identities.currentIdentity(servletRequest), projectId, taskId);
+        return ResponseEntity.noContent().build();
     }
 
     /**

@@ -132,10 +132,15 @@ public class SingleExpertWorker {
             process(work);
         } catch (RuntimeException ex) {
             LOGGER.warn("Single expert dispatch {} failed.", work.getDispatchId(), ex);
+            String msg = ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName();
+            // Fail all tasks associated with this dispatch so they don't
+            // permanently consume expert concurrency slots.
+            executionRepository.failTasksForMessage(
+                    work.getTenantId(), work.getMessageId());
             executionRepository.completeDispatch(
-                    work.getDispatchId(), "FAILED", abbreviate(ex.getMessage()));
+                    work.getDispatchId(), "FAILED", abbreviate(msg));
             emitAgentEvent(work,
-                    AgentEvent.content("error", "Coordinator could not execute the task.",
+                    AgentEvent.content("coordinatorError", "Execution failed: " + abbreviate(msg),
                             "coordinator"));
         }
     }
@@ -164,7 +169,7 @@ public class SingleExpertWorker {
             throw ApiException.conflict("TASK_CANCEL_FAILED",
                     "AgentCore run was not found.");
         }
-        AgentEvent event = AgentEvent.of("RUN_CANCELLED");
+        AgentEvent event = AgentEvent.of("coordinatorRunCancelled");
         event.setSessionId(task.getSessionId());
         event.setSequence(task.getLastSequence() + 1);
         event.setEventId(task.getSessionId() + ":cancel:" + event.getSequence());
@@ -214,7 +219,7 @@ public class SingleExpertWorker {
         if (decision.getDecisionType() == DecisionType.ANSWER) {
             emitPhase(work, PHASE_ANSWERING, "Coordinator is preparing a direct answer.");
             publishAgentEvent(work,
-                    AgentEvent.content("chat", decision.getAnswer(),
+                    AgentEvent.content("coordinatorChat", decision.getAnswer(),
                             CoordinatorAgentClient.COORDINATOR_AGENT_ID));
             emitPhase(work, PHASE_COMPLETED, "Request completed.");
             executionRepository.completeDispatch(work.getDispatchId(), "COMPLETED", null);
@@ -224,7 +229,7 @@ public class SingleExpertWorker {
             emitPhase(work, PHASE_WAITING, "Coordinator needs clarification from the user.");
             humanRequests.linkDispatch(
                     decision.getHumanRequestId(), work.getMessageId(), work.getDispatchId());
-            AgentEvent confirmEvent = AgentEvent.of("confirm");
+            AgentEvent confirmEvent = AgentEvent.of("coordinatorConfirm");
             confirmEvent.setAgentId(CoordinatorAgentClient.COORDINATOR_AGENT_ID);
             confirmEvent.setQuestionId(decision.getHumanRequestId());
             confirmEvent.setContent(decision.getQuestion());
@@ -247,7 +252,7 @@ public class SingleExpertWorker {
         executionRepository.createPlan(work, decision, planning);
 
         // Emit plan update
-        AgentEvent planEvent = AgentEvent.of("planUpdate");
+        AgentEvent planEvent = AgentEvent.of("coordinatorPlanUpdate");
         planEvent.setAgentId(CoordinatorAgentClient.COORDINATOR_AGENT_ID);
         List<AgentEvent.PlanTaskStatus> planTasks = new ArrayList<>();
         for (org.cmb.teamcoordinator.planning.PlannedTask pt
@@ -285,7 +290,7 @@ public class SingleExpertWorker {
             String resultText = resultText(last);
             emitPhase(work, PHASE_ANSWERING, "All expert tasks completed, preparing final response.");
             publishAgentEvent(work,
-                    AgentEvent.content("chat", resultText,
+                    AgentEvent.content("coordinatorChat", resultText,
                             CoordinatorAgentClient.COORDINATOR_AGENT_ID));
             emitPhase(work, PHASE_COMPLETED, "Request completed.");
             executionRepository.completePlanAndDispatch(
@@ -362,10 +367,11 @@ public class SingleExpertWorker {
         structuredInput.put("promptTemplateId", prompt.getTemplateId());
         runRequest.setStructuredInput(structuredInput);
         runRequest.setAttachments(artifactService.toAgentAttachments(inputRefs));
-        // Reuse existing expert session within this task for context continuity
+        // Reuse existing expert session from a previous message for context continuity
+        // (explicitly exclude current message to prevent parallel tasks sharing sessions)
         String existingExpertSession = executionRepository.findExpertSession(
                 work.getTenantId(), work.getProjectId(),
-                work.getConversationId(), expertId);
+                work.getConversationId(), expertId, work.getMessageId());
         if (existingExpertSession != null) {
             runRequest.setConversationSessionId(existingExpertSession);
         }
@@ -382,8 +388,8 @@ public class SingleExpertWorker {
                 work.getMessageId(), ProjectEventType.AGENT_RUN_MARKER,
                 EventVisibility.PUBLIC, markerPayload);
 
-        // Emit newPlanStep for task start
-        AgentEvent stepEvent = AgentEvent.of("newPlanStep");
+        // Emit coordinatorNewPlanStep for task start
+        AgentEvent stepEvent = AgentEvent.of("coordinatorNewPlanStep");
         stepEvent.setAgentId(expertId);
         stepEvent.setContent("Expert " + expertId + " accepted the task.");
         stepEvent.setTimestamp(System.currentTimeMillis());
@@ -403,7 +409,7 @@ public class SingleExpertWorker {
                         work.getBusinessSessionId()));
         if (events.isEmpty() && agentCore.getRunStatus(
                 task.getSessionId(), work.getBusinessSessionId()) == null) {
-            AgentEvent lost = AgentEvent.of("error");
+            AgentEvent lost = AgentEvent.of("coordinatorError");
             lost.setSessionId(task.getSessionId());
             lost.setSequence(task.getLastSequence() + 1);
             lost.setEventId(task.getSessionId() + ":lost");
@@ -454,7 +460,7 @@ public class SingleExpertWorker {
             return;
         }
 
-        // Human-in-the-loop
+        // Human-in-the-loop (AgentCore confirm)
         if ("confirm".equals(type)) {
             if (executionRepository.advanceTask(
                     task.getId(), event.getSequence(), "WAITING_HUMAN",
@@ -495,13 +501,8 @@ public class SingleExpertWorker {
                 executionRepository.saveExpertSession(
                         work.getTenantId(), work.getProjectId(),
                         work.getConversationId(),
-                        task.getExpertId(), task.getSessionId());
-                if (!artifactIds.isEmpty()) {
-                    AgentEvent artifactEvent = AgentEvent.of("ARTIFACT_CREATED");
-                    artifactEvent.setAgentId(task.getExpertId());
-                    artifactEvent.setContent(write(artifactIds));
-                    publishAgentEvent(work, artifactEvent);
-                }
+                        task.getExpertId(), task.getSessionId(),
+                        work.getMessageId());
                 if (task.getCorrectionOf() != null) {
                     executionRepository.acceptCorrection(task, writeMap(event));
                 }
@@ -509,8 +510,8 @@ public class SingleExpertWorker {
             return;
         }
 
-        // Failure
-        if ("error".equals(type)) {
+        // Failure (AgentCore error or Coordinator synthetic error)
+        if ("error".equals(type) || "coordinatorError".equals(type)) {
             String status = event.getStatus() != null ? event.getStatus() : "FAILED";
             if ("TIMED_OUT".equals(status) || "CANCELLED".equals(status) || "FAILED".equals(status)) {
                 // already set by the agent
@@ -526,8 +527,8 @@ public class SingleExpertWorker {
             return;
         }
 
-        // Synthetic: RUN_CANCELLED (from cancel() or stopSession)
-        if ("RUN_CANCELLED".equals(type)) {
+        // Synthetic: coordinatorRunCancelled (from cancel() or stopSession)
+        if ("coordinatorRunCancelled".equals(type)) {
             if (executionRepository.advanceTask(
                     task.getId(), event.getSequence(), "CANCELLED", writeMap(event))) {
                 task.setStatus("CANCELLED");
@@ -550,7 +551,7 @@ public class SingleExpertWorker {
         TaskRecord correction = executionRepository.createCorrection(work, task);
         if (correction != null) {
             task.setStatus("CORRECTING");
-            AgentEvent correctionEvent = AgentEvent.of("newPlanStep");
+            AgentEvent correctionEvent = AgentEvent.of("coordinatorNewPlanStep");
             correctionEvent.setAgentId(task.getExpertId());
             correctionEvent.setContent(message + " A correction task was scheduled.");
             publishAgentEvent(work, correctionEvent);
@@ -559,7 +560,7 @@ public class SingleExpertWorker {
         executionRepository.advanceTask(
                 task.getId(), event.getSequence(), "FAILED", writeMap(event));
         task.setStatus("FAILED");
-        AgentEvent failEvent = AgentEvent.of("error");
+        AgentEvent failEvent = AgentEvent.of("coordinatorError");
         failEvent.setAgentId(task.getExpertId());
         failEvent.setContent(message);
         publishAgentEvent(work, failEvent);

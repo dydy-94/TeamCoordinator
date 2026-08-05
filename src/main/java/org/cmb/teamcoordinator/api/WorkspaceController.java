@@ -50,7 +50,8 @@ public class WorkspaceController {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("project", projectService.get(identity, projectId));
         result.put("task", jdbc.queryForMap(
-                "SELECT business_id AS id, session_id, title, status, created_at "
+                "SELECT business_id AS taskId, session_id AS sessionId, title, status, "
+                        + "created_at AS createdAt "
                         + "FROM project_conversation WHERE tenant_id = ? "
                         + "AND project_id = ? AND business_id = ?",
                 identity.getTenantId(), projectId, taskId));

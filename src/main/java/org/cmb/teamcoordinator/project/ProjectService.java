@@ -45,6 +45,25 @@ public class ProjectService {
     }
 
     @Transactional(readOnly = true)
+    public java.util.List<ProjectView> list(RequestIdentity identity) {
+        java.util.List<ProjectView> result = new java.util.ArrayList<>();
+        for (ProjectRecord project : repository.findByTenant(
+                identity.getTenantId(), identity.getUserId())) {
+            ProjectView view = new ProjectView();
+            view.setId(project.getId());
+            view.setName(project.getName());
+            view.setDescription(project.getDescription());
+            view.setStatus(project.getStatus());
+            view.setCreatedAt(project.getCreatedAt());
+            view.setUpdatedAt(project.getUpdatedAt());
+            // Members and experts are omitted for list compactness;
+            // call get(id) for full details.
+            result.add(view);
+        }
+        return result;
+    }
+
+    @Transactional(readOnly = true)
     public ProjectView get(RequestIdentity identity, String projectId) {
         ProjectRecord project = requireVisible(identity, projectId);
         return toView(project);

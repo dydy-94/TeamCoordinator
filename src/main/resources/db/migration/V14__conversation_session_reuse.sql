@@ -8,6 +8,7 @@ CREATE TABLE project_conversation_expert_session (
     conversation_id VARCHAR(64) NOT NULL,
     expert_id VARCHAR(128) NOT NULL,
     session_id VARCHAR(128) NOT NULL,
+    message_id VARCHAR(64) NOT NULL DEFAULT '',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_expert_session_conversation UNIQUE (conversation_id, expert_id)
 );

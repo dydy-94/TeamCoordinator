@@ -27,7 +27,8 @@ public class ArtifactRepository {
                 "INSERT INTO project_artifact "
                         + "(business_id, tenant_id, project_id, task_id, expert_run_id, version, "
                         + "storage_key, file_name, media_type, status, created_by) "
-                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                        + "ON DUPLICATE KEY UPDATE business_id = business_id",
                 artifact.id, tenantId, artifact.projectId, artifact.taskId,
                 artifact.expertRunId, artifact.version, artifact.storageKey,
                 artifact.fileName, artifact.mediaType, artifact.status, createdBy);

@@ -324,25 +324,32 @@ public class ExecutionRepository {
     }
 
     public String findExpertSession(
-            String tenantId, String projectId, String conversationId, String expertId) {
+            String tenantId, String projectId, String conversationId,
+            String expertId, String currentMessageId) {
+        // Only return session from a DIFFERENT message to avoid
+        // parallel tasks within the same plan sharing an expert session.
         List<String> rows = jdbc.queryForList(
                 "SELECT session_id FROM project_conversation_expert_session "
                         + "WHERE tenant_id = ? AND project_id = ? "
-                        + "AND conversation_id = ? AND expert_id = ?",
-                String.class, tenantId, projectId, conversationId, expertId);
+                        + "AND conversation_id = ? AND expert_id = ? "
+                        + "AND message_id <> ?",
+                String.class, tenantId, projectId, conversationId,
+                expertId, currentMessageId);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
     public void saveExpertSession(
             String tenantId, String projectId, String conversationId,
-            String expertId, String sessionId) {
+            String expertId, String sessionId, String messageId) {
         jdbc.update(
                 "INSERT INTO project_conversation_expert_session "
-                        + "(id, tenant_id, project_id, conversation_id, expert_id, session_id) "
-                        + "VALUES (?, ?, ?, ?, ?, ?) "
-                        + "ON DUPLICATE KEY UPDATE session_id = VALUES(session_id)",
+                        + "(id, tenant_id, project_id, conversation_id, expert_id, "
+                        + "session_id, message_id) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?) "
+                        + "ON DUPLICATE KEY UPDATE session_id = VALUES(session_id), "
+                        + "message_id = VALUES(message_id)",
                 "exp-session-" + UUID.randomUUID(), tenantId, projectId,
-                conversationId, expertId, sessionId);
+                conversationId, expertId, sessionId, messageId);
     }
 
     public void saveCoordinatorSession(String conversationId, String sessionId) {
@@ -395,6 +402,16 @@ public class ExecutionRepository {
                 status,
                 planId);
         completeDispatch(dispatchId, status, error);
+    }
+
+    public int failTasksForMessage(String tenantId, String messageId) {
+        return jdbc.update(
+                "UPDATE coordinator_task t JOIN coordinator_plan p "
+                        + "ON p.business_id = t.plan_id "
+                        + "SET t.status = 'FAILED', t.updated_at = CURRENT_TIMESTAMP "
+                        + "WHERE p.tenant_id = ? AND p.message_id = ? "
+                        + "AND t.status IN ('RUNNING', 'STARTING', 'PENDING')",
+                tenantId, messageId);
     }
 
     public void completeDispatch(String dispatchId, String status, String error) {

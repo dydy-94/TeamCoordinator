@@ -30,6 +30,17 @@ public class ProjectRepository {
                 project.getCreatedBy());
     }
 
+    public List<ProjectRecord> findByTenant(String tenantId, String userId) {
+        return jdbc.query(
+                "SELECT p.* FROM project p JOIN project_member m ON m.project_id = p.business_id "
+                        + "AND m.tenant_id = p.tenant_id "
+                        + "WHERE p.tenant_id = ? AND m.user_id = ? "
+                        + "ORDER BY p.created_at DESC",
+                projectMapper(),
+                tenantId,
+                userId);
+    }
+
     public ProjectRecord findVisible(String tenantId, String projectId, String userId) {
         List<ProjectRecord> rows = jdbc.query(
                 "SELECT p.* FROM project p JOIN project_member m ON m.project_id = p.business_id "
