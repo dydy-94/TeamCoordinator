@@ -379,6 +379,12 @@ body {
   color: rgba(255, 255, 255, 0.7);
 }
 
+.bubble.other {
+  align-self: flex-start;
+  background: #e8f0fe;
+  border: 1px solid #c5d9f5;
+}
+
 .bubble.system {
   align-self: flex-start;
   background: #f3f4f6;

@@ -27,7 +27,7 @@ public class ConversationTaskService {
 
     public List<ConversationTaskView> list(
             RequestIdentity identity, String projectId) {
-        projects.requireTaskInitiator(identity, projectId);
+        projects.get(identity, projectId); // allow VIEWER to list
         return tasks.listByProject(identity.getTenantId(), projectId);
     }
 

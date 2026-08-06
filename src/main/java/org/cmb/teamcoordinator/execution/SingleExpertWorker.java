@@ -197,9 +197,12 @@ public class SingleExpertWorker {
         request.setAttachmentRefs(work.getAttachmentRefs());
 
         // Build event sink that forwards coordinator agent events to the task SSE
+        // without persisting them — AgentCore events should be re-fetched on replay,
+        // not stored in project_event. Only Coordinator-generated lifecycle events
+        // (coordinatorPhase, coordinatorChat, etc.) are persisted.
         Consumer<AgentEvent> coordinatorEventSink = event -> {
             event.setAgentId(CoordinatorAgentClient.COORDINATOR_AGENT_ID);
-            publishAgentEvent(work, event);
+            publishAgentEventLive(work, event);
         };
         // 意图分析（传入 task 级 coordinator session 以保持跨消息上下文连续）
         CoordinatorDecision decision = analysisService.analyzeForDispatch(
@@ -215,6 +218,15 @@ public class SingleExpertWorker {
         if (decision.getCoordinatorSessionId() != null) {
             executionRepository.saveCoordinatorSession(
                     work.getConversationId(), decision.getCoordinatorSessionId());
+            // Insert AGENT_RUN_MARKER so SSE replay can re-fetch
+            // the Coordinator's AgentCore events from AgentCore.
+            ObjectNode coordMarkerPayload = objectMapper.createObjectNode();
+            coordMarkerPayload.put("sessionId", decision.getCoordinatorSessionId());
+            coordMarkerPayload.put("expertId", CoordinatorAgentClient.COORDINATOR_AGENT_ID);
+            eventRepository.insertEvent(
+                    identity, work.getProjectId(), work.getConversationId(),
+                    work.getMessageId(), ProjectEventType.AGENT_RUN_MARKER,
+                    EventVisibility.PUBLIC, coordMarkerPayload);
         }
         if (decision.getDecisionType() == DecisionType.ANSWER) {
             emitPhase(work, PHASE_ANSWERING, "Coordinator is preparing a direct answer.");

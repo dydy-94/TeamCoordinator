@@ -118,16 +118,17 @@ function renderTree() {
   for (const proj of state.projects) {
     const isActive = state.projectId === proj.id;
     const tasks = state.tasks.get(proj.id) || [];
+    const expanded = state.projectId === proj.id;
     items.push(`
-      <div class="tree-folder ${isActive ? "active" : ""}">
+      <div class="tree-folder ${expanded ? "active" : ""}">
         <div class="tree-row project-row"
-             data-action="toggle-project"
+             data-action="select-project"
              data-project="${esc(proj.id)}">
-          <span class="tree-arrow">${isActive ? "▼" : "▶"}</span>
+          <span class="tree-arrow" data-action="toggle-expand" data-project="${esc(proj.id)}">${expanded ? "▼" : "▶"}</span>
           <span class="tree-icon">📁</span>
           <span class="tree-label">${esc(proj.name)}</span>
         </div>
-        ${isActive ? renderTaskTree(proj.id, tasks) : ""}
+        ${expanded ? renderTaskTree(proj.id, tasks) : ""}
       </div>
     `);
   }
@@ -191,7 +192,7 @@ function renderIdentity() {
 
 function bindTreeEvents() {
   document.querySelectorAll(".tree-row").forEach((row) => {
-    row.addEventListener("click", (e) => {
+    row.addEventListener("click", async (e) => {
       const target = e.target as HTMLElement;
       const action = target.dataset.action || (row as HTMLElement).dataset.action;
       const projectId = (row as HTMLElement).dataset.project!;
@@ -216,15 +217,29 @@ function bindTreeEvents() {
         return;
       }
 
-      if (action === "toggle-project") {
+      if (action === "toggle-expand") {
+        e.stopPropagation();
         if (state.projectId === projectId) {
+          // Collapse: clear project selection
           state.projectId = "";
+          state.taskId = "";
           save();
           refreshSidebar();
           showWelcome();
         } else {
-          showProjectDetail(projectId);
+          // Expand: select project without navigating to detail
+          state.projectId = projectId;
+          save();
+          try {
+            const tasks = await listProjectTasks(projectId);
+            state.tasks.set(projectId, tasks);
+          } catch { /* quiet */ }
+          refreshSidebar();
         }
+        return;
+      }
+      if (action === "select-project") {
+        showProjectDetail(projectId);
       } else if (action === "select-task") {
         const taskId = (row as HTMLElement).dataset.task!;
         selectTask(projectId, taskId);
@@ -704,8 +719,22 @@ async function showChat() {
     }
     const titleEl = document.getElementById("chat-title");
     if (titleEl) titleEl.textContent = task.title;
-  } catch {
-    // Task might not exist yet (created just now via showCreateTaskDialog)
+  } catch (err: any) {
+    const msg = err?.message || String(err);
+    if (msg.includes("VIEWER") || msg.includes("FORBIDDEN") || msg.includes("403")) {
+      state.taskId = "";
+      save();
+      $("main-content").innerHTML = `
+        <div class="panel" style="margin-top:60px;text-align:center">
+          <h3>权限不足</h3>
+          <p>你当前是 VIEWER 角色，只能查看项目，不能进入对话。</p>
+          <button id="btn-back-project" class="primary" style="margin-top:12px">返回项目</button>
+        </div>
+      `;
+      document.getElementById("btn-back-project")!.onclick = () => showProjectDetail(state.projectId);
+      refreshSidebar();
+      return;
+    }
     const titleEl = document.getElementById("chat-title");
     if (titleEl) titleEl.textContent = "对话";
   }
@@ -786,10 +815,12 @@ function appendSseEvent(event: Partial<SseEvent>) {
   if (type === "userMessage") {
     replyBubble = null;
     replyAgent = "";
+    const sender = event.agentId || "user";
+    const isMe = sender === getIdentity().user;
     tl.insertAdjacentHTML(
       "beforeend",
-      `<div class="bubble user">
-        <div class="meta">${esc(event.agentId || "user")} · ${time(event.timestamp)}</div>
+      `<div class="bubble ${isMe ? "user" : "other"}">
+        <div class="meta">${esc(sender)} · ${time(event.timestamp)}</div>
         <div class="text">${esc(event.content || "")}</div>
       </div>`
     );
