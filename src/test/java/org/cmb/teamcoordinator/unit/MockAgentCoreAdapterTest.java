@@ -21,7 +21,8 @@ class MockAgentCoreAdapterTest {
         request.setTaskText("analyze this plan");
 
         AgentRunResponse response = adapter.submitRun("expert-analysis", request);
-        List<AgentEvent> events = adapter.streamEvents(response.getSessionId(), 0L);
+        List<AgentEvent> events = adapter.streamEvents(
+                "expert-analysis", response.getSessionId(), 0L);
 
         assertEquals("ACCEPTED", response.getStatus());
         assertFalse(events.isEmpty());
@@ -47,17 +48,20 @@ class MockAgentCoreAdapterTest {
 
         AgentRunRequest failed = request("please fail");
         AgentRunResponse failedRun = adapter.submitRun("expert-analysis", failed);
-        assertEquals("error", adapter.getRunStatus(failedRun.getSessionId()).getType());
+        assertEquals("error", adapter.getRunStatus(
+                "expert-analysis", failedRun.getSessionId()).getType());
 
         AgentRunRequest timedOut = request("please timeout");
         AgentRunResponse timedOutRun = adapter.submitRun("expert-analysis", timedOut);
-        assertEquals("error", adapter.getRunStatus(timedOutRun.getSessionId()).getType());
+        assertEquals("error", adapter.getRunStatus(
+                "expert-analysis", timedOutRun.getSessionId()).getType());
 
         AgentRunResponse cancelledRun =
                 adapter.submitRun("expert-analysis", request("long task"));
-        adapter.cancelRun(cancelledRun.getSessionId());
+        adapter.cancelRun("expert-analysis", cancelledRun.getSessionId());
         assertEquals("RUN_CANCELLED",
-                adapter.getRunStatus(cancelledRun.getSessionId()).getType());
+                adapter.getRunStatus(
+                        "expert-analysis", cancelledRun.getSessionId()).getType());
     }
 
     private AgentRunRequest request(String taskText) {

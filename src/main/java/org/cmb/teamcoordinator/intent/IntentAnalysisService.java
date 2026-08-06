@@ -16,7 +16,6 @@ import org.cmb.teamcoordinator.agentcore.ExpertRegistry;
 import org.cmb.teamcoordinator.artifact.ArtifactRepository;
 import org.cmb.teamcoordinator.artifact.FileStore;
 import org.cmb.teamcoordinator.artifact.MockFileDescriptor;
-import org.cmb.teamcoordinator.coordinator.MessageEventRepository;
 import org.cmb.teamcoordinator.project.ProjectExpert;
 import org.cmb.teamcoordinator.project.ProjectService;
 import org.cmb.teamcoordinator.project.ProjectView;
@@ -30,7 +29,6 @@ public class IntentAnalysisService {
     private static final String SCHEMA_VERSION = "task-intent-v1";
 
     private final ProjectService projectService;
-    private final MessageEventRepository messageRepository;
     private final IntentAnalysisRepository analysisRepository;
     private final ExpertRegistry expertRegistry;
     private final ArtifactRepository artifactRepository;
@@ -42,7 +40,6 @@ public class IntentAnalysisService {
 
     public IntentAnalysisService(
             ProjectService projectService,
-            MessageEventRepository messageRepository,
             IntentAnalysisRepository analysisRepository,
             ExpertRegistry expertRegistry,
             ArtifactRepository artifactRepository,
@@ -52,7 +49,6 @@ public class IntentAnalysisService {
             ObjectMapper objectMapper,
             Validator validator) {
         this.projectService = projectService;
-        this.messageRepository = messageRepository;
         this.analysisRepository = analysisRepository;
         this.expertRegistry = expertRegistry;
         this.artifactRepository = artifactRepository;
@@ -154,10 +150,8 @@ public class IntentAnalysisService {
         context.setProjectDescription(project.getDescription());
         context.setText(request.getText());
         context.setAttachmentRefs(request.getAttachmentRefs());
-        context.setRecentMessages(taskId == null
-                ? new ArrayList<>()
-                : messageRepository.findRecentMessageTexts(
-                        identity.getTenantId(), projectId, taskId, 10));
+        // Conversation history lives in AgentCore's session — no need to duplicate.
+        context.setRecentMessages(new ArrayList<>());
         context.setExperts(enabledExperts(project));
         List<MockFileDescriptor> attachments = new ArrayList<>();
         for (String reference : request.getAttachmentRefs()) {

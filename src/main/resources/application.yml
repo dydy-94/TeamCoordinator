@@ -56,10 +56,10 @@ digital-team:
     coordinator-agent-id: ${COORDINATOR_AGENT_ID:coordinator}
     session-header: ${AGENTCORE_SESSION_HEADER:X-Session-Id}
     base-url: ${AGENTCORE_BASE_URL:}
-    submit-path: ${AGENTCORE_SUBMIT_PATH:/runs}
-    status-path: ${AGENTCORE_STATUS_PATH:/runs/{sessionId}}
-    stream-path: ${AGENTCORE_STREAM_PATH:/runs/{sessionId}/streamEvents}
-    cancel-path: ${AGENTCORE_CANCEL_PATH:/runs/{sessionId}/cancel}
+    submit-path: ${AGENTCORE_SUBMIT_PATH:/{agentId}/chat}
+    status-path: ${AGENTCORE_STATUS_PATH:/{agentId}/sessions/{sessionId}}
+    stream-path: ${AGENTCORE_STREAM_PATH:/{agentId}/sessions/{sessionId}/stream}
+    cancel-path: ${AGENTCORE_CANCEL_PATH:/{agentId}/sessions/{sessionId}/cancel}
     auth-header: ${AGENTCORE_AUTH_HEADER:Authorization}
     auth-value: ${AGENTCORE_AUTH_VALUE:}
     artifact-tool-token: ${AGENTCORE_ARTIFACT_TOOL_TOKEN:}

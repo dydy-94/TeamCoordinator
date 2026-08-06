@@ -106,7 +106,8 @@ public class HumanRequestService {
                     identity.getTenantId(), projectId, record.taskId);
             String answer = request.getResponse().path("answer").asText();
             AgentRunResponse resumed = tryResume(
-                    task.getSessionId(), record.agentQuestionId,
+                    task.getExpertId(), task.getSessionId(),
+                    record.agentQuestionId,
                     answers(request.getResponse()));
             if (resumed == null) {
                 AgentRunRequest run = new AgentRunRequest();
@@ -140,9 +141,11 @@ public class HumanRequestService {
     }
 
     private AgentRunResponse tryResume(
-            String sessionId, String questionId, Map<String, String> answers) {
+            String expertId, String sessionId,
+            String questionId, Map<String, String> answers) {
         try {
-            return agentCore.answerQuestion(sessionId, questionId, answers);
+            return agentCore.answerQuestion(
+                    expertId, sessionId, questionId, answers);
         } catch (RuntimeException ex) {
             return null;
         }

@@ -48,11 +48,13 @@ public class MockAgentCoreController {
     public ResponseEntity<AgentCoreConversationResponse> submitRun(
             @RequestBody AgentCoreConversationRequest request) {
         AgentRunResponse response;
+        String agentId = "expert-analysis";
         if ("stopSession".equals(request.getType())) {
-            response = agentCoreAdapter.stopSession(request.getSessionId());
+            response = agentCoreAdapter.stopSession(agentId, request.getSessionId());
         } else if ("userAnswerQuestion".equals(request.getType())) {
             response = agentCoreAdapter.answerQuestion(
-                    request.getSessionId(), request.getData().getQuestionId(),
+                    agentId, request.getSessionId(),
+                    request.getData().getQuestionId(),
                     request.getData().getAnswers());
         } else {
             AgentRunRequest run = new AgentRunRequest();
@@ -75,13 +77,13 @@ public class MockAgentCoreController {
 
     @PostMapping("/agentcore/runs/{sessionId}/cancel")
     public ResponseEntity<AgentEvent> cancelRun(@PathVariable String sessionId) {
-        AgentEvent event = agentCoreAdapter.cancelRun(sessionId);
+        AgentEvent event = agentCoreAdapter.cancelRun("expert-analysis", sessionId);
         return event == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(event);
     }
 
     @GetMapping("/agentcore/runs/{sessionId}")
     public ResponseEntity<AgentEvent> getRunStatus(@PathVariable String sessionId) {
-        AgentEvent event = agentCoreAdapter.getRunStatus(sessionId);
+        AgentEvent event = agentCoreAdapter.getRunStatus("expert-analysis", sessionId);
         return event == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(event);
     }
 
@@ -95,7 +97,7 @@ public class MockAgentCoreController {
         SseEmitter emitter = new SseEmitter(30_000L);
         try {
             for (AgentEvent event : agentCoreAdapter.streamEvents(
-                    sessionId, afterSequence)) {
+                    "expert-analysis", sessionId, afterSequence)) {
                 emitter.send(SseEmitter.event()
                         .id(event.getEventId())
                         .data(toChunk(event)));

@@ -68,7 +68,8 @@ class SingleExpertExecutionIntegrationTest {
         assertEquals("SUCCEEDED", task.getStatus());
         assertEquals("COMPLETED", dispatchStatus(dispatchId));
 
-        List<AgentEvent> replay = agentCore.streamEvents(task.getSessionId(), 0L);
+        List<AgentEvent> replay = agentCore.streamEvents(
+                task.getExpertId(), task.getSessionId(), 0L);
         // advanceTask is idempotent: already-succeeded task can't be re-advanced
         assertFalse(executionRepository.advanceTask(
                 task.getId(), 2L, "RUNNING", null));

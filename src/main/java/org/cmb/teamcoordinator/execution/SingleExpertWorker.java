@@ -164,7 +164,8 @@ public class SingleExpertWorker {
         }
         DispatchWork work = executionRepository.loadWorkForTask(
                 identity.getTenantId(), projectId, taskId);
-        AgentRunResponse stopped = agentCore.stopSession(task.getSessionId());
+        AgentRunResponse stopped = agentCore.stopSession(
+                task.getExpertId(), task.getSessionId());
         if (stopped == null) {
             throw ApiException.conflict("TASK_CANCEL_FAILED",
                     "AgentCore run was not found.");
@@ -204,29 +205,32 @@ public class SingleExpertWorker {
             event.setAgentId(CoordinatorAgentClient.COORDINATOR_AGENT_ID);
             publishAgentEventLive(work, event);
         };
+        // Insert AGENT_RUN_MARKER before the AgentCore call when we already
+        // know the session ID (reuse from a previous message). This lets
+        // cross-instance SSE subscribers discover and replay via AgentCore
+        // while the current call is still streaming.
+        String existingCoordSession = work.getCoordinatorSessionId();
+        if (existingCoordSession != null) {
+            insertCoordinatorMarker(identity, work, existingCoordSession);
+        }
+
         // 意图分析（传入 task 级 coordinator session 以保持跨消息上下文连续）
         CoordinatorDecision decision = analysisService.analyzeForDispatch(
                 identity, work.getProjectId(), work.getConversationId(),
                 work.getMessageId(), work.getBusinessSessionId(),
-                work.getCoordinatorSessionId(),
+                existingCoordSession,
                 request, coordinatorEventSink);
         if (decision == null) {
             executionRepository.releaseDispatch(work.getDispatchId());
             return;
         }
-        // Persist coordinator session for cross-message context continuity
+        // Persist coordinator session + insert MARKER for first-time use
         if (decision.getCoordinatorSessionId() != null) {
             executionRepository.saveCoordinatorSession(
                     work.getConversationId(), decision.getCoordinatorSessionId());
-            // Insert AGENT_RUN_MARKER so SSE replay can re-fetch
-            // the Coordinator's AgentCore events from AgentCore.
-            ObjectNode coordMarkerPayload = objectMapper.createObjectNode();
-            coordMarkerPayload.put("sessionId", decision.getCoordinatorSessionId());
-            coordMarkerPayload.put("expertId", CoordinatorAgentClient.COORDINATOR_AGENT_ID);
-            eventRepository.insertEvent(
-                    identity, work.getProjectId(), work.getConversationId(),
-                    work.getMessageId(), ProjectEventType.AGENT_RUN_MARKER,
-                    EventVisibility.PUBLIC, coordMarkerPayload);
+            if (existingCoordSession == null) {
+                insertCoordinatorMarker(identity, work, decision.getCoordinatorSessionId());
+            }
         }
         if (decision.getDecisionType() == DecisionType.ANSWER) {
             emitPhase(work, PHASE_ANSWERING, "Coordinator is preparing a direct answer.");
@@ -417,10 +421,11 @@ public class SingleExpertWorker {
     private void consumeEvents(DispatchWork work, TaskRecord task) {
         List<AgentEvent> events = new ArrayList<>(
                 agentCore.streamEvents(
-                        task.getSessionId(), task.getLastSequence(),
-                        work.getBusinessSessionId()));
+                        task.getExpertId(), task.getSessionId(),
+                        task.getLastSequence(), work.getBusinessSessionId()));
         if (events.isEmpty() && agentCore.getRunStatus(
-                task.getSessionId(), work.getBusinessSessionId()) == null) {
+                task.getExpertId(), task.getSessionId(),
+                work.getBusinessSessionId()) == null) {
             AgentEvent lost = AgentEvent.of("coordinatorError");
             lost.setSessionId(task.getSessionId());
             lost.setSequence(task.getLastSequence() + 1);
@@ -653,6 +658,17 @@ public class SingleExpertWorker {
         } catch (Exception ex) {
             return "Expert tasks completed.";
         }
+    }
+
+    private void insertCoordinatorMarker(
+            RequestIdentity identity, DispatchWork work, String sessionId) {
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.put("sessionId", sessionId);
+        payload.put("expertId", CoordinatorAgentClient.COORDINATOR_AGENT_ID);
+        eventRepository.insertEvent(
+                identity, work.getProjectId(), work.getConversationId(),
+                work.getMessageId(), ProjectEventType.AGENT_RUN_MARKER,
+                EventVisibility.PUBLIC, payload);
     }
 
     /** Emit a coordinator phase transition event. */

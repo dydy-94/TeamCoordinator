@@ -75,7 +75,8 @@ public class CoordinatorAgentClient {
         }
 
         List<AgentEvent> events = agentCore.streamEvents(
-                run.getSessionId(), run.getLastSequence(), run.getBusinessSessionId());
+                coordinatorAgentId, run.getSessionId(),
+                run.getLastSequence(), run.getBusinessSessionId());
         events.sort(Comparator.comparingLong(AgentEvent::getSequence));
         for (AgentEvent event : events) {
             // Forward intermediate events to the task SSE stream

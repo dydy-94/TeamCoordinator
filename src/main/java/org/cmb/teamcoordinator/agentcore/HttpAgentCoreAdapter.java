@@ -52,25 +52,27 @@ public class HttpAgentCoreAdapter implements AgentCoreAdapter {
 
     @Override
     public AgentRunResponse submitRun(String targetAgentId, AgentRunRequest request) {
-        ResponseEntity<AgentCoreConversationResponse> response = restTemplate.exchange(
-                uri(properties.getSubmitPath()),
+        AgentCoreConversationResponse body = restTemplate.exchange(
+                uri(agentPath(properties.getSubmitPath(), targetAgentId, null)),
                 HttpMethod.POST,
                 new HttpEntity<>(
                         AgentCoreConversationRequest.userInput(request), jsonHeaders(null)),
-                AgentCoreConversationResponse.class);
-        return requireResponse(response);
-    }
-
-    @Override
-    public List<AgentEvent> streamEvents(String sessionId, Long afterSequence) {
-        return streamEvents(sessionId, afterSequence, null);
+                AgentCoreConversationResponse.class).getBody();
+        return requireResponse(body);
     }
 
     @Override
     public List<AgentEvent> streamEvents(
-            String sessionId, Long afterSequence, String businessSessionId) {
-        UriComponentsBuilder builder =
-                UriComponentsBuilder.fromUri(uri(path(properties.getStreamPath(), sessionId)));
+            String targetAgentId, String sessionId, Long afterSequence) {
+        return streamEvents(targetAgentId, sessionId, afterSequence, null);
+    }
+
+    @Override
+    public List<AgentEvent> streamEvents(
+            String targetAgentId, String sessionId, Long afterSequence,
+            String businessSessionId) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromUri(
+                uri(agentPath(properties.getStreamPath(), targetAgentId, sessionId)));
         if (afterSequence != null) {
             builder.queryParam("afterSequence", afterSequence);
         }
@@ -86,15 +88,16 @@ public class HttpAgentCoreAdapter implements AgentCoreAdapter {
     }
 
     @Override
-    public AgentEvent getRunStatus(String sessionId) {
-        return getRunStatus(sessionId, null);
+    public AgentEvent getRunStatus(String targetAgentId, String sessionId) {
+        return getRunStatus(targetAgentId, sessionId, null);
     }
 
     @Override
-    public AgentEvent getRunStatus(String sessionId, String businessSessionId) {
+    public AgentEvent getRunStatus(
+            String targetAgentId, String sessionId, String businessSessionId) {
         try {
             ResponseEntity<JsonNode> response = restTemplate.exchange(
-                    uri(path(properties.getStatusPath(), sessionId)),
+                    uri(agentPath(properties.getStatusPath(), targetAgentId, sessionId)),
                     HttpMethod.GET,
                     new HttpEntity<Void>(jsonHeaders(businessSessionId)),
                     JsonNode.class);
@@ -106,14 +109,15 @@ public class HttpAgentCoreAdapter implements AgentCoreAdapter {
     }
 
     @Override
-    public AgentEvent cancelRun(String sessionId) {
-        return cancelRun(sessionId, null);
+    public AgentEvent cancelRun(String targetAgentId, String sessionId) {
+        return cancelRun(targetAgentId, sessionId, null);
     }
 
     @Override
-    public AgentEvent cancelRun(String sessionId, String businessSessionId) {
+    public AgentEvent cancelRun(
+            String targetAgentId, String sessionId, String businessSessionId) {
         try {
-            AgentRunResponse response = stopSession(sessionId);
+            AgentRunResponse response = stopSession(targetAgentId, sessionId);
             AgentEvent event = new AgentEvent();
             event.setSessionId(sessionId);
             event.setType("RUN_CANCELLED");
@@ -127,16 +131,16 @@ public class HttpAgentCoreAdapter implements AgentCoreAdapter {
     }
 
     @Override
-    public AgentRunResponse stopSession(String sessionId) {
+    public AgentRunResponse stopSession(String targetAgentId, String sessionId) {
         try {
             ResponseEntity<AgentCoreConversationResponse> response = restTemplate.exchange(
-                    uri(properties.getSubmitPath()),
+                    uri(agentPath(properties.getSubmitPath(), targetAgentId, sessionId)),
                     HttpMethod.POST,
                     new HttpEntity<>(
                             AgentCoreConversationRequest.stopSession(sessionId),
                             jsonHeaders(null)),
                     AgentCoreConversationResponse.class);
-            return requireResponse(response);
+            return requireResponse(response.getBody());
         } catch (HttpClientErrorException.NotFound ex) {
             return null;
         }
@@ -144,31 +148,34 @@ public class HttpAgentCoreAdapter implements AgentCoreAdapter {
 
     @Override
     public AgentRunResponse resumeRun(
-            String sessionId, String humanResponse, String idempotencyKey) {
-        return resumeRun(sessionId, humanResponse, idempotencyKey, null);
+            String targetAgentId, String sessionId,
+            String humanResponse, String idempotencyKey) {
+        return resumeRun(targetAgentId, sessionId, humanResponse, idempotencyKey, null);
     }
 
     @Override
     public AgentRunResponse resumeRun(
-            String sessionId, String humanResponse, String idempotencyKey,
+            String targetAgentId, String sessionId,
+            String humanResponse, String idempotencyKey,
             String businessSessionId) {
         Map<String, String> answers = new LinkedHashMap<>();
         answers.put("answer", humanResponse);
-        return answerQuestion(sessionId, idempotencyKey, answers);
+        return answerQuestion(targetAgentId, sessionId, idempotencyKey, answers);
     }
 
     @Override
     public AgentRunResponse answerQuestion(
-            String sessionId, String questionId, Map<String, String> answers) {
+            String targetAgentId, String sessionId,
+            String questionId, Map<String, String> answers) {
         ResponseEntity<AgentCoreConversationResponse> response = restTemplate.exchange(
-                uri(properties.getSubmitPath()),
+                uri(agentPath(properties.getSubmitPath(), targetAgentId, sessionId)),
                 HttpMethod.POST,
                 new HttpEntity<>(
                         AgentCoreConversationRequest.answerQuestion(
                                 sessionId, questionId, answers),
                         jsonHeaders(null)),
                 AgentCoreConversationResponse.class);
-        return requireResponse(response);
+        return requireResponse(response.getBody());
     }
 
     // ── SSE Parsing ─────────────────────────────────────────────────────
@@ -501,12 +508,11 @@ public class HttpAgentCoreAdapter implements AgentCoreAdapter {
         return node != null && node.hasNonNull(field) ? node.get(field).asText() : null;
     }
 
-    private AgentRunResponse requireResponse(
-            ResponseEntity<AgentCoreConversationResponse> response) {
-        if (response.getBody() == null) {
+    private AgentRunResponse requireResponse(AgentCoreConversationResponse body) {
+        if (body == null) {
             throw new IllegalStateException("AgentCore returned an empty response.");
         }
-        return response.getBody().toRunResponse();
+        return body.toRunResponse();
     }
 
     private HttpHeaders jsonHeaders(String businessSessionId) {
@@ -527,8 +533,12 @@ public class HttpAgentCoreAdapter implements AgentCoreAdapter {
         return URI.create(base + suffix);
     }
 
-    private String path(String template, String sessionId) {
-        return template.replace("{sessionId}", sessionId);
+    private String agentPath(String template, String agentId, String sessionId) {
+        String resolved = template.replace("{agentId}", agentId != null ? agentId : "_");
+        if (sessionId != null) {
+            resolved = resolved.replace("{sessionId}", sessionId);
+        }
+        return resolved;
     }
 
     private static RestTemplate restTemplate(DigitalTeamProperties.AgentCore properties) {

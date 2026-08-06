@@ -23,12 +23,13 @@ class RealAgentCoreAcceptanceIT {
         properties.setBaseUrl(required("AGENTCORE_BASE_URL"));
         properties.setAuthHeader(value("AGENTCORE_AUTH_HEADER", "Authorization"));
         properties.setAuthValue(System.getenv("AGENTCORE_AUTH_VALUE"));
-        properties.setSubmitPath(value("AGENTCORE_SUBMIT_PATH", "/runs"));
-        properties.setStatusPath(value("AGENTCORE_STATUS_PATH", "/runs/{sessionId}"));
+        properties.setSubmitPath(value("AGENTCORE_SUBMIT_PATH", "/{agentId}/chat"));
+        properties.setStatusPath(value(
+                "AGENTCORE_STATUS_PATH", "/{agentId}/sessions/{sessionId}"));
         properties.setStreamPath(value(
-                "AGENTCORE_STREAM_PATH", "/runs/{sessionId}/streamEvents"));
+                "AGENTCORE_STREAM_PATH", "/{agentId}/sessions/{sessionId}/stream"));
         properties.setCancelPath(value(
-                "AGENTCORE_CANCEL_PATH", "/runs/{sessionId}/cancel"));
+                "AGENTCORE_CANCEL_PATH", "/{agentId}/sessions/{sessionId}/cancel"));
         HttpAgentCoreAdapter adapter =
                 new HttpAgentCoreAdapter(properties, new ObjectMapper(), new RestTemplate());
 
@@ -40,7 +41,9 @@ class RealAgentCoreAcceptanceIT {
             assertNotNull(response);
             assertNotNull(response.getSessionId());
             List<AgentEvent> events =
-                    adapter.streamEvents(response.getSessionId(), 0L);
+                    adapter.streamEvents(
+                            required("AGENTCORE_TEST_EXPERT_ID"),
+                            response.getSessionId(), 0L);
             assertFalse(events.isEmpty());
             AgentEvent terminal = events.get(events.size() - 1);
             assertNotNull(terminal.getType());

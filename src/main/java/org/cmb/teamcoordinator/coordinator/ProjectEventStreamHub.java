@@ -55,6 +55,7 @@ public class ProjectEventStreamHub {
                             && event.getPayload() != null
                             && event.getPayload().has("sessionId")) {
                         replayAgentEvents(subscriber,
+                                stringFromPayload(event.getPayload(), "expertId"),
                                 event.getPayload().get("sessionId").asText(),
                                 event.getSequence());
                     } else {
@@ -114,9 +115,11 @@ public class ProjectEventStreamHub {
                             // push to each subscriber.
                             String sessionId =
                                     event.getPayload().get("sessionId").asText();
+                            String expertId = stringFromPayload(
+                                    event.getPayload(), "expertId");
                             for (Subscriber subscriber : projectSubscribers) {
-                                replayAgentEvents(subscriber, sessionId,
-                                        event.getSequence());
+                                replayAgentEvents(subscriber, expertId,
+                                        sessionId, event.getSequence());
                             }
                             continue;
                         }
@@ -140,9 +143,10 @@ public class ProjectEventStreamHub {
      * SSE replay. Each agent event gets its own SSE frame with the
      * agent event's type as the event name.
      */
-    private void replayAgentEvents(Subscriber subscriber, String sessionId,
-                                    long markerSequence) throws IOException {
-        List<AgentEvent> events = agentCore.streamEvents(sessionId, 0L);
+    private void replayAgentEvents(Subscriber subscriber, String expertId,
+                                    String sessionId, long markerSequence)
+            throws IOException {
+        List<AgentEvent> events = agentCore.streamEvents(expertId, sessionId, 0L);
         if (events == null || events.isEmpty()) {
             return;
         }
@@ -166,6 +170,12 @@ public class ProjectEventStreamHub {
             }
         }
         return minimum == Long.MAX_VALUE ? 0L : minimum;
+    }
+
+    private static String stringFromPayload(
+            com.fasterxml.jackson.databind.JsonNode payload, String field) {
+        return payload != null && payload.has(field)
+                ? payload.get(field).asText() : "";
     }
 
     private void send(Subscriber subscriber, ProjectEvent event) throws IOException {

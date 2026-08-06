@@ -434,13 +434,13 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
     // ── Interface methods ───────────────────────────────────────────────
 
     @Override
-    public AgentEvent getRunStatus(String sessionId) {
+    public AgentEvent getRunStatus(String targetAgentId, String sessionId) {
         List<AgentEvent> events = eventsBySessionId.get(sessionId);
         return events == null || events.isEmpty() ? null : events.get(events.size() - 1);
     }
 
     @Override
-    public List<AgentEvent> streamEvents(String sessionId, Long afterSequence) {
+    public List<AgentEvent> streamEvents(String targetAgentId, String sessionId, Long afterSequence) {
         List<AgentEvent> events = eventsBySessionId.get(sessionId);
         if (events == null) {
             return Collections.emptyList();
@@ -456,7 +456,7 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
     }
 
     @Override
-    public AgentEvent cancelRun(String sessionId) {
+    public AgentEvent cancelRun(String targetAgentId, String sessionId) {
         List<AgentEvent> events = eventsBySessionId.get(sessionId);
         if (events == null) {
             return null;
@@ -473,7 +473,8 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
 
     @Override
     public AgentRunResponse resumeRun(
-            String sessionId, String humanResponse, String idempotencyKey) {
+            String targetAgentId, String sessionId,
+            String humanResponse, String idempotencyKey) {
         List<AgentEvent> events = eventsBySessionId.get(sessionId);
         if (events == null) {
             return null;
@@ -504,8 +505,10 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
 
     @Override
     public AgentRunResponse answerQuestion(
-            String sessionId, String questionId, Map<String, String> answers) {
-        return resumeRun(sessionId, String.valueOf(answers), questionId);
+            String targetAgentId, String sessionId,
+            String questionId, Map<String, String> answers) {
+        return resumeRun(targetAgentId, sessionId,
+                String.valueOf(answers), questionId);
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────

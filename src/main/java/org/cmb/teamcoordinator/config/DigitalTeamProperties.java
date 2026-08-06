@@ -29,11 +29,11 @@ public class DigitalTeamProperties {
     public static class AgentCore {
         private boolean mockEnabled = true;
         private String baseUrl;
-        private String submitPath = "/runs";
-        private String statusPath = "/runs/{sessionId}";
-        private String streamPath = "/runs/{sessionId}/streamEvents";
-        private String cancelPath = "/runs/{sessionId}/cancel";
-        private String resumePath = "/runs/{sessionId}/resume";
+        private String submitPath = "/{agentId}/chat";
+        private String statusPath = "/{agentId}/sessions/{sessionId}";
+        private String streamPath = "/{agentId}/sessions/{sessionId}/stream";
+        private String cancelPath = "/{agentId}/sessions/{sessionId}/cancel";
+        private String resumePath = "/{agentId}/sessions/{sessionId}/resume";
         private String coordinatorAgentId = "coordinator";
         private String sessionHeader = "X-Session-Id";
         private String authHeader = "Authorization";
