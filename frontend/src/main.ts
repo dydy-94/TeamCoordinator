@@ -490,6 +490,14 @@ async function renderSettings(proj: Project) {
   const el = document.getElementById("tab-content")!;
   const enabledExpertIds = new Set(proj.experts.filter(e => e.enabled).map(e => e.expertId));
 
+  const coordinatorId = proj.coordinatorAgentId || "";
+  // Filter out the coordinator from the expert team
+  const teamExperts = proj.experts.filter(e => e.expertId !== coordinatorId);
+  // Experts available for team assignment (exclude coordinator)
+  const teamAvailable = availableExperts.filter(e => e.id !== coordinatorId);
+  const isCoordinatorInTeam = proj.experts.some(
+    e => e.expertId === coordinatorId && coordinatorId);
+
   el.innerHTML = `
     <h2>项目配置</h2>
 
@@ -497,13 +505,30 @@ async function renderSettings(proj: Project) {
     <div class="form-row">
       <label>名称 <input id="cfg-name" value="${esc(proj.name)}"></label>
       <label>描述 <input id="cfg-desc" value="${esc(proj.description || "")}"></label>
+      <label>主 Agent (Coordinator)
+        <select id="cfg-coordinator">
+          <option value="">使用全局默认</option>
+          ${availableExperts.map(e =>
+            `<option value="${esc(e.id)}" ${e.id === coordinatorId ? "selected" : ""}>${esc(e.name)} (${esc(e.id)})</option>`
+          ).join("")}
+        </select>
+      </label>
       <button class="primary" id="btn-save-info">保存</button>
     </div>
 
-    <h3>已配置的专家</h3>
-    ${proj.experts.length === 0 ? '<p class="hint">暂无专家</p>' : ''}
+    ${coordinatorId ? `
+    <h3>主 Agent</h3>
+    <div class="expert-card coordinator-card">
+      <div class="expert-name">⭐ ${esc(availableExperts.find(e=>e.id===coordinatorId)?.name || coordinatorId)}</div>
+      <div class="expert-id">${esc(coordinatorId)}</div>
+      <div class="expert-desc">${esc(availableExperts.find(e=>e.id===coordinatorId)?.description || "")}</div>
+    </div>
+    ` : ""}
+
+    <h3>专家团队 ${isCoordinatorInTeam ? '<span class="hint" style="color:var(--danger)">⚠ 主Agent不能同时在专家团队中，请先移除以避免保存失败</span>' : ''}</h3>
+    ${teamExperts.length === 0 ? '<p class="hint">暂无专家</p>' : ''}
     <div class="expert-grid">
-      ${proj.experts.map(added => {
+      ${teamExperts.map(added => {
         const info = availableExperts.find(e => e.id === added.expertId);
         return `
         <div class="expert-card added">
@@ -551,18 +576,21 @@ async function renderSettings(proj: Project) {
   document.getElementById("btn-save-info")!.onclick = async () => {
     const name = ($("cfg-name") as HTMLInputElement).value.trim();
     const desc = ($("cfg-desc") as HTMLInputElement).value.trim();
+    const coordinatorAgentId = ($("cfg-coordinator") as HTMLInputElement).value.trim();
     if (!name) return;
     try {
-      await updateProject(proj.id, { name, description: desc });
+      await updateProject(proj.id, { name, description: desc, coordinatorAgentId });
       currentProj = await getProject(proj.id);
       renderProjectView("settings");
     } catch (err) { alert(String(err)); }
   };
 
-  // Add expert dialog
+  // Add expert dialog (exclude coordinator)
   document.getElementById("btn-add-expert")!.onclick = () => {
     const alreadyAdded = new Set(proj.experts.map(e => e.expertId));
-    const available = availableExperts.filter(e => !alreadyAdded.has(e.id));
+    const coordinatorId = proj.coordinatorAgentId || "";
+    const available = availableExperts.filter(
+      e => !alreadyAdded.has(e.id) && e.id !== coordinatorId);
     $("dialog-overlay").innerHTML = `
       <div class="dialog wide">
         <h3>添加专家</h3>

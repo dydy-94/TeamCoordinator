@@ -148,6 +148,7 @@ public class IntentAnalysisService {
         IntentAnalysisContext context = new IntentAnalysisContext();
         context.setProjectName(project.getName());
         context.setProjectDescription(project.getDescription());
+        context.setCoordinatorAgentId(project.getCoordinatorAgentId());
         context.setText(request.getText());
         context.setAttachmentRefs(request.getAttachmentRefs());
         // Conversation history lives in AgentCore's session — no need to duplicate.

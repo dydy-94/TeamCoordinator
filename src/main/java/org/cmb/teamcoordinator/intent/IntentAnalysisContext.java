@@ -20,6 +20,8 @@ public class IntentAnalysisContext {
     private String pendingQuestion;
     /** Expert ID when pendingStatus is EXPERT_WAITING. */
     private String pendingExpertName;
+    /** Project-level override for the Coordinator agent ID. */
+    private String coordinatorAgentId;
 
     public String getProjectName() { return projectName; }
     public void setProjectName(String projectName) { this.projectName = projectName; }
@@ -41,4 +43,6 @@ public class IntentAnalysisContext {
     public void setPendingQuestion(String value) { this.pendingQuestion = value; }
     public String getPendingExpertName() { return pendingExpertName; }
     public void setPendingExpertName(String value) { this.pendingExpertName = value; }
+    public String getCoordinatorAgentId() { return coordinatorAgentId; }
+    public void setCoordinatorAgentId(String v) { this.coordinatorAgentId = v; }
 }

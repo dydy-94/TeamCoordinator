@@ -20,12 +20,14 @@ public class ProjectRepository {
 
     public void insertProject(ProjectRecord project) {
         jdbc.update(
-                "INSERT INTO project (business_id, tenant_id, name, description, status, created_by) "
-                        + "VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO project (business_id, tenant_id, name, description, "
+                        + "coordinator_agent_id, status, created_by) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?)",
                 project.getId(),
                 project.getTenantId(),
                 project.getName(),
                 project.getDescription(),
+                project.getCoordinatorAgentId(),
                 project.getStatus().name(),
                 project.getCreatedBy());
     }
@@ -88,12 +90,16 @@ public class ProjectRepository {
             String projectId,
             String name,
             String description,
+            String coordinatorAgentId,
             ProjectStatus status) {
         jdbc.update(
-                "UPDATE project SET name = ?, description = ?, status = ?, updated_at = CURRENT_TIMESTAMP "
+                "UPDATE project SET name = ?, description = ?, "
+                        + "coordinator_agent_id = ?, status = ?, "
+                        + "updated_at = CURRENT_TIMESTAMP "
                         + "WHERE tenant_id = ? AND business_id = ?",
                 name,
                 description,
+                coordinatorAgentId,
                 status.name(),
                 tenantId,
                 projectId);
@@ -210,6 +216,7 @@ public class ProjectRepository {
         project.setName(rs.getString("name"));
         project.setDescription(rs.getString("description"));
         project.setStatus(ProjectStatus.valueOf(rs.getString("status")));
+        project.setCoordinatorAgentId(rs.getString("coordinator_agent_id"));
         project.setCreatedBy(rs.getString("created_by"));
         project.setCreatedAt(toInstant(rs.getTimestamp("created_at")));
         project.setUpdatedAt(toInstant(rs.getTimestamp("updated_at")));

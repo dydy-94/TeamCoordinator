@@ -2,6 +2,7 @@ export interface Project {
   id: string;
   name: string;
   description?: string;
+  coordinatorAgentId?: string;
   status: string;
   members: ProjectMember[];
   experts: ProjectExpert[];
@@ -138,7 +139,7 @@ export function createProject(name: string, description?: string): Promise<Proje
 
 export function updateProject(
   id: string,
-  data: { name?: string; description?: string; status?: string }
+  data: { name?: string; description?: string; coordinatorAgentId?: string; status?: string }
 ): Promise<Project> {
   return request<Project>(`/api/v1/projects/${id}`, {
     method: "PATCH",

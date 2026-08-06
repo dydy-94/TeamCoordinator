@@ -9,6 +9,7 @@ public class ProjectView {
     private String id;
     private String name;
     private String description;
+    private String coordinatorAgentId;
     private ProjectStatus status;
     private Instant createdAt;
     private Instant updatedAt;
@@ -21,6 +22,8 @@ public class ProjectView {
     public void setName(String name) { this.name = name; }
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
+    public String getCoordinatorAgentId() { return coordinatorAgentId; }
+    public void setCoordinatorAgentId(String v) { this.coordinatorAgentId = v; }
     public ProjectStatus getStatus() { return status; }
     public void setStatus(ProjectStatus status) { this.status = status; }
     public Instant getCreatedAt() { return createdAt; }

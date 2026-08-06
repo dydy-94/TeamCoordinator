@@ -118,10 +118,18 @@ public class CoordinatorAgentClient {
         runs.prepareRepair(run.getId(), invalidOutput);
     }
 
+    /** Resolve the effective coordinator agent ID: project override > global config. */
+    private String effectiveCoordinatorAgent(IntentAnalysisContext context) {
+        String projectOverride = context.getCoordinatorAgentId();
+        return (projectOverride != null && !projectOverride.trim().isEmpty())
+                ? projectOverride : coordinatorAgentId;
+    }
+
     private void submit(
             RequestIdentity identity, String projectId,
             CoordinatorAgentRun run, IntentAnalysisContext context,
             String coordinatorSessionId) {
+        String effectiveAgentId = effectiveCoordinatorAgent(context);
         AgentRunRequest request = new AgentRunRequest();
         Map<String, Object> input = new LinkedHashMap<>();
         input.put("operation", run.getStage());
@@ -131,7 +139,7 @@ public class CoordinatorAgentClient {
         RenderedPrompt prompt = prompts.render(
                 PromptService.COORDINATOR_EXECUTION, input,
                 identity.getTenantId(), projectId, null,
-                run.getId() + ":" + run.getStage(), coordinatorAgentId);
+                run.getId() + ":" + run.getStage(), effectiveAgentId);
         request.setSystemPrompt(prompt.getContent());
         request.setTaskText(context.getText());
         input.put("promptVersion", prompt.getVersion());
@@ -151,7 +159,7 @@ public class CoordinatorAgentClient {
         } else if (coordinatorSessionId != null) {
             request.setConversationSessionId(coordinatorSessionId);
         }
-        AgentRunResponse response = agentCore.submitRun(coordinatorAgentId, request);
+        AgentRunResponse response = agentCore.submitRun(effectiveAgentId, request);
         runs.saveSession(run.getId(), run.getStage(), response.getSessionId());
     }
 

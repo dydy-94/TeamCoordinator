@@ -30,6 +30,7 @@ public class ProjectService {
         project.setTenantId(identity.getTenantId());
         project.setName(request.getName().trim());
         project.setDescription(request.getDescription());
+        project.setCoordinatorAgentId(request.getCoordinatorAgentId());
         project.setStatus(ProjectStatus.ACTIVE);
         project.setCreatedBy(identity.getUserId());
         try {
@@ -53,6 +54,7 @@ public class ProjectService {
             view.setId(project.getId());
             view.setName(project.getName());
             view.setDescription(project.getDescription());
+            view.setCoordinatorAgentId(project.getCoordinatorAgentId());
             view.setStatus(project.getStatus());
             view.setCreatedAt(project.getCreatedAt());
             view.setUpdatedAt(project.getUpdatedAt());
@@ -76,8 +78,23 @@ public class ProjectService {
         String name = request.getName() == null ? project.getName() : request.getName().trim();
         String description =
                 request.getDescription() == null ? project.getDescription() : request.getDescription();
+        String coordinatorAgentId = request.getCoordinatorAgentId() != null
+                ? request.getCoordinatorAgentId() : project.getCoordinatorAgentId();
         ProjectStatus status = request.getStatus() == null ? project.getStatus() : request.getStatus();
-        repository.updateProject(identity.getTenantId(), projectId, name, description, status);
+        repository.updateProject(
+                identity.getTenantId(), projectId, name, description,
+                coordinatorAgentId, status);
+        // Coordinator agent and team expert are mutually exclusive —
+        // fail with a clear message instead of silently removing.
+        if (coordinatorAgentId != null && !coordinatorAgentId.trim().isEmpty()) {
+            if (repository.expertExists(
+                    identity.getTenantId(), projectId, coordinatorAgentId)) {
+                throw ApiException.conflict(
+                        "COORDINATOR_IS_EXPERT",
+                        "主Agent '" + coordinatorAgentId
+                        + "' 已在专家团队中。请先从团队移除该专家，再将其设为主Agent。");
+            }
+        }
         repository.audit(identity, projectId, "PROJECT_UPDATED", projectId, status.name());
         return get(identity, projectId);
     }
@@ -197,6 +214,7 @@ public class ProjectService {
         view.setId(project.getId());
         view.setName(project.getName());
         view.setDescription(project.getDescription());
+        view.setCoordinatorAgentId(project.getCoordinatorAgentId());
         view.setStatus(project.getStatus());
         view.setCreatedAt(project.getCreatedAt());
         view.setUpdatedAt(project.getUpdatedAt());

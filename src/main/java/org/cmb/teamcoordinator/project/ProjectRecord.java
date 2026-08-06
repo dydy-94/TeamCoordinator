@@ -10,6 +10,7 @@ public class ProjectRecord {
     private String name;
     private String description;
     private ProjectStatus status;
+    private String coordinatorAgentId;
     private String createdBy;
     private Instant createdAt;
     private Instant updatedAt;
@@ -28,6 +29,8 @@ public class ProjectRecord {
     public void setDescription(String description) { this.description = description; }
     public ProjectStatus getStatus() { return status; }
     public void setStatus(ProjectStatus status) { this.status = status; }
+    public String getCoordinatorAgentId() { return coordinatorAgentId; }
+    public void setCoordinatorAgentId(String v) { this.coordinatorAgentId = v; }
     public String getCreatedBy() { return createdBy; }
     public void setCreatedBy(String createdBy) { this.createdBy = createdBy; }
     public Instant getCreatedAt() { return createdAt; }

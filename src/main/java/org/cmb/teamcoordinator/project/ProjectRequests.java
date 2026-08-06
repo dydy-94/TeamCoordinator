@@ -16,10 +16,15 @@ public final class ProjectRequests {
         @Size(max = 1024)
         private String description;
 
+        @Size(max = 128)
+        private String coordinatorAgentId;
+
         public String getName() { return name; }
         public void setName(String name) { this.name = name; }
         public String getDescription() { return description; }
         public void setDescription(String description) { this.description = description; }
+        public String getCoordinatorAgentId() { return coordinatorAgentId; }
+        public void setCoordinatorAgentId(String v) { this.coordinatorAgentId = v; }
     }
 
     public static class UpdateProject {
@@ -29,12 +34,17 @@ public final class ProjectRequests {
         @Size(max = 1024)
         private String description;
 
+        @Size(max = 128)
+        private String coordinatorAgentId;
+
         private ProjectStatus status;
 
         public String getName() { return name; }
         public void setName(String name) { this.name = name; }
         public String getDescription() { return description; }
         public void setDescription(String description) { this.description = description; }
+        public String getCoordinatorAgentId() { return coordinatorAgentId; }
+        public void setCoordinatorAgentId(String v) { this.coordinatorAgentId = v; }
         public ProjectStatus getStatus() { return status; }
         public void setStatus(ProjectStatus status) { this.status = status; }
     }
