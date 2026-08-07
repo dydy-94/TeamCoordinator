@@ -22,6 +22,8 @@ public class CoordinatorDecision {
     private String humanRequestId;
     /** Task-level AgentCore session ID for context continuity across messages. */
     private transient String coordinatorSessionId;
+    /** The actual agent ID used for this call (may differ from global default). */
+    private transient String effectiveAgentId;
 
     public DecisionType getDecisionType() { return decisionType; }
     public void setDecisionType(DecisionType decisionType) { this.decisionType = decisionType; }
@@ -37,4 +39,6 @@ public class CoordinatorDecision {
     public void setHumanRequestId(String value) { this.humanRequestId = value; }
     public String getCoordinatorSessionId() { return coordinatorSessionId; }
     public void setCoordinatorSessionId(String value) { this.coordinatorSessionId = value; }
+    public String getEffectiveAgentId() { return effectiveAgentId; }
+    public void setEffectiveAgentId(String v) { this.effectiveAgentId = v; }
 }

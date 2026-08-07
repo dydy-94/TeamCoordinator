@@ -352,12 +352,22 @@ public class ExecutionRepository {
                 conversationId, expertId, sessionId, messageId);
     }
 
-    public void saveCoordinatorSession(String conversationId, String sessionId) {
+    public void saveCoordinatorSession(
+            String conversationId, String sessionId, String agentId) {
         jdbc.update(
-                "UPDATE project_conversation SET coordinator_session_id = ? "
+                "UPDATE project_conversation SET coordinator_session_id = ?, "
+                        + "coordinator_agent_id = ? "
                         + "WHERE business_id = ? "
                         + "AND coordinator_session_id IS NULL",
-                sessionId, conversationId);
+                sessionId, agentId, conversationId);
+    }
+
+    public String loadCoordinatorAgent(String conversationId) {
+        List<String> rows = jdbc.queryForList(
+                "SELECT coordinator_agent_id FROM project_conversation "
+                        + "WHERE business_id = ?",
+                String.class, conversationId);
+        return rows.isEmpty() || rows.get(0) == null ? "" : rows.get(0);
     }
 
     @Transactional

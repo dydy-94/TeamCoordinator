@@ -62,11 +62,13 @@ public class CoordinatorAgentClient {
             String businessSessionId, String coordinatorSessionId,
             IntentAnalysisContext context,
             Consumer<AgentEvent> eventSink) {
+        String effectiveAgent = effectiveCoordinatorAgent(context);
         CoordinatorAgentRun run = runs.createOrLoad(
                 identity, projectId, messageId, runKey, write(context), businessSessionId);
         if ("SUCCEEDED".equals(run.getStatus()) || "FAILED".equals(run.getStatus())) {
             String sid = run.getSessionId();
-            return new Result(true, run.getOutputJson(), sid, "REPAIR".equals(run.getStage()));
+            return new Result(true, run.getOutputJson(), sid, effectiveAgent,
+                    "REPAIR".equals(run.getStage()));
         }
         // Submit if no session yet, or if repairing (need new events within same conversation)
         if (run.getSessionId() == null || "REPAIR".equals(run.getStage())) {
@@ -75,30 +77,30 @@ public class CoordinatorAgentClient {
         }
 
         List<AgentEvent> events = agentCore.streamEvents(
-                coordinatorAgentId, run.getSessionId(),
+                effectiveAgent, run.getSessionId(),
                 run.getLastSequence(), run.getBusinessSessionId());
         events.sort(Comparator.comparingLong(AgentEvent::getSequence));
         for (AgentEvent event : events) {
             // Forward intermediate events to the task SSE stream
             if (eventSink != null) {
-                event.setAgentId(coordinatorAgentId);
+                event.setAgentId(effectiveAgent);
                 eventSink.accept(event);
             }
 
             if ("end".equals(event.getType())) {
                 String output = event.getContent();
                 runs.complete(run.getId(), event.getSequence(), output);
-                return new Result(true, output, run.getSessionId(),
+                return new Result(true, output, run.getSessionId(), effectiveAgent,
                         "REPAIR".equals(run.getStage()));
             }
             if (isFailure(event)) {
                 runs.fail(run.getId(), event.getContent());
-                return new Result(true, null, run.getSessionId(),
+                return new Result(true, null, run.getSessionId(), effectiveAgent,
                         "REPAIR".equals(run.getStage()));
             }
             runs.advance(run.getId(), event);
         }
-        return new Result(false, null, run.getSessionId(),
+        return new Result(false, null, run.getSessionId(), effectiveAgent,
                 "REPAIR".equals(run.getStage()));
     }
 
@@ -180,18 +182,22 @@ public class CoordinatorAgentClient {
         private final boolean complete;
         private final String output;
         private final String sessionId;
+        private final String effectiveAgentId;
         private final boolean repaired;
 
-        Result(boolean complete, String output, String sessionId, boolean repaired) {
+        Result(boolean complete, String output, String sessionId,
+                String effectiveAgentId, boolean repaired) {
             this.complete = complete;
             this.output = output;
             this.sessionId = sessionId;
+            this.effectiveAgentId = effectiveAgentId;
             this.repaired = repaired;
         }
 
         public boolean isComplete() { return complete; }
         public String getOutput() { return output; }
         public String getSessionId() { return sessionId; }
+        public String getEffectiveAgentId() { return effectiveAgentId; }
         public boolean isRepaired() { return repaired; }
     }
 }

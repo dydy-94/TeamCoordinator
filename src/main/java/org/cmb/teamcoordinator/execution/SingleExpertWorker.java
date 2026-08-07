@@ -211,7 +211,12 @@ public class SingleExpertWorker {
         // while the current call is still streaming.
         String existingCoordSession = work.getCoordinatorSessionId();
         if (existingCoordSession != null) {
-            insertCoordinatorMarker(identity, work, existingCoordSession);
+            String storedAgentId = executionRepository.loadCoordinatorAgent(
+                    work.getConversationId());
+            if (storedAgentId.isEmpty()) {
+                storedAgentId = CoordinatorAgentClient.COORDINATOR_AGENT_ID;
+            }
+            insertCoordinatorMarker(identity, work, existingCoordSession, storedAgentId);
         }
 
         // 意图分析（传入 task 级 coordinator session 以保持跨消息上下文连续）
@@ -226,10 +231,15 @@ public class SingleExpertWorker {
         }
         // Persist coordinator session + insert MARKER for first-time use
         if (decision.getCoordinatorSessionId() != null) {
+            String effectiveAgent = decision.getEffectiveAgentId() != null
+                    ? decision.getEffectiveAgentId()
+                    : CoordinatorAgentClient.COORDINATOR_AGENT_ID;
             executionRepository.saveCoordinatorSession(
-                    work.getConversationId(), decision.getCoordinatorSessionId());
+                    work.getConversationId(), decision.getCoordinatorSessionId(),
+                    effectiveAgent);
             if (existingCoordSession == null) {
-                insertCoordinatorMarker(identity, work, decision.getCoordinatorSessionId());
+                insertCoordinatorMarker(identity, work,
+                        decision.getCoordinatorSessionId(), effectiveAgent);
             }
         }
         if (decision.getDecisionType() == DecisionType.ANSWER) {
@@ -661,10 +671,11 @@ public class SingleExpertWorker {
     }
 
     private void insertCoordinatorMarker(
-            RequestIdentity identity, DispatchWork work, String sessionId) {
+            RequestIdentity identity, DispatchWork work,
+            String sessionId, String effectiveAgentId) {
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("sessionId", sessionId);
-        payload.put("expertId", CoordinatorAgentClient.COORDINATOR_AGENT_ID);
+        payload.put("expertId", effectiveAgentId);
         eventRepository.insertEvent(
                 identity, work.getProjectId(), work.getConversationId(),
                 work.getMessageId(), ProjectEventType.AGENT_RUN_MARKER,

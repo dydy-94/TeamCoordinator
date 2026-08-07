@@ -120,6 +120,7 @@ public class IntentAnalysisService {
         }
         CoordinatorDecision decision = parsed == null ? fallbackDecision() : parsed.decision;
         decision.setCoordinatorSessionId(agentResult.getSessionId());
+        decision.setEffectiveAgentId(agentResult.getEffectiveAgentId());
         String decisionJson = write(decision);
         String analysisId = "analysis-" + UUID.randomUUID();
         analysisRepository.insertAnalysis(
