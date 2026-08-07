@@ -49,11 +49,12 @@ public class PlanningService {
         context.put("taskIntent", intent);
         context.put("availableExperts", project.getExperts());
         context.put("planVersion", planVersion);
+        String invocationKey = "plan:" + project.getId() + ":" + planVersion;
         RenderedPrompt prompt = prompts.render(
                 PromptService.COORDINATOR_PLANNING, context, "system", project.getId(),
-                null, "plan:" + project.getId() + ":" + planVersion, agentId);
+                null, invocationKey, agentId);
         PlanModelClient.PlanCallResult result = modelClient.createPlan(
-                prompt.getContent(), intent, planVersion, agentId, eventSink);
+                prompt.getContent(), intent, planVersion, agentId, invocationKey, eventSink);
         String output = result.getOutput();
         String planSessionId = result.getSessionId();
         RuntimeException lastFailure = null;
@@ -71,7 +72,7 @@ public class PlanningService {
                 if (attempt < MAX_REPAIR_ATTEMPTS) {
                     PlanModelClient.PlanCallResult repaired = modelClient.repairPlan(
                             prompt.getContent(), intent, output, attempt + 1,
-                            agentId, eventSink);
+                            agentId, invocationKey, eventSink);
                     output = repaired.getOutput();
                     planSessionId = repaired.getSessionId();
                 }

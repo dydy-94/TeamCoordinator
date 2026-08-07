@@ -28,14 +28,14 @@ public class MockPlanModelClient implements PlanModelClient {
 
     @Override
     public PlanCallResult createPlan(String prompt, TaskIntent intent, int planVersion,
-            String agentId, Consumer<AgentEvent> eventSink) {
+            String agentId, String invocationKey, Consumer<AgentEvent> eventSink) {
         return new PlanCallResult(write(build(intent, planVersion)), "mock-plan");
     }
 
     @Override
     public PlanCallResult repairPlan(String prompt, TaskIntent intent,
             String invalidOutput, int attempt,
-            String agentId, Consumer<AgentEvent> eventSink) {
+            String agentId, String invocationKey, Consumer<AgentEvent> eventSink) {
         return new PlanCallResult(write(build(intent, 1)), "mock-plan-repair");
     }
 

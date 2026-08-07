@@ -8,11 +8,13 @@ public interface PlanModelClient {
 
     String modelName();
 
+    /** @param invocationKey unique key for this planning call, used for session reuse across repairs */
     PlanCallResult createPlan(String prompt, TaskIntent intent, int planVersion,
-            String agentId, Consumer<AgentEvent> eventSink);
+            String agentId, String invocationKey, Consumer<AgentEvent> eventSink);
 
+    /** @param invocationKey same key as the original createPlan call to reuse its session */
     PlanCallResult repairPlan(String prompt, TaskIntent intent, String invalidOutput,
-            int attempt, String agentId, Consumer<AgentEvent> eventSink);
+            int attempt, String agentId, String invocationKey, Consumer<AgentEvent> eventSink);
 
     class PlanCallResult {
         private final String output;
