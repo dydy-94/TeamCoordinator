@@ -49,7 +49,7 @@ class MockFileFlowTest {
                         .content("{\"type\":\"userInput\",\"sessionId\":\"\","
                                 + "\"systemPrompt\":\"Process the file\","
                                 + "\"data\":{\"skillNames\":[],"
-                                + "\"skillOrigin\":\"skillDevelop\","
+                                + "\"skillOrigin\":\"skillMarket\","
                                 + "\"contents\":[{\"type\":\"text\","
                                 + "\"value\":\"process file\"}],\"context\":[],"
                                 + "\"attachments\":[{\"fileName\":\"input.txt\","

@@ -762,7 +762,7 @@ The header name can be changed with `AGENTCORE_AUTH_HEADER`.
   "systemPrompt": "Database-managed coordinator or expert system prompt",
   "data": {
     "skillNames": ["cmb-ui-design"],
-    "skillOrigin": "skillDevelop",
+    "skillOrigin": "skillMarket",
     "contents": [{"type": "text", "value": "Analyze API risks"}],
     "context": [{"type": "text", "value": "{\"projectName\":\"Risk Review\"}"}],
     "attachments": [{

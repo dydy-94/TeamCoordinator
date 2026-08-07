@@ -73,4 +73,16 @@ public final class ProjectRequests {
         public boolean isEnabled() { return enabled; }
         public void setEnabled(boolean enabled) { this.enabled = enabled; }
     }
+
+    public static class UpsertSkill {
+        @NotBlank
+        private String skillId;
+
+        private boolean enabled = true;
+
+        public String getSkillId() { return skillId; }
+        public void setSkillId(String skillId) { this.skillId = skillId; }
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+    }
 }

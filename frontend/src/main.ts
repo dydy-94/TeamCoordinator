@@ -16,10 +16,14 @@ import {
   removeProjectExpert,
   addProjectMember,
   removeProjectMember,
+  listAvailableSkills,
+  addProjectSkill,
+  removeProjectSkill,
   type Project,
   type Task,
   type HumanRequest,
   type ExpertInfo,
+  type Skill,
 } from "./api";
 import { SseStream, type SseEvent } from "./sse";
 
@@ -472,6 +476,10 @@ function renderOverview(proj: Project) {
     <ul class="detail-list">
       ${proj.experts.map((e) => `<li>${esc(e.expertId)} ${e.enabled ? "✅" : "❌"}</li>`).join("")}
     </ul>
+    <h3>技能 (${proj.skills?.length || 0})</h3>
+    <ul class="detail-list">
+      ${(proj.skills || []).map((s) => `<li>🔧 ${esc(s.name)} ${s.enabled ? "✅" : "❌"}</li>`).join("")}
+    </ul>
     <div class="actions">
       <button class="primary" id="btn-goto-chat">进入对话</button>
     </div>
@@ -543,6 +551,22 @@ async function renderSettings(proj: Project) {
       }).join("")}
     </div>
     <button class="primary" id="btn-add-expert">+ 添加专家</button>
+
+    <h3>技能 ${proj.skills?.length ? "" : '<span class="hint">（仅平台内置AgentCore支持）</span>'}</h3>
+    ${(proj.skills || []).length === 0 ? '<p class="hint">暂无技能</p>' : ''}
+    <div class="expert-grid" id="skill-grid">
+      ${(proj.skills || []).map(s => `
+        <div class="expert-card added">
+          <div class="expert-name">🔧 ${esc(s.name)}</div>
+          <div class="expert-id">${esc(s.id)}</div>
+          <div class="expert-desc">${esc(s.description || "")}</div>
+          <div class="expert-actions">
+            <label><input type="checkbox" class="toggle-skill" data-skill="${esc(s.id)}" ${s.enabled ? "checked" : ""}> 启用</label>
+            <button class="small danger btn-remove-skill" data-skill="${esc(s.id)}">移除</button>
+          </div>
+        </div>`).join("")}
+    </div>
+    <button class="primary" id="btn-add-skill">+ 添加技能</button>
 
     <h3>成员</h3>
     <div id="member-list">
@@ -641,6 +665,68 @@ async function renderSettings(proj: Project) {
       const expertId = (btn as HTMLElement).dataset.expert!;
       try {
         await removeProjectExpert(proj.id, expertId);
+        currentProj = await getProject(proj.id);
+        renderProjectView("settings");
+      } catch (err) { alert(String(err)); }
+    });
+  });
+
+  // Add skill dialog
+  document.getElementById("btn-add-skill")!.onclick = () => {
+    const alreadyAdded = new Set((proj.skills || []).map(s => s.id));
+    listAvailableSkills().then(allSkills => {
+      const available = allSkills.filter(s => !alreadyAdded.has(s.id));
+      $("dialog-overlay").innerHTML = `
+        <div class="dialog wide">
+          <h3>添加技能</h3>
+          ${available.length === 0 ? '<p>所有技能已添加</p>' : ''}
+          <div style="max-height:300px;overflow-y:auto">
+          ${available.map(s => `
+            <div class="expert-card" style="cursor:pointer" data-add-skill="${esc(s.id)}">
+              <div class="expert-name">🔧 ${esc(s.name)}</div>
+              <div class="expert-id">${esc(s.id)}</div>
+              <div class="expert-desc">${esc(s.description || "")}</div>
+            </div>
+          `).join("")}
+          </div>
+          <div class="dialog-actions">
+            <button id="dlg-cancel">取消</button>
+          </div>
+        </div>`;
+      $("dialog-overlay").style.display = "flex";
+      $("dlg-cancel").onclick = () => ($("dialog-overlay").style.display = "none");
+      document.querySelectorAll("[data-add-skill]").forEach(card => {
+        card.addEventListener("click", async () => {
+          const skillId = (card as HTMLElement).dataset.addSkill!;
+          try {
+            await addProjectSkill(proj.id, skillId, true);
+            currentProj = await getProject(proj.id);
+            $("dialog-overlay").style.display = "none";
+            renderProjectView("settings");
+          } catch (err) { alert(String(err)); }
+        });
+      });
+    }).catch(err => alert(String(err)));
+  };
+
+  // Toggle skill
+  el.querySelectorAll(".toggle-skill").forEach(cb => {
+    cb.addEventListener("change", async () => {
+      const skillId = (cb as HTMLElement).dataset.skill!;
+      const enabled = (cb as HTMLInputElement).checked;
+      try {
+        await addProjectSkill(proj.id, skillId, enabled);
+        currentProj = await getProject(proj.id);
+      } catch (err) { alert(String(err)); }
+    });
+  });
+
+  // Remove skill
+  el.querySelectorAll(".btn-remove-skill").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const skillId = (btn as HTMLElement).dataset.skill!;
+      try {
+        await removeProjectSkill(proj.id, skillId);
         currentProj = await getProject(proj.id);
         renderProjectView("settings");
       } catch (err) { alert(String(err)); }

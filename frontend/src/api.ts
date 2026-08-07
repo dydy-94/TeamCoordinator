@@ -6,6 +6,7 @@ export interface Project {
   status: string;
   members: ProjectMember[];
   experts: ProjectExpert[];
+  skills: Skill[];
 }
 
 export interface ProjectMember {
@@ -15,6 +16,14 @@ export interface ProjectMember {
 
 export interface ProjectExpert {
   expertId: string;
+  enabled: boolean;
+}
+
+export interface Skill {
+  id: string;
+  name: string;
+  description?: string;
+  prompt?: string;
   enabled: boolean;
 }
 
@@ -276,6 +285,36 @@ export function removeProjectMember(
   userId: string
 ): Promise<void> {
   return request(`/api/v1/projects/${projectId}/members/${userId}`, {
+    method: "DELETE",
+  });
+}
+
+// ── Skills ────────────────────────────────────────────────────
+
+export function listAvailableSkills(): Promise<Skill[]> {
+  return request<Skill[]>("/api/v1/skills");
+}
+
+export function listProjectSkills(projectId: string): Promise<Skill[]> {
+  return request<Skill[]>(`/api/v1/projects/${projectId}/skills`);
+}
+
+export function addProjectSkill(
+  projectId: string,
+  skillId: string,
+  enabled: boolean = true
+): Promise<Project> {
+  return request<Project>(`/api/v1/projects/${projectId}/skills`, {
+    method: "POST",
+    body: JSON.stringify({ skillId, enabled }),
+  });
+}
+
+export function removeProjectSkill(
+  projectId: string,
+  skillId: string
+): Promise<void> {
+  return request(`/api/v1/projects/${projectId}/skills/${skillId}`, {
     method: "DELETE",
   });
 }

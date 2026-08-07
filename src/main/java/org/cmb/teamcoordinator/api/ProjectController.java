@@ -3,13 +3,16 @@ package org.cmb.teamcoordinator.api;
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import org.cmb.teamcoordinator.project.IdentityProvider;
+import java.util.List;
 import org.cmb.teamcoordinator.project.ProjectRequests.CreateProject;
 import org.cmb.teamcoordinator.project.ProjectRequests.UpdateProject;
 import org.cmb.teamcoordinator.project.ProjectRequests.UpsertExpert;
 import org.cmb.teamcoordinator.project.ProjectRequests.UpsertMember;
+import org.cmb.teamcoordinator.project.ProjectRequests.UpsertSkill;
 import org.cmb.teamcoordinator.project.ProjectService;
 import org.cmb.teamcoordinator.project.ProjectView;
 import org.cmb.teamcoordinator.project.RequestIdentity;
+import org.cmb.teamcoordinator.project.Skill;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -139,6 +142,49 @@ public class ProjectController {
             @PathVariable String projectId,
             @PathVariable String expertId) {
         projectService.removeExpert(identity(servletRequest), projectId, expertId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * 查询项目的技能列表
+     * @param request
+     * @param projectId
+     * @return
+     */
+    @GetMapping("/{projectId}/skills")
+    public List<Skill> listSkills(
+            HttpServletRequest request, @PathVariable String projectId) {
+        return projectService.listProjectSkills(identity(request), projectId);
+    }
+
+    /**
+     * 为项目添加/更新技能
+     * @param servletRequest
+     * @param projectId
+     * @param request
+     * @return
+     */
+    @PostMapping("/{projectId}/skills")
+    public ProjectView upsertSkill(
+            HttpServletRequest servletRequest,
+            @PathVariable String projectId,
+            @Valid @RequestBody UpsertSkill request) {
+        return projectService.upsertSkill(identity(servletRequest), projectId, request);
+    }
+
+    /**
+     * 从项目中移除技能
+     * @param servletRequest
+     * @param projectId
+     * @param skillId
+     * @return
+     */
+    @DeleteMapping("/{projectId}/skills/{skillId}")
+    public ResponseEntity<Void> removeSkill(
+            HttpServletRequest servletRequest,
+            @PathVariable String projectId,
+            @PathVariable String skillId) {
+        projectService.removeSkill(identity(servletRequest), projectId, skillId);
         return ResponseEntity.noContent().build();
     }
 

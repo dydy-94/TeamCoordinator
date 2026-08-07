@@ -20,7 +20,7 @@ public class AgentCoreConversationRequest {
         request.systemPrompt = run.getSystemPrompt();
         Data input = new Data();
         input.skillNames = run.getSkillNames();
-        input.skillOrigin = "skillDevelop";
+        input.skillOrigin = "skillMarket";
         input.contents.add(new TextContent("text", run.getTaskText()));
         if (run.getStructuredInput() != null && !run.getStructuredInput().isEmpty()) {
             input.context.add(new TextContent("text", run.getContextText()));

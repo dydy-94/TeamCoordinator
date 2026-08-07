@@ -1,13 +1,16 @@
 package org.cmb.teamcoordinator.project;
 
+import java.util.List;
 import java.util.UUID;
 import org.cmb.teamcoordinator.agentcore.ExpertDescriptor;
 import org.cmb.teamcoordinator.agentcore.ExpertRegistry;
 import org.cmb.teamcoordinator.common.ApiException;
+import org.cmb.teamcoordinator.config.DigitalTeamProperties;
 import org.cmb.teamcoordinator.project.ProjectRequests.CreateProject;
 import org.cmb.teamcoordinator.project.ProjectRequests.UpdateProject;
 import org.cmb.teamcoordinator.project.ProjectRequests.UpsertExpert;
 import org.cmb.teamcoordinator.project.ProjectRequests.UpsertMember;
+import org.cmb.teamcoordinator.project.ProjectRequests.UpsertSkill;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,10 +20,15 @@ public class ProjectService {
 
     private final ProjectRepository repository;
     private final ExpertRegistry expertRegistry;
+    private final SkillRepository skillRepository;
+    private final DigitalTeamProperties properties;
 
-    public ProjectService(ProjectRepository repository, ExpertRegistry expertRegistry) {
+    public ProjectService(ProjectRepository repository, ExpertRegistry expertRegistry,
+            SkillRepository skillRepository, DigitalTeamProperties properties) {
         this.repository = repository;
         this.expertRegistry = expertRegistry;
+        this.skillRepository = skillRepository;
+        this.properties = properties;
     }
 
     @Transactional
@@ -164,6 +172,63 @@ public class ProjectService {
         repository.audit(identity, projectId, "EXPERT_REMOVED", expertId, null);
     }
 
+    // ── Skills ────────────────────────────────────────────────────────────
+
+    /**
+     * Skills are provided by the platform's built-in AgentCore. Projects
+     * using a custom (non-default) coordinator agent cannot use skills.
+     */
+    private void requireBuiltInAgentCore(ProjectRecord project) {
+        String coord = project.getCoordinatorAgentId();
+        boolean usesBuiltIn = coord == null || coord.trim().isEmpty()
+                || coord.equals(properties.getAgentCore().getCoordinatorAgentId());
+        if (!usesBuiltIn) {
+            throw ApiException.conflict(
+                    "SKILL_UNSUPPORTED",
+                    "技能管理仅在项目使用平台内置AgentCore时可用。"
+                            + "当前项目使用了自定义主Agent，不支持此功能。");
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public List<Skill> listProjectSkills(RequestIdentity identity, String projectId) {
+        ProjectRecord project = requireVisible(identity, projectId);
+        return skillRepository.findByProject(identity.getTenantId(), projectId);
+    }
+
+    @Transactional
+    public ProjectView upsertSkill(
+            RequestIdentity identity, String projectId, UpsertSkill request) {
+        ProjectRecord project = requireOwnerAndActive(identity, projectId);
+        requireBuiltInAgentCore(project);
+        Skill skill = skillRepository.findByBusinessId(request.getSkillId());
+        if (skill == null) {
+            throw ApiException.notFound("SKILL_NOT_FOUND", "技能不存在: " + request.getSkillId());
+        }
+        String tenantId = identity.getTenantId();
+        if (skillRepository.projectSkillExists(tenantId, projectId, request.getSkillId())) {
+            skillRepository.updateProjectSkill(
+                    tenantId, projectId, request.getSkillId(), request.isEnabled());
+        } else {
+            skillRepository.insertProjectSkill(
+                    tenantId, projectId, request.getSkillId(), request.isEnabled());
+        }
+        repository.audit(identity, projectId, "SKILL_UPSERTED",
+                request.getSkillId(), Boolean.toString(request.isEnabled()));
+        return get(identity, projectId);
+    }
+
+    @Transactional
+    public void removeSkill(
+            RequestIdentity identity, String projectId, String skillId) {
+        ProjectRecord project = requireOwnerAndActive(identity, projectId);
+        requireBuiltInAgentCore(project);
+        skillRepository.deleteProjectSkill(identity.getTenantId(), projectId, skillId);
+        repository.audit(identity, projectId, "SKILL_REMOVED", skillId, null);
+    }
+
+    // ── Authorization helpers ─────────────────────────────────────────────
+
     @Transactional(readOnly = true)
     public void requireTaskInitiator(RequestIdentity identity, String projectId) {
         ProjectRecord project = requireVisible(identity, projectId);
@@ -220,6 +285,7 @@ public class ProjectService {
         view.setUpdatedAt(project.getUpdatedAt());
         view.setMembers(repository.findMembers(project.getTenantId(), project.getId()));
         view.setExperts(repository.findExperts(project.getTenantId(), project.getId()));
+        view.setSkills(skillRepository.findByProject(project.getTenantId(), project.getId()));
         return view;
     }
 }

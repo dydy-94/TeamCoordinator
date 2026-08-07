@@ -32,7 +32,7 @@ class MockAgentCoreControllerTest {
                         .content("{\"type\":\"userInput\",\"sessionId\":\"\","
                                 + "\"systemPrompt\":\"Analyze the request\","
                                 + "\"data\":{\"skillNames\":[],"
-                                + "\"skillOrigin\":\"skillDevelop\","
+                                + "\"skillOrigin\":\"skillMarket\","
                                 + "\"contents\":[{\"type\":\"text\","
                                 + "\"value\":\"analyze\"}],\"context\":[],"
                                 + "\"attachments\":[]}}"))

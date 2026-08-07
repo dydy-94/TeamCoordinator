@@ -15,6 +15,7 @@ public class ProjectView {
     private Instant updatedAt;
     private List<ProjectMember> members = new ArrayList<>();
     private List<ProjectExpert> experts = new ArrayList<>();
+    private List<Skill> skills = new ArrayList<>();
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -34,4 +35,6 @@ public class ProjectView {
     public void setMembers(List<ProjectMember> members) { this.members = members; }
     public List<ProjectExpert> getExperts() { return experts; }
     public void setExperts(List<ProjectExpert> experts) { this.experts = experts; }
+    public List<Skill> getSkills() { return skills; }
+    public void setSkills(List<Skill> skills) { this.skills = skills; }
 }

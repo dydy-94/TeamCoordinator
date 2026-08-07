@@ -38,6 +38,8 @@ import org.cmb.teamcoordinator.planning.PlanningService;
 import org.cmb.teamcoordinator.project.ProjectService;
 import org.cmb.teamcoordinator.project.ProjectView;
 import org.cmb.teamcoordinator.project.RequestIdentity;
+import org.cmb.teamcoordinator.project.Skill;
+import org.cmb.teamcoordinator.project.SkillRepository;
 import org.cmb.teamcoordinator.prompt.PromptService;
 import org.cmb.teamcoordinator.prompt.RenderedPrompt;
 import org.slf4j.Logger;
@@ -89,6 +91,7 @@ public class SingleExpertWorker {
     private final ArtifactRepository artifactRepository;
     private final ArtifactService artifactService;
     private final PromptService prompts;
+    private final SkillRepository skillRepository;
 
     public SingleExpertWorker(
             ExecutionRepository executionRepository,
@@ -103,7 +106,8 @@ public class SingleExpertWorker {
             HumanRequestRepository humanRequests,
             ArtifactRepository artifactRepository,
             ArtifactService artifactService,
-            PromptService prompts) {
+            PromptService prompts,
+            SkillRepository skillRepository) {
         this.executionRepository = executionRepository;
         this.analysisService = analysisService;
         this.agentCore = agentCore;
@@ -117,6 +121,7 @@ public class SingleExpertWorker {
         this.artifactRepository = artifactRepository;
         this.artifactService = artifactService;
         this.prompts = prompts;
+        this.skillRepository = skillRepository;
     }
 
     /**
@@ -419,6 +424,17 @@ public class SingleExpertWorker {
                 work.getConversationId(), expertId, work.getMessageId());
         if (existingExpertSession != null) {
             runRequest.setConversationSessionId(existingExpertSession);
+        }
+        // Attach project skills to the expert run request
+        List<String> skillNames = new java.util.ArrayList<>();
+        for (Skill skill : skillRepository.findByProject(
+                work.getTenantId(), work.getProjectId())) {
+            if (skill.isEnabled()) {
+                skillNames.add(skill.getId());
+            }
+        }
+        if (!skillNames.isEmpty()) {
+            runRequest.setSkillNames(skillNames);
         }
         AgentRunResponse response = agentCore.submitRun(expertId, runRequest);
         executionRepository.saveSession(task.getId(), response.getSessionId());
