@@ -274,7 +274,26 @@ public class SingleExpertWorker {
         TaskIntent intent = decision.getTaskIntent();
         ProjectView project = projectService.get(identity, work.getProjectId());
         emitPhase(work, PHASE_PLANNING, "Coordinator is creating an execution plan.");
-        PlanningResult planning = planningService.createPlan(intent, project, 1);
+        String planAgentId = decision.getEffectiveAgentId() != null
+                ? decision.getEffectiveAgentId()
+                : CoordinatorAgentClient.COORDINATOR_AGENT_ID;
+        // Forward planning agent events to SSE (live-only, MARKER for replay)
+        Consumer<AgentEvent> planEventSink = event -> {
+            event.setAgentId(planAgentId);
+            publishAgentEventLive(work, event);
+        };
+        PlanningResult planning = planningService.createPlan(
+                intent, project, 1, planAgentId, planEventSink);
+        // Insert AGENT_RUN_MARKER for the planning AgentCore call
+        if (planning.getSessionId() != null) {
+            ObjectNode planMarkerPayload = objectMapper.createObjectNode();
+            planMarkerPayload.put("sessionId", planning.getSessionId());
+            planMarkerPayload.put("expertId", planAgentId);
+            eventRepository.insertEvent(
+                    identity, work.getProjectId(), work.getConversationId(),
+                    work.getMessageId(), ProjectEventType.AGENT_RUN_MARKER,
+                    EventVisibility.PUBLIC, planMarkerPayload);
+        }
         executionRepository.createPlan(work, decision, planning);
 
         // Emit plan update

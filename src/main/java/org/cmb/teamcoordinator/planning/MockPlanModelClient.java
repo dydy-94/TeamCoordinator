@@ -3,11 +3,16 @@ package org.cmb.teamcoordinator.planning;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.function.Consumer;
+import org.cmb.teamcoordinator.agentcore.AgentEvent;
 import org.cmb.teamcoordinator.intent.ExecutionMode;
 import org.cmb.teamcoordinator.intent.TaskIntent;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 @Component
+@ConditionalOnProperty(prefix = "digital-team.agent-core", name = "mock-enabled",
+        havingValue = "true", matchIfMissing = true)
 public class MockPlanModelClient implements PlanModelClient {
 
     private final ObjectMapper objectMapper;
@@ -22,14 +27,16 @@ public class MockPlanModelClient implements PlanModelClient {
     }
 
     @Override
-    public String createPlan(String prompt, TaskIntent intent, int planVersion) {
-        return write(build(intent, planVersion));
+    public PlanCallResult createPlan(String prompt, TaskIntent intent, int planVersion,
+            String agentId, Consumer<AgentEvent> eventSink) {
+        return new PlanCallResult(write(build(intent, planVersion)), "mock-plan");
     }
 
     @Override
-    public String repairPlan(
-            String prompt, TaskIntent intent, String invalidOutput, int attempt) {
-        return write(build(intent, 1));
+    public PlanCallResult repairPlan(String prompt, TaskIntent intent,
+            String invalidOutput, int attempt,
+            String agentId, Consumer<AgentEvent> eventSink) {
+        return new PlanCallResult(write(build(intent, 1)), "mock-plan-repair");
     }
 
     private CoordinatorPlanSpec build(TaskIntent intent, int planVersion) {

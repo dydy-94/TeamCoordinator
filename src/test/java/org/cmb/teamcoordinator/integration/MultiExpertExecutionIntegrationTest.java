@@ -145,7 +145,7 @@ class MultiExpertExecutionIntegrationTest {
                 intent,
                 projectService.get(
                         new RequestIdentity("tenant-multi", "multi-owner"), projectId),
-                2);
+                2, "coordinator", null);
 
         executionRepository.createReplan(work, decision, v2, oldPlanId);
 
