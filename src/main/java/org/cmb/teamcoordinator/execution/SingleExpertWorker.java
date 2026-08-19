@@ -8,6 +8,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -17,6 +18,7 @@ import org.cmb.teamcoordinator.agentcore.AgentCoreAdapter;
 import org.cmb.teamcoordinator.agentcore.AgentEvent;
 import org.cmb.teamcoordinator.agentcore.AgentRunRequest;
 import org.cmb.teamcoordinator.agentcore.AgentRunResponse;
+import org.cmb.teamcoordinator.config.DigitalTeamProperties;
 import org.cmb.teamcoordinator.coordinator.EventVisibility;
 import org.cmb.teamcoordinator.coordinator.MessageEventRepository;
 import org.cmb.teamcoordinator.coordinator.ProjectEvent;
@@ -42,6 +44,7 @@ import org.cmb.teamcoordinator.project.Skill;
 import org.cmb.teamcoordinator.project.SkillRepository;
 import org.cmb.teamcoordinator.prompt.PromptService;
 import org.cmb.teamcoordinator.prompt.RenderedPrompt;
+import org.cmb.teamcoordinator.semantic.SemanticCheckClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -92,6 +95,8 @@ public class SingleExpertWorker {
     private final ArtifactService artifactService;
     private final PromptService prompts;
     private final SkillRepository skillRepository;
+    private final SemanticCheckClient semanticChecks;
+    private final DigitalTeamProperties properties;
 
     public SingleExpertWorker(
             ExecutionRepository executionRepository,
@@ -107,7 +112,9 @@ public class SingleExpertWorker {
             ArtifactRepository artifactRepository,
             ArtifactService artifactService,
             PromptService prompts,
-            SkillRepository skillRepository) {
+            SkillRepository skillRepository,
+            SemanticCheckClient semanticChecks,
+            DigitalTeamProperties properties) {
         this.executionRepository = executionRepository;
         this.analysisService = analysisService;
         this.agentCore = agentCore;
@@ -122,6 +129,8 @@ public class SingleExpertWorker {
         this.artifactService = artifactService;
         this.prompts = prompts;
         this.skillRepository = skillRepository;
+        this.semanticChecks = semanticChecks;
+        this.properties = properties;
     }
 
     /**
@@ -553,6 +562,15 @@ public class SingleExpertWorker {
                 failResult(work, task, event, "Expert result did not contain content.");
                 return;
             }
+            // Second-pass semantic review: judge whether resultText actually
+            // satisfies the objective and acceptance criteria before success.
+            SemanticCheckClient.SemanticCheckResult review =
+                    reviewExpertResult(work, task, resultText);
+            if (review.isConclusive() && !review.isConsistent()) {
+                failResult(work, task, event,
+                        "Expert result failed semantic review: " + review.getReason());
+                return;
+            }
             List<String> artifactIds = registerArtifacts(work, task, event);
             if (executionRepository.advanceTask(
                     task.getId(), event.getSequence(), "SUCCEEDED",
@@ -608,9 +626,41 @@ public class SingleExpertWorker {
 
     // ── Artifact registration ───────────────────────────────────────────
 
+    /**
+     * Ask the Coordinator to judge whether the expert result actually
+     * satisfies the subtask. Best-effort: an inconclusive review passes the
+     * result through — only an explicit rejection fails it.
+     */
+    private SemanticCheckClient.SemanticCheckResult reviewExpertResult(
+            DispatchWork work, TaskRecord task, String resultText) {
+        Map<String, Object> context = new LinkedHashMap<>();
+        context.put("overallRequest", work.getText());
+        context.put("taskKey", task.getTaskKey());
+        context.put("objective", task.getObjective());
+        context.put("expectedOutput", task.getExpectedOutput());
+        context.put("acceptanceCriteria", task.getAcceptanceCriteria());
+        context.put("resultText", resultText);
+        String judgeAgent = judgeAgentId(work);
+        RenderedPrompt prompt = prompts.render(
+                PromptService.EXPERT_RESULT_CHECK, context,
+                work.getTenantId(), work.getProjectId(), work.getConversationId(),
+                task.getRequestId() + ":review", judgeAgent);
+        return semanticChecks.check(prompt.getContent(), judgeAgent, null);
+    }
+
+    /** Resolve the review judge: project coordinator override > global default. */
+    private String judgeAgentId(DispatchWork work) {
+        RequestIdentity identity =
+                new RequestIdentity(work.getTenantId(), work.getUserId());
+        ProjectView project = projectService.get(identity, work.getProjectId());
+        String override = project.getCoordinatorAgentId();
+        return (override != null && !override.trim().isEmpty())
+                ? override : properties.getAgentCore().getCoordinatorAgentId();
+    }
+
     private void failResult(
             DispatchWork work, TaskRecord task, AgentEvent event, String message) {
-        TaskRecord correction = executionRepository.createCorrection(work, task);
+        TaskRecord correction = executionRepository.createCorrection(work, task, message);
         if (correction != null) {
             task.setStatus("CORRECTING");
             AgentEvent correctionEvent = AgentEvent.of("coordinatorNewPlanStep");

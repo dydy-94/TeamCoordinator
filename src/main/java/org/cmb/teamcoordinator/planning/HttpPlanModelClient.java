@@ -34,24 +34,27 @@ public class HttpPlanModelClient implements PlanModelClient {
     @Override
     public PlanCallResult createPlan(String prompt, TaskIntent intent, int planVersion,
             String agentId, String invocationKey, Consumer<AgentEvent> eventSink) {
-        return callAgentCore(null, prompt, agentId, eventSink);
+        return callAgentCore(null, 0L, prompt, agentId, eventSink);
     }
 
     @Override
     public PlanCallResult repairPlan(String prompt, TaskIntent intent,
-            String invalidOutput, int attempt,
-            String agentId, String invocationKey, Consumer<AgentEvent> eventSink) {
-        // Session reuse across repairs is handled by the caller (PlanningService)
-        // passing the sessionId from the original createPlan result via
-        // conversationSessionId. This parameter is not available in the current
-        // interface — the caller simply calls createPlan again and the old
-        // session is orphaned. Acceptable because: same-thread sync call,
-        // Worker crash re-runs from scratch.
-        return callAgentCore(null, prompt, agentId, eventSink);
+            String invalidOutput, String sessionId, long lastSequence, int planVersion,
+            int attempt, String agentId, String invocationKey,
+            Consumer<AgentEvent> eventSink) {
+        // Feed the invalid output back to the model within the same
+        // conversation and continue streaming after the last consumed event,
+        // so the repair is a real correction rather than a blind retry.
+        String repairPrompt = prompt
+                + "\n\nYour previous output failed validation:\n"
+                + invalidOutput
+                + "\nCorrect every problem above and return only the required "
+                + "CoordinatorPlan JSON with plan_version " + planVersion + ".";
+        return callAgentCore(sessionId, lastSequence, repairPrompt, agentId, eventSink);
     }
 
     private PlanCallResult callAgentCore(
-            String conversationSessionId, String prompt,
+            String conversationSessionId, long afterSequence, String prompt,
             String agentId, Consumer<AgentEvent> eventSink) {
         AgentRunRequest request = new AgentRunRequest();
         request.setSystemPrompt(prompt);
@@ -61,15 +64,17 @@ public class HttpPlanModelClient implements PlanModelClient {
         }
         AgentRunResponse response = agentCore.submitRun(agentId, request);
         String sessionId = response.getSessionId();
-        List<AgentEvent> events = agentCore.streamEvents(agentId, sessionId, 0L);
+        List<AgentEvent> events = agentCore.streamEvents(agentId, sessionId, afterSequence);
         events.sort(Comparator.comparingLong(AgentEvent::getSequence));
+        long lastSequence = afterSequence;
         for (AgentEvent event : events) {
+            lastSequence = Math.max(lastSequence, event.getSequence());
             if (eventSink != null) {
                 event.setAgentId(agentId);
                 eventSink.accept(event);
             }
             if ("end".equals(event.getType())) {
-                return new PlanCallResult(event.getContent(), sessionId);
+                return new PlanCallResult(event.getContent(), sessionId, lastSequence);
             }
             if ("error".equals(event.getType())) {
                 throw new PlanValidationException(

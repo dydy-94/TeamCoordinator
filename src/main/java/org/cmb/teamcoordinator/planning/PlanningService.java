@@ -8,10 +8,12 @@ import java.util.Map;
 import java.util.function.Consumer;
 import org.cmb.teamcoordinator.agentcore.AgentEvent;
 import org.cmb.teamcoordinator.agentcore.ExpertRegistry;
+import org.cmb.teamcoordinator.common.OutputSchemaProvider;
 import org.cmb.teamcoordinator.intent.TaskIntent;
 import org.cmb.teamcoordinator.project.ProjectView;
 import org.cmb.teamcoordinator.prompt.PromptService;
 import org.cmb.teamcoordinator.prompt.RenderedPrompt;
+import org.cmb.teamcoordinator.semantic.SemanticCheckClient;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -24,6 +26,8 @@ public class PlanningService {
     private final ExpertRegistry expertRegistry;
     private final ObjectMapper objectMapper;
     private final PromptService prompts;
+    private final OutputSchemaProvider outputSchemas;
+    private final SemanticCheckClient semanticChecks;
 
     public PlanningService(
             PlanModelClient modelClient,
@@ -31,13 +35,17 @@ public class PlanningService {
             PlanValidator planValidator,
             ExpertRegistry expertRegistry,
             ObjectMapper objectMapper,
-            PromptService prompts) {
+            PromptService prompts,
+            OutputSchemaProvider outputSchemas,
+            SemanticCheckClient semanticChecks) {
         this.modelClient = modelClient;
         this.schemaValidator = schemaValidator;
         this.planValidator = planValidator;
         this.expertRegistry = expertRegistry;
         this.objectMapper = objectMapper;
         this.prompts = prompts;
+        this.outputSchemas = outputSchemas;
+        this.semanticChecks = semanticChecks;
     }
 
     public PlanningResult createPlan(
@@ -50,15 +58,23 @@ public class PlanningService {
         context.put("availableExperts", project.getExperts());
         context.put("planVersion", planVersion);
         String invocationKey = "plan:" + project.getId() + ":" + planVersion;
+        // Inject the full plan JSON Schema so the output contract is explicit
+        // in the prompt instead of relying on agent-side configuration.
+        Map<String, String> variables = new LinkedHashMap<>();
+        variables.put("output_schema", outputSchemas.planSchema());
         RenderedPrompt prompt = prompts.render(
-                PromptService.COORDINATOR_PLANNING, context, "system", project.getId(),
-                null, invocationKey, agentId);
+                PromptService.COORDINATOR_PLANNING, context, variables, "system",
+                project.getId(), null, invocationKey, agentId);
         PlanModelClient.PlanCallResult result = modelClient.createPlan(
                 prompt.getContent(), intent, planVersion, agentId, invocationKey, eventSink);
         String output = result.getOutput();
         String planSessionId = result.getSessionId();
+        long lastSequence = result.getLastSequence();
         RuntimeException lastFailure = null;
         for (int attempt = 0; attempt <= MAX_REPAIR_ATTEMPTS; attempt++) {
+            // Default repair feedback: the invalid plan itself. Replaced below
+            // when a semantic review rejected an otherwise valid plan.
+            String invalidOutput = output;
             try {
                 CoordinatorPlanSpec plan = parse(output);
                 if (plan.getPlanVersion() != planVersion) {
@@ -66,20 +82,48 @@ public class PlanningService {
                             "Expected plan_version " + planVersion);
                 }
                 planValidator.validate(plan, project, expertRegistry.listExperts());
+                SemanticCheckClient.SemanticCheckResult check = semanticChecks.check(
+                        renderPlanCheck(intent, project, output, agentId),
+                        agentId, eventSink);
+                if (check.isConclusive() && !check.isConsistent()) {
+                    invalidOutput = "Semantic review rejected the plan: "
+                            + check.getReason() + "\nRejected plan:\n" + output;
+                    throw new PlanValidationException(
+                            "Semantic check failed: " + check.getReason());
+                }
                 return new PlanningResult(plan, output, attempt, planSessionId);
             } catch (RuntimeException ex) {
                 lastFailure = ex;
                 if (attempt < MAX_REPAIR_ATTEMPTS) {
                     PlanModelClient.PlanCallResult repaired = modelClient.repairPlan(
-                            prompt.getContent(), intent, output, attempt + 1,
+                            prompt.getContent(), intent, invalidOutput,
+                            planSessionId, lastSequence, planVersion, attempt + 1,
                             agentId, invocationKey, eventSink);
                     output = repaired.getOutput();
                     planSessionId = repaired.getSessionId();
+                    lastSequence = repaired.getLastSequence();
                 }
             }
         }
         throw new PlanValidationException(
                 "Plan remained invalid after two repairs: " + lastFailure.getMessage());
+    }
+
+    /**
+     * Render the second-pass review prompt that judges whether the generated
+     * plan actually serves the task intent.
+     */
+    private String renderPlanCheck(
+            TaskIntent intent, ProjectView project, String planJson, String agentId) {
+        Map<String, Object> context = new LinkedHashMap<>();
+        context.put("projectName", project.getName());
+        context.put("projectDescription", project.getDescription());
+        context.put("taskIntent", intent);
+        context.put("planJson", planJson);
+        RenderedPrompt prompt = prompts.render(
+                PromptService.COORDINATOR_PLAN_CHECK, context, "system", project.getId(),
+                null, "plan:" + project.getId() + ":check", agentId);
+        return prompt.getContent();
     }
 
     private CoordinatorPlanSpec parse(String output) {

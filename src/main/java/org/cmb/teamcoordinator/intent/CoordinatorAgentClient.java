@@ -13,6 +13,7 @@ import org.cmb.teamcoordinator.agentcore.AgentRunRequest;
 import org.cmb.teamcoordinator.agentcore.AgentRunResponse;
 import org.cmb.teamcoordinator.artifact.ArtifactRepository;
 import org.cmb.teamcoordinator.artifact.ArtifactService;
+import org.cmb.teamcoordinator.common.OutputSchemaProvider;
 import org.cmb.teamcoordinator.config.DigitalTeamProperties;
 import org.cmb.teamcoordinator.prompt.PromptService;
 import org.cmb.teamcoordinator.prompt.RenderedPrompt;
@@ -29,19 +30,21 @@ public class CoordinatorAgentClient {
     private final ObjectMapper objectMapper;
     private final String coordinatorAgentId;
     private final PromptService prompts;
+    private final OutputSchemaProvider outputSchemas;
     private final ArtifactRepository artifacts;
     private final ArtifactService artifactService;
 
     public CoordinatorAgentClient(
             AgentCoreAdapter agentCore, CoordinatorAgentRunRepository runs,
             ObjectMapper objectMapper, DigitalTeamProperties properties,
-            PromptService prompts, ArtifactRepository artifacts,
-            ArtifactService artifactService) {
+            PromptService prompts, OutputSchemaProvider outputSchemas,
+            ArtifactRepository artifacts, ArtifactService artifactService) {
         this.agentCore = agentCore;
         this.runs = runs;
         this.objectMapper = objectMapper;
         this.coordinatorAgentId = properties.getAgentCore().getCoordinatorAgentId();
         this.prompts = prompts;
+        this.outputSchemas = outputSchemas;
         this.artifacts = artifacts;
         this.artifactService = artifactService;
     }
@@ -138,8 +141,10 @@ public class CoordinatorAgentClient {
         input.put("context", objectMapper.convertValue(
                 context, new TypeReference<Map<String, Object>>() { }));
         input.put("invalidOutput", run.getInvalidOutput());
+        Map<String, String> variables = new LinkedHashMap<>();
+        variables.put("output_schema", outputSchemas.taskIntentSchema());
         RenderedPrompt prompt = prompts.render(
-                PromptService.COORDINATOR_EXECUTION, input,
+                PromptService.COORDINATOR_EXECUTION, input, variables,
                 identity.getTenantId(), projectId, null,
                 run.getId() + ":" + run.getStage(), effectiveAgentId);
         request.setSystemPrompt(prompt.getContent());
