@@ -4,9 +4,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import org.cmb.teamcoordinator.agentcore.AgentCoreAdapter;
+import org.cmb.teamcoordinator.agentcore.AgentCoreTools;
 import org.cmb.teamcoordinator.agentcore.AgentEvent;
 import org.cmb.teamcoordinator.agentcore.AgentRunRequest;
 import org.cmb.teamcoordinator.agentcore.AgentRunResponse;
@@ -19,12 +23,16 @@ import org.junit.jupiter.api.Test;
 class HttpPlanModelClientTest {
 
     private static final String ORIGINAL_SESSION = "plan-session-1";
+    private static final String TOOL_PLAN_JSON =
+            "{\"plan_version\":2,\"tasks\":[{\"task_key\":\"k\",\"objective\":\"o\","
+                    + "\"dependencies\":[],\"expected_output\":\"e\","
+                    + "\"acceptance_criteria\":\"a\",\"required_capabilities\":[\"c\"]}]}";
+    private static final String END_PLAN_JSON = "{\"plan_version\":2,\"tasks\":[]}";
 
     @Test
     void repairFeedsBackInvalidOutputAndReusesSession() {
         RecordingAdapter adapter = new RecordingAdapter();
-        HttpPlanModelClient client =
-                new HttpPlanModelClient(adapter, new DigitalTeamProperties());
+        HttpPlanModelClient client = client(adapter);
 
         client.repairPlan("original prompt", new TaskIntent(), "invalid plan json",
                 ORIGINAL_SESSION, 7L, 2, 1, "coordinator", "key", null);
@@ -39,10 +47,9 @@ class HttpPlanModelClientTest {
     }
 
     @Test
-    void createPlanUsesFreshSessionAndReportsLastSequence() {
+    void createPlanPrefersToolSubmissionOverEndContent() {
         RecordingAdapter adapter = new RecordingAdapter();
-        HttpPlanModelClient client =
-                new HttpPlanModelClient(adapter, new DigitalTeamProperties());
+        HttpPlanModelClient client = client(adapter);
 
         PlanModelClient.PlanCallResult result = client.createPlan(
                 "prompt", new TaskIntent(), 2, "coordinator", "key", null);
@@ -50,11 +57,31 @@ class HttpPlanModelClientTest {
         assertNull(adapter.lastRequest.getConversationSessionId());
         assertEquals(0L, adapter.lastAfterSequence);
         assertEquals(ORIGINAL_SESSION, result.getSessionId());
-        assertEquals(1L, result.getLastSequence());
-        assertTrue(result.getOutput().contains("plan_version"));
+        // The tool submission carries the real plan; the end event carries
+        // different content that must be ignored.
+        assertEquals(TOOL_PLAN_JSON, result.getOutput());
+        assertEquals(2L, result.getLastSequence());
     }
 
-    private static class RecordingAdapter implements AgentCoreAdapter {
+    @Test
+    void createPlanFallsBackToEndContentWhenToolNotCalled() {
+        EndOnlyAdapter adapter = new EndOnlyAdapter();
+        HttpPlanModelClient client = client(adapter);
+
+        PlanModelClient.PlanCallResult result = client.createPlan(
+                "prompt", new TaskIntent(), 2, "coordinator", "key", null);
+
+        assertEquals(END_PLAN_JSON, result.getOutput());
+        assertEquals(1L, result.getLastSequence());
+    }
+
+    private HttpPlanModelClient client(AgentCoreAdapter adapter) {
+        return new HttpPlanModelClient(
+                adapter, new DigitalTeamProperties(), new ObjectMapper());
+    }
+
+    /** Adapter whose plan run submits via the tool, then ends with different content. */
+    private static class RecordingAdapter extends PlanAdapterBase {
 
         AgentRunRequest lastRequest;
         String lastPrompt;
@@ -71,11 +98,58 @@ class HttpPlanModelClientTest {
         public List<AgentEvent> streamEvents(
                 String targetAgentId, String sessionId, Long afterSequence) {
             lastAfterSequence = afterSequence == null ? 0L : afterSequence;
-            AgentEvent end = AgentEvent.content(
-                    "end", "{\"plan_version\":2,\"tasks\":[]}", targetAgentId);
-            end.setSequence(lastAfterSequence + 1);
-            end.setEventId(sessionId + ":end");
-            return Collections.singletonList(end);
+            List<AgentEvent> events = new ArrayList<>();
+            long seq = lastAfterSequence;
+            events.add(toolEvent(sessionId, ++seq, targetAgentId, TOOL_PLAN_JSON));
+            events.add(endEvent(sessionId, ++seq, targetAgentId, END_PLAN_JSON));
+            return events;
+        }
+    }
+
+    /** Adapter whose plan run never calls the submission tool. */
+    private static class EndOnlyAdapter extends PlanAdapterBase {
+
+        @Override
+        public AgentRunResponse submitRun(String targetAgentId, AgentRunRequest request) {
+            return new AgentRunResponse(ORIGINAL_SESSION, "ACCEPTED");
+        }
+
+        @Override
+        public List<AgentEvent> streamEvents(
+                String targetAgentId, String sessionId, Long afterSequence) {
+            return Collections.singletonList(
+                    endEvent(sessionId, 1L, targetAgentId, END_PLAN_JSON));
+        }
+    }
+
+    private abstract static class PlanAdapterBase implements AgentCoreAdapter {
+
+        AgentEvent toolEvent(
+                String sessionId, long seq, String agentId, String inputJson) {
+            AgentEvent event = AgentEvent.of("toolUsed");
+            event.setSessionId(sessionId);
+            event.setSequence(seq);
+            event.setEventId(sessionId + ":" + seq);
+            event.setTool(AgentCoreTools.SUBMIT_COORDINATOR_PLAN);
+            event.setInput(new ObjectMapper().convertValue(
+                    readTree(inputJson), Map.class));
+            return event;
+        }
+
+        AgentEvent endEvent(String sessionId, long seq, String agentId, String content) {
+            AgentEvent event = AgentEvent.content("end", content, agentId);
+            event.setSessionId(sessionId);
+            event.setSequence(seq);
+            event.setEventId(sessionId + ":" + seq);
+            return event;
+        }
+
+        private Object readTree(String json) {
+            try {
+                return new ObjectMapper().readTree(json);
+            } catch (Exception ex) {
+                throw new IllegalStateException(ex);
+            }
         }
 
         @Override

@@ -1,0 +1,13 @@
+{
+  "name": "submit_review_verdict",
+  "description": "Submit the semantic review verdict. Call this tool with {\"consistent\": true|false, \"reason\": \"...\"} as its arguments, then end the run without further output. Never write the verdict as plain text.",
+  "parameters": {
+    "type": "object",
+    "required": ["consistent"],
+    "properties": {
+      "consistent": {"type": "boolean"},
+      "reason": {"type": "string"}
+    },
+    "additionalProperties": false
+  }
+}

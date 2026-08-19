@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import org.cmb.teamcoordinator.agentcore.AgentCoreAdapter;
+import org.cmb.teamcoordinator.agentcore.AgentCoreTools;
 import org.cmb.teamcoordinator.agentcore.AgentEvent;
 import org.cmb.teamcoordinator.agentcore.AgentRunRequest;
 import org.cmb.teamcoordinator.agentcore.AgentRunResponse;
@@ -83,15 +84,24 @@ public class CoordinatorAgentClient {
                 effectiveAgent, run.getSessionId(),
                 run.getLastSequence(), run.getBusinessSessionId());
         events.sort(Comparator.comparingLong(AgentEvent::getSequence));
+        String toolSubmission = null;
         for (AgentEvent event : events) {
             // Forward intermediate events to the task SSE stream
             if (eventSink != null) {
                 event.setAgentId(effectiveAgent);
                 eventSink.accept(event);
             }
+            // Structured output via submission tool: highest priority over
+            // whatever the run's end event carries as plain text.
+            if ("toolUsed".equals(event.getType())
+                    && AgentCoreTools.SUBMIT_COORDINATOR_DECISION.equals(event.getTool())
+                    && event.getInput() != null) {
+                toolSubmission = write(event.getInput());
+            }
 
             if ("end".equals(event.getType())) {
-                String output = event.getContent();
+                String output = toolSubmission != null
+                        ? toolSubmission : event.getContent();
                 runs.complete(run.getId(), event.getSequence(), output);
                 return new Result(true, output, run.getSessionId(), effectiveAgent,
                         "REPAIR".equals(run.getStage()));

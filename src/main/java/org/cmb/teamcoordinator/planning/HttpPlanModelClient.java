@@ -1,9 +1,11 @@
 package org.cmb.teamcoordinator.planning;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Comparator;
 import java.util.List;
 import java.util.function.Consumer;
 import org.cmb.teamcoordinator.agentcore.AgentCoreAdapter;
+import org.cmb.teamcoordinator.agentcore.AgentCoreTools;
 import org.cmb.teamcoordinator.agentcore.AgentEvent;
 import org.cmb.teamcoordinator.agentcore.AgentRunRequest;
 import org.cmb.teamcoordinator.agentcore.AgentRunResponse;
@@ -20,10 +22,13 @@ import org.springframework.stereotype.Component;
 public class HttpPlanModelClient implements PlanModelClient {
 
     private final AgentCoreAdapter agentCore;
+    private final ObjectMapper objectMapper;
 
     public HttpPlanModelClient(
-            AgentCoreAdapter agentCore, DigitalTeamProperties properties) {
+            AgentCoreAdapter agentCore, DigitalTeamProperties properties,
+            ObjectMapper objectMapper) {
         this.agentCore = agentCore;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -67,14 +72,24 @@ public class HttpPlanModelClient implements PlanModelClient {
         List<AgentEvent> events = agentCore.streamEvents(agentId, sessionId, afterSequence);
         events.sort(Comparator.comparingLong(AgentEvent::getSequence));
         long lastSequence = afterSequence;
+        String toolSubmission = null;
         for (AgentEvent event : events) {
             lastSequence = Math.max(lastSequence, event.getSequence());
             if (eventSink != null) {
                 event.setAgentId(agentId);
                 eventSink.accept(event);
             }
+            // Structured output via submission tool takes priority over the
+            // run's end event content.
+            if ("toolUsed".equals(event.getType())
+                    && AgentCoreTools.SUBMIT_COORDINATOR_PLAN.equals(event.getTool())
+                    && event.getInput() != null) {
+                toolSubmission = write(event.getInput());
+            }
             if ("end".equals(event.getType())) {
-                return new PlanCallResult(event.getContent(), sessionId, lastSequence);
+                String output = toolSubmission != null
+                        ? toolSubmission : event.getContent();
+                return new PlanCallResult(output, sessionId, lastSequence);
             }
             if ("error".equals(event.getType())) {
                 throw new PlanValidationException(
@@ -82,5 +97,13 @@ public class HttpPlanModelClient implements PlanModelClient {
             }
         }
         throw new PlanValidationException("Plan generation did not complete.");
+    }
+
+    private String write(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception ex) {
+            throw new IllegalStateException("Could not serialize tool input.", ex);
+        }
     }
 }
