@@ -213,7 +213,8 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
         events.add(thinkingDeltaEvent(sessionId, ++seq, "分析用户意图...", now));
         events.add(thinkingEndEvent(sessionId, ++seq, now));
 
-        AgentEvent endEvent = endEvent(sessionId, ++seq, now);
+        String decisionJson = null;
+        String invalidContent = null;
         try {
             Object rawContext = request.getStructuredInput().get("context");
             IntentAnalysisContext context = objectMapper.convertValue(
@@ -221,14 +222,13 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
             String operation = String.valueOf(
                     request.getStructuredInput().get("operation"));
             if (context.getText().startsWith("__always_invalid__")) {
-                endEvent.setContent("{still-invalid");
+                invalidContent = "{still-invalid";
             } else if ("ANALYZE".equals(operation)
                     && context.getText().startsWith("__invalid_once__")) {
-                endEvent.setContent("{invalid");
+                invalidContent = "{invalid";
             } else {
-                endEvent.setContent(
-                        objectMapper.writeValueAsString(
-                                coordinatorAgent.classify(context)));
+                decisionJson = objectMapper.writeValueAsString(
+                        coordinatorAgent.classify(context));
             }
         } catch (RuntimeException ex) {
             events.add(errorEvent(sessionId, ++seq,
@@ -238,6 +238,20 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
             events.add(errorEvent(sessionId, ++seq,
                     "Coordinator error: " + ex.getMessage(), now));
             return events;
+        }
+        // Valid decisions are submitted via the submission tool, mirroring
+        // the real AgentCore contract. Invalid-output scenarios deliberately
+        // skip the tool call so repair paths stay exercised.
+        if (decisionJson != null) {
+            events.add(submissionToolEvent(
+                    sessionId, ++seq,
+                    AgentCoreTools.SUBMIT_COORDINATOR_DECISION, decisionJson, now));
+        }
+        AgentEvent endEvent = endEvent(sessionId, ++seq, now);
+        if (invalidContent != null) {
+            endEvent.setContent(invalidContent);
+        } else if (decisionJson != null) {
+            endEvent.setContent(decisionJson);
         }
         events.add(endEvent);
         return events;
@@ -414,6 +428,26 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
         e.setInput(Collections.singletonMap("skill", skillName));
         e.setToolUseId(toolUseId);
         e.setTimestamp(now);
+        return e;
+    }
+
+    /** Simulate a submission tool call whose input is the given JSON. */
+    private AgentEvent submissionToolEvent(String sessionId, long seq,
+                                           String tool, String inputJson, long now) {
+        AgentEvent e = AgentEvent.of("toolUsed");
+        e.setSessionId(sessionId);
+        e.setSequence(seq);
+        e.setEventId(sessionId + ":" + seq);
+        e.setTool(tool);
+        e.setToolUseId("call_" + UUID.randomUUID().toString()
+                .replace("-", "").substring(0, 24));
+        e.setTimestamp(now);
+        try {
+            e.setInput(objectMapper.convertValue(
+                    objectMapper.readTree(inputJson), Map.class));
+        } catch (Exception ex) {
+            e.setInput(Collections.singletonMap("raw", inputJson));
+        }
         return e;
     }
 

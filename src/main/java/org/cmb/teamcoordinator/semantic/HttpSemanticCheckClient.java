@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.function.Consumer;
 import org.cmb.teamcoordinator.agentcore.AgentCoreAdapter;
+import org.cmb.teamcoordinator.agentcore.AgentCoreTools;
 import org.cmb.teamcoordinator.agentcore.AgentEvent;
 import org.cmb.teamcoordinator.agentcore.AgentRunRequest;
 import org.cmb.teamcoordinator.agentcore.AgentRunResponse;
@@ -58,10 +59,17 @@ public class HttpSemanticCheckClient implements SemanticCheckClient {
             LOGGER.warn("Semantic review stream failed; treating as inconclusive.", ex);
             return new SemanticCheckResult(false, false, null, null);
         }
+        String toolSubmission = null;
         for (AgentEvent event : events) {
             if (eventSink != null) {
                 event.setAgentId(agentId);
                 eventSink.accept(event);
+            }
+            // Verdict submitted via tool takes priority over end content.
+            if ("toolUsed".equals(event.getType())
+                    && AgentCoreTools.SUBMIT_REVIEW_VERDICT.equals(event.getTool())
+                    && event.getInput() != null) {
+                toolSubmission = write(event.getInput());
             }
             if ("error".equals(event.getType())) {
                 LOGGER.warn("Semantic review agent error; treating as inconclusive: {}",
@@ -69,11 +77,21 @@ public class HttpSemanticCheckClient implements SemanticCheckClient {
                 return new SemanticCheckResult(false, false, null, null);
             }
             if ("end".equals(event.getType())) {
-                return parse(event.getContent());
+                return parse(toolSubmission != null
+                        ? toolSubmission : event.getContent());
             }
         }
         LOGGER.warn("Semantic review did not complete; treating as inconclusive.");
         return new SemanticCheckResult(false, false, null, null);
+    }
+
+    private String write(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception ex) {
+            LOGGER.warn("Could not serialize review tool input; treating as inconclusive.");
+            return null;
+        }
     }
 
     private SemanticCheckResult parse(String output) {

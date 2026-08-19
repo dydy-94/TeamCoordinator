@@ -1,0 +1,34 @@
+{
+  "name": "submit_coordinator_decision",
+  "description": "Submit the Coordinator decision for the current user request. Call this tool with the decision JSON as its arguments, then end the run without further output. Never write the decision JSON as plain text.",
+  "parameters": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "required": ["decision_type"],
+    "properties": {
+      "decision_type": {"enum": ["ANSWER", "ASK_HUMAN", "CREATE_PLAN"]},
+      "answer": {"type": ["string", "null"]},
+      "question": {"type": ["string", "null"]},
+      "task_intent": {
+        "type": ["object", "null"],
+        "properties": {
+          "intent": {"type": "string", "minLength": 1},
+          "objective": {"type": "string", "minLength": 1},
+          "expected_outputs": {"type": "array", "items": {"type": "string"}},
+          "constraints": {"type": "array", "items": {"type": "string"}},
+          "required_capabilities": {"type": "array", "items": {"type": "string"}},
+          "input_refs": {"type": "array", "items": {"type": "string"}},
+          "missing_information": {"type": "array", "items": {"type": "string"}},
+          "risk_level": {"enum": ["LOW", "MEDIUM", "HIGH"]},
+          "execution_mode": {"enum": ["SINGLE_EXPERT", "MULTI_EXPERT"]}
+        },
+        "required": [
+          "intent", "objective", "expected_outputs", "constraints",
+          "required_capabilities", "input_refs", "missing_information",
+          "risk_level", "execution_mode"
+        ]
+      }
+    },
+    "additionalProperties": false
+  }
+}

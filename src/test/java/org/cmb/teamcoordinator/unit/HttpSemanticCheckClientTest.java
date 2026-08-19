@@ -5,9 +5,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import org.cmb.teamcoordinator.agentcore.AgentCoreAdapter;
+import org.cmb.teamcoordinator.agentcore.AgentCoreTools;
 import org.cmb.teamcoordinator.agentcore.AgentEvent;
 import org.cmb.teamcoordinator.agentcore.AgentRunRequest;
 import org.cmb.teamcoordinator.agentcore.AgentRunResponse;
@@ -89,13 +92,36 @@ class HttpSemanticCheckClientTest {
         assertFalse(result.isConclusive());
     }
 
-    /** Adapter that returns a single end event carrying the given verdict. */
+    @Test
+    void prefersToolVerdictOverEndContent() {
+        HttpSemanticCheckClient client = new HttpSemanticCheckClient(
+                new VerdictAdapter(
+                        "{\"consistent\":true,\"reason\":\"\"}", "garbage end content"),
+                new ObjectMapper());
+
+        SemanticCheckClient.SemanticCheckResult result =
+                client.check("review prompt", "coordinator", null);
+
+        assertTrue(result.isConclusive());
+        assertTrue(result.isConsistent());
+    }
+
+    /**
+     * Adapter that submits the verdict via the submission tool and ends with
+     * the given end content (defaults to the same verdict).
+     */
     private static class VerdictAdapter implements AgentCoreAdapter {
 
         private final String verdict;
+        private final String endContent;
 
         VerdictAdapter(String verdict) {
+            this(verdict, verdict);
+        }
+
+        VerdictAdapter(String verdict, String endContent) {
             this.verdict = verdict;
+            this.endContent = endContent;
         }
 
         @Override
@@ -106,10 +132,26 @@ class HttpSemanticCheckClientTest {
         @Override
         public List<AgentEvent> streamEvents(
                 String targetAgentId, String sessionId, Long afterSequence) {
-            AgentEvent end = AgentEvent.content("end", verdict, targetAgentId);
-            end.setSequence(1);
+            AgentEvent tool = AgentEvent.of("toolUsed");
+            tool.setSessionId(sessionId);
+            tool.setSequence(1);
+            tool.setEventId(sessionId + ":tool");
+            tool.setTool(AgentCoreTools.SUBMIT_REVIEW_VERDICT);
+            tool.setInput(inputMap(verdict));
+            AgentEvent end = AgentEvent.content("end", endContent, targetAgentId);
+            end.setSessionId(sessionId);
+            end.setSequence(2);
             end.setEventId(sessionId + ":end");
-            return Collections.singletonList(end);
+            return Arrays.asList(tool, end);
+        }
+
+        private Map<String, Object> inputMap(String json) {
+            try {
+                return new ObjectMapper().convertValue(
+                        new ObjectMapper().readTree(json), Map.class);
+            } catch (Exception ex) {
+                return Collections.singletonMap("raw", json);
+            }
         }
 
         @Override
