@@ -44,6 +44,8 @@ User Message → Intent Analysis (Coordinator Agent) → Planning → Expert Exe
 - **`ProjectEventStreamHub`** (`coordinator/`): Manages SSE emitters per (tenant, project, task). Publishes events in-memory for same-instance subscribers, and polls MySQL for cross-instance event delivery. Supports `Last-Event-ID` replay.
 - **`SingleExpertWorker`** (`execution/`): The main orchestration loop. Claims dispatches with a database lease (`ExecutionRepository.claimNext`), runs intent analysis, creates plans, dispatches tasks to experts, and consumes their events.
 - **`IntentAnalysisService`** / **`CoordinatorAgentClient`** (`intent/`): Wrap the Coordinator agent run lifecycle — submit, stream, parse JSON decision output, optionally repair invalid output, and persist the run state.
+- **`SemanticCheckClient`** (`semantic/`): Second-pass model judgment of Coordinator outputs — plan/intent consistency and expert-result acceptance. Best-effort and fail-open: an inconclusive review never blocks execution; only an explicit rejection fails a plan (→ repair with the reason) or an expert result (→ correction task).
+- **`OutputSchemaProvider`** (`common/`): Loads the CoordinatorDecision / CoordinatorPlan JSON Schemas so they can be injected into prompts (`{{output_schema}}` in prompt template v2+), making the output contract explicit at the source.
 - **Identity contract**: `X-Tenant-Id` + `X-User-Id` headers (`HeaderIdentityProvider`). Project authorization is role-based (OWNER, ADMIN, MEMBER, VIEWER).
 
 ### Package Map
@@ -64,6 +66,7 @@ User Message → Intent Analysis (Coordinator Agent) → Planning → Expert Exe
 | `planning/` | Plan generation via AI model, plan validation, expert selection |
 | `project/` | Project CRUD, members, experts, identity provider, authorization |
 | `prompt/` | Prompt template management, rendering, versioning (PUBLISHED/DRAFT) |
+| `semantic/` | Second-pass semantic reviews (plan consistency, expert-result acceptance) via AgentCore |
 
 ### Database
 

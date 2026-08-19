@@ -2,6 +2,7 @@ package org.cmb.teamcoordinator.prompt;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
+import java.util.Map;
 import org.cmb.teamcoordinator.common.ApiException;
 import org.cmb.teamcoordinator.config.DigitalTeamProperties;
 import org.cmb.teamcoordinator.project.RequestIdentity;
@@ -14,6 +15,8 @@ public class PromptService {
     public static final String COORDINATOR_PLANNING = "coordinator.planning";
     public static final String EXPERT_EXECUTION = "expert.execution";
     public static final String EXPERT_RESUME = "expert.resume";
+    public static final String COORDINATOR_PLAN_CHECK = "coordinator.plan_check";
+    public static final String EXPERT_RESULT_CHECK = "expert.result_check";
 
     private final PromptRepository repository;
     private final ObjectMapper objectMapper;
@@ -30,13 +33,33 @@ public class PromptService {
     public RenderedPrompt render(
             String promptKey, Object context, String tenantId, String projectId,
             String conversationId, String invocationId, String agentId) {
+        return render(promptKey, context, null, tenantId, projectId,
+                conversationId, invocationId, agentId);
+    }
+
+    /**
+     * Render a prompt template, additionally replacing {@code {{variable}}}
+     * placeholders found in {@code extraVariables} before the context JSON.
+     * Variables that do not appear in the template are ignored.
+     */
+    public RenderedPrompt render(
+            String promptKey, Object context, Map<String, String> extraVariables,
+            String tenantId, String projectId, String conversationId,
+            String invocationId, String agentId) {
         PromptTemplateView template = repository.findPublished(promptKey);
         if (template == null) {
             throw new IllegalStateException(
                     "No published prompt template exists for " + promptKey);
         }
+        String rendered = template.getTemplateContent();
+        if (extraVariables != null) {
+            for (Map.Entry<String, String> entry : extraVariables.entrySet()) {
+                rendered = rendered.replace(
+                        "{{" + entry.getKey() + "}}", entry.getValue());
+            }
+        }
         String contextJson = write(context);
-        String rendered = template.getTemplateContent().replace("{{context_json}}", contextJson);
+        rendered = rendered.replace("{{context_json}}", contextJson);
         if (rendered.contains("{{")) {
             throw new IllegalStateException(
                     "Prompt template contains unresolved variables: " + promptKey);

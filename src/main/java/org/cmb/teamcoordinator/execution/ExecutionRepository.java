@@ -213,7 +213,8 @@ public class ExecutionRepository {
     }
 
     @Transactional
-    public TaskRecord createCorrection(DispatchWork work, TaskRecord original) {
+    public TaskRecord createCorrection(
+            DispatchWork work, TaskRecord original, String reason) {
         if (original.getCorrectionCount() >= 1) {
             return null;
         }
@@ -247,9 +248,25 @@ public class ExecutionRepository {
                 write(original.getDependencies()),
                 write(original.getRequiredCapabilities()),
                 original.getExpectedOutput(),
-                original.getAcceptanceCriteria(),
+                correctionCriteria(original, reason),
                 original.getId());
         return findTask(work.getTenantId(), work.getProjectId(), id);
+    }
+
+    /**
+     * The correction task's acceptance criteria carry the original criteria
+     * plus the failure reason, so the expert sees why the result was rejected
+     * without the free-text reason leaking into the objective (task text).
+     */
+    private String correctionCriteria(TaskRecord original, String reason) {
+        String criteria = original.getAcceptanceCriteria() == null
+                ? "" : original.getAcceptanceCriteria();
+        if (reason != null && !reason.trim().isEmpty()) {
+            criteria = criteria.trim().isEmpty()
+                    ? "Correction reason: " + reason
+                    : criteria + "\nCorrection reason: " + reason;
+        }
+        return criteria;
     }
 
     public void acceptCorrection(TaskRecord correction, String resultJson) {
