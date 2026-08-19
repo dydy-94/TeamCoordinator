@@ -11,9 +11,14 @@ public class DigitalTeamProperties {
     private final Storage storage = new Storage();
     private final Rollout rollout = new Rollout();
     private final Prompt prompt = new Prompt();
+    private final Execution execution = new Execution();
 
     public AgentCore getAgentCore() {
         return agentCore;
+    }
+
+    public Execution getExecution() {
+        return execution;
     }
 
     public Storage getStorage() {
@@ -112,5 +117,16 @@ public class DigitalTeamProperties {
 
         public List<String> getAdminUsers() { return adminUsers; }
         public void setAdminUsers(List<String> value) { this.adminUsers = value; }
+    }
+
+    public static class Execution {
+        /**
+         * Consecutive AgentCore failures (stream errors or an unreachable run)
+         * tolerated before a task is failed. Each poll tick counts as one.
+         */
+        private int agentcoreFailureThreshold = 60;
+
+        public int getAgentcoreFailureThreshold() { return agentcoreFailureThreshold; }
+        public void setAgentcoreFailureThreshold(int value) { this.agentcoreFailureThreshold = value; }
     }
 }

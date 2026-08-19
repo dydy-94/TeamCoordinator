@@ -78,13 +78,20 @@ public class HttpAgentCoreAdapter implements AgentCoreAdapter {
         }
         HttpHeaders headers = jsonHeaders(businessSessionId);
         headers.setAccept(Collections.singletonList(MediaType.TEXT_EVENT_STREAM));
-        ResponseEntity<String> response = restTemplate.exchange(
-                builder.build(true).toUri(),
-                HttpMethod.GET,
-                new HttpEntity<Void>(headers),
-                String.class);
-        return parseSse(
-                response.getBody(), sessionId, afterSequence == null ? 0L : afterSequence);
+        try {
+            ResponseEntity<String> response = restTemplate.exchange(
+                    builder.build(true).toUri(),
+                    HttpMethod.GET,
+                    new HttpEntity<Void>(headers),
+                    String.class);
+            return parseSse(
+                    response.getBody(), sessionId, afterSequence == null ? 0L : afterSequence);
+        } catch (HttpClientErrorException.NotFound ex) {
+            // A missing run is not a transport failure: surface it as an
+            // empty stream so the caller's lost-run detection decides
+            // (with its consecutive-failure tolerance) what to do.
+            return Collections.emptyList();
+        }
     }
 
     @Override

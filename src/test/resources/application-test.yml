@@ -18,6 +18,7 @@ digital-team:
     artifact-tool-token: test-agentcore-tool-token
   execution:
     worker-interval-ms: 60000
+    agentcore-failure-threshold: 3
   events:
     database-poll-interval-ms: 60000
   storage:

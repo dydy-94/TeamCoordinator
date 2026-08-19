@@ -61,6 +61,22 @@ public class ExecutionRepository {
         return updated == 1 ? loadWork(id) : null;
     }
 
+    /**
+     * Extend the dispatch lease while {@code process()} is still running.
+     * The lease owner check makes a stale heartbeat harmless: once the
+     * dispatch is released (lease_owner = NULL) or completed, renewal
+     * becomes a no-op and another instance may claim it.
+     */
+    public int renewLease(String dispatchId, String owner, int leaseSeconds) {
+        return jdbc.update(
+                "UPDATE coordinator_dispatch SET lease_expires_at = ?, "
+                        + "updated_at = CURRENT_TIMESTAMP "
+                        + "WHERE business_id = ? AND lease_owner = ? AND status = 'RUNNING'",
+                Timestamp.from(Instant.now().plusSeconds(leaseSeconds)),
+                dispatchId,
+                owner);
+    }
+
     public DispatchWork loadWork(String dispatchId) {
         return jdbc.queryForObject(
                 "SELECT d.business_id dispatch_id, d.tenant_id, d.project_id, d.conversation_id, "
@@ -431,14 +447,78 @@ public class ExecutionRepository {
         completeDispatch(dispatchId, status, error);
     }
 
+    @Transactional
     public int failTasksForMessage(String tenantId, String messageId) {
-        return jdbc.update(
-                "UPDATE coordinator_task t JOIN coordinator_plan p "
-                        + "ON p.business_id = t.plan_id "
-                        + "SET t.status = 'FAILED', t.updated_at = CURRENT_TIMESTAMP "
-                        + "WHERE p.tenant_id = ? AND p.message_id = ? "
-                        + "AND t.status IN ('RUNNING', 'STARTING', 'PENDING')",
+        // Keep plan and task states consistent: the plan must not stay
+        // RUNNING when all its tasks were force-failed.
+        jdbc.update(
+                "UPDATE coordinator_plan SET status = 'FAILED', "
+                        + "updated_at = CURRENT_TIMESTAMP "
+                        + "WHERE tenant_id = ? AND message_id = ? AND status = 'RUNNING'",
                 tenantId, messageId);
+        return jdbc.update(
+                "UPDATE coordinator_task SET status = 'FAILED', "
+                        + "updated_at = CURRENT_TIMESTAMP "
+                        + "WHERE plan_id IN (SELECT business_id FROM coordinator_plan "
+                        + "WHERE tenant_id = ? AND message_id = ?) "
+                        + "AND status IN ('RUNNING', 'STARTING', 'PENDING')",
+                tenantId, messageId);
+    }
+
+    /**
+     * Reset tasks stranded in STARTING (process died between submitRun and
+     * saveSession) back to PENDING so they get re-dispatched. The cutoff
+     * makes sure a task being started right now by the lease holder is
+     * never touched. last_sequence is reset because the replacement
+     * AgentCore session starts its event sequence from 1 again.
+     */
+    public int recoverStaleStartingTasks(
+            String tenantId, String messageId, Timestamp cutoff) {
+        return jdbc.update(
+                "UPDATE coordinator_task SET status = 'PENDING', expert_id = '', "
+                        + "last_sequence = 0, consecutive_failures = 0, "
+                        + "updated_at = CURRENT_TIMESTAMP "
+                        + "WHERE plan_id IN (SELECT business_id FROM coordinator_plan "
+                        + "WHERE tenant_id = ? AND message_id = ? AND status = 'RUNNING') "
+                        + "AND status = 'STARTING' AND session_id IS NULL "
+                        + "AND updated_at < ?",
+                tenantId, messageId, cutoff);
+    }
+
+    /**
+     * Force a task status without the {@code last_sequence} guard. Used by
+     * cancel(): the synthetic cancel event's sequence can collide with a
+     * concurrently consumed real event, and the sequence guard would then
+     * silently drop the cancel after the AgentCore session was already
+     * stopped, leaving the task RUNNING against a dead session.
+     */
+    public boolean cancelTask(String taskId, String status, String resultJson) {
+        return jdbc.update(
+                "UPDATE coordinator_task SET status = ?, result_json = ?, "
+                        + "updated_at = CURRENT_TIMESTAMP "
+                        + "WHERE business_id = ? AND status NOT IN "
+                        + "('SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT')",
+                status, resultJson, taskId) == 1;
+    }
+
+    /** Count one AgentCore failure tick for a task; returns the new count. */
+    public int incrementConsecutiveFailures(String taskId) {
+        jdbc.update(
+                "UPDATE coordinator_task SET consecutive_failures = consecutive_failures + 1, "
+                        + "updated_at = CURRENT_TIMESTAMP WHERE business_id = ?",
+                taskId);
+        Integer count = jdbc.queryForObject(
+                "SELECT consecutive_failures FROM coordinator_task WHERE business_id = ?",
+                Integer.class,
+                taskId);
+        return count == null ? 0 : count;
+    }
+
+    public void resetConsecutiveFailures(String taskId) {
+        jdbc.update(
+                "UPDATE coordinator_task SET consecutive_failures = 0 "
+                        + "WHERE business_id = ? AND consecutive_failures <> 0",
+                taskId);
     }
 
     public void completeDispatch(String dispatchId, String status, String error) {

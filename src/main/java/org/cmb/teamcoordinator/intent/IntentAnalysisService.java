@@ -110,7 +110,7 @@ public class IntentAnalysisService {
             coordinatorAgent.prepareRepair(identity, runKey, output);
             agentResult = coordinatorAgent.execute(
                     identity, projectId, messageId, runKey,
-                    businessSessionId, coordinatorSessionId, context, null);
+                    businessSessionId, coordinatorSessionId, context, eventSink);
             if (!agentResult.isComplete()) {
                 return null;
             }

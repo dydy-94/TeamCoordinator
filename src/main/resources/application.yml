@@ -49,6 +49,7 @@ digital-team:
     emergency-stop: ${DIGITAL_TEAM_EMERGENCY_STOP:false}
   execution:
     worker-interval-ms: ${EXECUTION_WORKER_INTERVAL_MS:500}
+    agentcore-failure-threshold: ${AGENTCORE_FAILURE_THRESHOLD:60}
   events:
     database-poll-interval-ms: ${EVENT_DATABASE_POLL_INTERVAL_MS:500}
   agent-core:

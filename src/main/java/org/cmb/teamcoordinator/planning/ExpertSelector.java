@@ -3,16 +3,19 @@ package org.cmb.teamcoordinator.planning;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Collectors;
 import org.cmb.teamcoordinator.agentcore.ExpertDescriptor;
 import org.cmb.teamcoordinator.agentcore.ExpertRegistry;
 import org.cmb.teamcoordinator.execution.ExecutionRepository;
 import org.cmb.teamcoordinator.project.ProjectExpert;
 import org.cmb.teamcoordinator.project.ProjectView;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 @Component
 public class ExpertSelector {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(ExpertSelector.class);
 
     private final ExpertRegistry registry;
     private final ExecutionRepository repository;
@@ -22,6 +25,12 @@ public class ExpertSelector {
         this.repository = repository;
     }
 
+    /**
+     * Pick the least-loaded matching expert, or return {@code null} when no
+     * candidate is currently available (busy at concurrency limit, disabled,
+     * or temporarily unavailable). A null result is a retryable condition —
+     * callers must skip the round instead of treating it as a failure.
+     */
     public String select(ProjectView project, List<String> capabilities) {
         List<Candidate> candidates = new ArrayList<>();
         for (ExpertDescriptor expert : registry.listExperts()) {
@@ -41,16 +50,25 @@ public class ExpertSelector {
             for (ProjectExpert pe : project.getExperts()) {
                 expertIds.add(pe.getExpertId() + (pe.isEnabled() ? ":on" : ":off"));
             }
-            throw new PlanValidationException(
-                    "No available expert matches " + capabilities
-                    + ". Project experts: " + expertIds
-                    + ". Registry: " + registry.listExperts().stream()
-                        .map(e -> e.getExpertId() + "[" + e.getCapabilities() + "]"
-                            + " enabled=" + e.isEnabled()
-                            + " avail=" + e.isAvailable())
-                        .collect(java.util.stream.Collectors.toList()));
+            LOGGER.warn("No available expert matches {} (retryable). Project experts: {}. Registry: {}",
+                    capabilities, expertIds, describeRegistry());
+            return null;
         }
         return candidates.get(0).expertId;
+    }
+
+    private String describeRegistry() {
+        StringBuilder builder = new StringBuilder();
+        for (ExpertDescriptor expert : registry.listExperts()) {
+            if (builder.length() > 0) {
+                builder.append(", ");
+            }
+            builder.append(expert.getExpertId())
+                    .append(expert.getCapabilities())
+                    .append(" enabled=").append(expert.isEnabled())
+                    .append(" avail=").append(expert.isAvailable());
+        }
+        return builder.toString();
     }
 
     private boolean projectAllows(ProjectView project, String expertId) {

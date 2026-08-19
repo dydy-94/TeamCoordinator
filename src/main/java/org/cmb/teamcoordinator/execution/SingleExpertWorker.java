@@ -2,6 +2,8 @@ package org.cmb.teamcoordinator.execution;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -13,7 +15,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import javax.annotation.PreDestroy;
 import org.cmb.teamcoordinator.agentcore.AgentCoreAdapter;
 import org.cmb.teamcoordinator.agentcore.AgentEvent;
 import org.cmb.teamcoordinator.agentcore.AgentRunRequest;
@@ -80,6 +88,32 @@ public class SingleExpertWorker {
     private static final String PHASE_COMPLETED   = "completed";
     private static final String PHASE_FAILED      = "failed";
 
+    /** Dispatch lease length; renewed in the background while process() runs. */
+    private static final int DISPATCH_LEASE_SECONDS = 30;
+
+    /**
+     * Age after which a STARTING task with no session is considered stranded
+     * (its starting process died) and reset to PENDING. Well above the
+     * seconds-long legitimate window between assignExpert and saveSession,
+     * and above the lease expiry that gates cross-instance recovery.
+     */
+    private static final int STARTING_RECOVERY_AGE_SECONDS = 60;
+
+    /**
+     * Background lease renewal for the dispatch currently being processed.
+     * A dedicated daemon thread is used because the Spring task scheduler
+     * is blocked by the synchronous process() call.
+     */
+    private final ScheduledExecutorService leaseKeeper = Executors.newSingleThreadScheduledExecutor(
+            new ThreadFactory() {
+                @Override
+                public Thread newThread(Runnable runnable) {
+                    Thread thread = new Thread(runnable, "dispatch-lease-keeper");
+                    thread.setDaemon(true);
+                    return thread;
+                }
+            });
+
     private final String instanceId = "coordinator-" + UUID.randomUUID();
     private final ExecutionRepository executionRepository;
     private final IntentAnalysisService analysisService;
@@ -138,10 +172,19 @@ public class SingleExpertWorker {
      */
     @Scheduled(fixedDelayString = "${digital-team.execution.worker-interval-ms:500}")
     public void runOnce() {
-        DispatchWork work = executionRepository.claimNext(instanceId, 30);
+        DispatchWork work = executionRepository.claimNext(instanceId, DISPATCH_LEASE_SECONDS);
         if (work == null) {
             return;
         }
+        // process() can block for minutes (coordinator run, plan generation
+        // with repairs). Without renewal the lease would expire and another
+        // instance would claim the same dispatch concurrently.
+        ScheduledFuture<?> leaseRenewal = leaseKeeper.scheduleAtFixedRate(
+                () -> executionRepository.renewLease(
+                        work.getDispatchId(), instanceId, DISPATCH_LEASE_SECONDS),
+                DISPATCH_LEASE_SECONDS / 3,
+                DISPATCH_LEASE_SECONDS / 3,
+                TimeUnit.SECONDS);
         try {
             process(work);
         } catch (RuntimeException ex) {
@@ -156,7 +199,14 @@ public class SingleExpertWorker {
             emitAgentEvent(work,
                     AgentEvent.content("coordinatorError", "Execution failed: " + abbreviate(msg),
                             "coordinator"));
+        } finally {
+            leaseRenewal.cancel(false);
         }
+    }
+
+    @PreDestroy
+    public void shutdown() {
+        leaseKeeper.shutdownNow();
     }
 
     /**
@@ -190,7 +240,25 @@ public class SingleExpertWorker {
         event.setEventId(task.getSessionId() + ":cancel:" + event.getSequence());
         event.setContent("AgentCore session stopped.");
         event.setTimestamp(System.currentTimeMillis());
-        applyEvent(work, task, event);
+        publishAgentEventLive(work, event);
+        // Use the status-only transition instead of applyEvent: the
+        // sequence-guarded advanceTask could reject the synthetic cancel
+        // event when a real event with the same sequence was consumed
+        // concurrently, leaving the task RUNNING against a dead session.
+        if (!executionRepository.cancelTask(
+                task.getId(), "CANCELLED", writeMap(event))) {
+            TaskRecord current = executionRepository.findTask(
+                    identity.getTenantId(), projectId, taskId);
+            if (isTerminal(current.getStatus())) {
+                return current;
+            }
+            throw ApiException.conflict("TASK_CANCEL_FAILED",
+                    "Task state changed concurrently; cancel was not applied.");
+        }
+        if (work != null) {
+            executionRepository.completePlanAndDispatch(
+                    task.getPlanId(), work.getDispatchId(), "CANCELLED", event.getContent());
+        }
         return executionRepository.findTask(identity.getTenantId(), projectId, taskId);
     }
 
@@ -342,6 +410,16 @@ public class SingleExpertWorker {
                 consumeEvents(work, task);
             }
         }
+        // 恢复卡死的 STARTING 任务：submitRun 与 saveSession 之间进程崩溃时，
+        // 任务会永久停在 STARTING + 无 session，这里重置回 PENDING 重新调度。
+        int recovered = executionRepository.recoverStaleStartingTasks(
+                work.getTenantId(),
+                work.getMessageId(),
+                Timestamp.from(Instant.now().minusSeconds(STARTING_RECOVERY_AGE_SECONDS)));
+        if (recovered > 0) {
+            LOGGER.warn("Recovered {} stranded STARTING task(s) for message {}.",
+                    recovered, work.getMessageId());
+        }
         // 重新获取任务列表，检查是否所有任务都已完成或失败
         tasks = executionRepository.findTasksForMessage(work);
         if (allSucceeded(tasks)) {
@@ -372,8 +450,17 @@ public class SingleExpertWorker {
         boolean started = false;
         for (TaskRecord task : tasks) {
             if ("PENDING".equals(task.getStatus()) && dependenciesSucceeded(task, byKey)) {
+                // No candidate right now (experts busy or unavailable) is a
+                // retryable condition — skip this round instead of failing
+                // the whole message.
                 String expertId = expertSelector.select(
                         project, task.getRequiredCapabilities());
+                if (expertId == null) {
+                    LOGGER.warn("No expert available for task {} (capabilities {}); "
+                                    + "will retry on the next poll.",
+                            task.getTaskKey(), task.getRequiredCapabilities());
+                    continue;
+                }
                 if (executionRepository.assignExpert(task.getId(), expertId)) {
                     startTask(work, task, expertId);
                     started = true;
@@ -473,22 +560,40 @@ public class SingleExpertWorker {
      * @param task
      */
     private void consumeEvents(DispatchWork work, TaskRecord task) {
-        List<AgentEvent> events = new ArrayList<>(
-                agentCore.streamEvents(
-                        task.getExpertId(), task.getSessionId(),
-                        task.getLastSequence(), work.getBusinessSessionId()));
-        if (events.isEmpty() && agentCore.getRunStatus(
-                task.getExpertId(), task.getSessionId(),
-                work.getBusinessSessionId()) == null) {
-            AgentEvent lost = AgentEvent.of("coordinatorError");
-            lost.setSessionId(task.getSessionId());
-            lost.setSequence(task.getLastSequence() + 1);
-            lost.setEventId(task.getSessionId() + ":lost");
-            lost.setContent("Expert run no longer exists in AgentCore.");
-            lost.setAgentId(task.getExpertId());
-            lost.setTimestamp(System.currentTimeMillis());
-            events.add(lost);
+        List<AgentEvent> events;
+        try {
+            events = new ArrayList<>(
+                    agentCore.streamEvents(
+                            task.getExpertId(), task.getSessionId(),
+                            task.getLastSequence(), work.getBusinessSessionId()));
+        } catch (RuntimeException ex) {
+            // Transient AgentCore outage (5xx, connection failure): tolerate
+            // it up to the threshold instead of failing the whole message.
+            handleAgentCoreFailure(work, task,
+                    "AgentCore stream failed: " + abbreviate(ex.getMessage()));
+            return;
         }
+        if (events.isEmpty()) {
+            AgentEvent status;
+            try {
+                status = agentCore.getRunStatus(
+                        task.getExpertId(), task.getSessionId(),
+                        work.getBusinessSessionId());
+            } catch (RuntimeException ex) {
+                handleAgentCoreFailure(work, task,
+                        "AgentCore status failed: " + abbreviate(ex.getMessage()));
+                return;
+            }
+            // Empty stream AND no run record. This can be a genuinely lost
+            // run, but also a just-submitted run not yet visible — require
+            // consecutive observations before failing the task.
+            if (status == null) {
+                handleAgentCoreFailure(work, task,
+                        "Expert run no longer exists in AgentCore.");
+                return;
+            }
+        }
+        executionRepository.resetConsecutiveFailures(task.getId());
         events.sort(Comparator.comparingLong(AgentEvent::getSequence));
         for (AgentEvent event : events) {
             // Ensure event has agentId set
@@ -507,6 +612,31 @@ public class SingleExpertWorker {
         if (!isTerminal(task.getStatus())) {
             executionRepository.releaseDispatch(work.getDispatchId());
         }
+    }
+
+    /**
+     * Record one AgentCore failure tick. Below the threshold the task is
+     * left untouched and the dispatch released so the next poll retries;
+     * at the threshold a synthetic coordinatorError fails the task.
+     */
+    private void handleAgentCoreFailure(
+            DispatchWork work, TaskRecord task, String message) {
+        int failures = executionRepository.incrementConsecutiveFailures(task.getId());
+        LOGGER.warn("AgentCore failure {} for task {} (session {}): {}",
+                failures, task.getTaskKey(), task.getSessionId(), message);
+        if (failures < properties.getExecution().getAgentcoreFailureThreshold()) {
+            executionRepository.releaseDispatch(work.getDispatchId());
+            return;
+        }
+        AgentEvent lost = AgentEvent.of("coordinatorError");
+        lost.setSessionId(task.getSessionId());
+        lost.setSequence(task.getLastSequence() + 1);
+        lost.setEventId(task.getSessionId() + ":lost");
+        lost.setContent(message);
+        lost.setAgentId(task.getExpertId());
+        lost.setTimestamp(System.currentTimeMillis());
+        applyEvent(work, task, lost);
+        task.setLastSequence(Math.max(task.getLastSequence(), lost.getSequence()));
     }
 
     /**
