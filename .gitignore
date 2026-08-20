@@ -40,3 +40,4 @@ build/
 
 # Local-only runtime configuration and credentials
 src/main/resources/application-local.yml
+.mock-agentcore-sessions.json

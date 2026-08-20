@@ -51,6 +51,9 @@ public class DigitalTeamProperties {
         private String artifactToolToken;
         private int connectTimeoutMs = 5000;
         private int readTimeoutMs = 60000;
+        /** Mock 事件持久化到文件（开发用）：重启后历史可重放。 */
+        private boolean mockPersistEvents = false;
+        private String mockEventsFile = ".mock-agentcore-sessions.json";
 
         public boolean isMockEnabled() {
             return mockEnabled;
@@ -84,6 +87,10 @@ public class DigitalTeamProperties {
         public void setArtifactToolToken(String value) { this.artifactToolToken = value; }
         public int getConnectTimeoutMs() { return connectTimeoutMs; }
         public void setConnectTimeoutMs(int value) { this.connectTimeoutMs = value; }
+        public boolean isMockPersistEvents() { return mockPersistEvents; }
+        public void setMockPersistEvents(boolean value) { this.mockPersistEvents = value; }
+        public String getMockEventsFile() { return mockEventsFile; }
+        public void setMockEventsFile(String value) { this.mockEventsFile = value; }
         public int getReadTimeoutMs() { return readTimeoutMs; }
         public void setReadTimeoutMs(int value) { this.readTimeoutMs = value; }
     }

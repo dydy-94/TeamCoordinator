@@ -7,6 +7,7 @@ import org.cmb.application.domain.AgentRunRequest;
 import org.cmb.application.domain.AgentEvent;
 import org.cmb.application.domain.AgentCoreAdapter;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -19,6 +20,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.cmb.application.domain.TaskRecord;
 import org.cmb.application.domain.FileStore;
 import org.cmb.infrastructure.persistent.ExecutionRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.cmb.application.service.CliSubmissionService;
 import org.cmb.application.domain.TaskIntent;
 import org.cmb.application.domain.CoordinatorPlanSpec;
@@ -40,8 +43,13 @@ import org.springframework.stereotype.Component;
         havingValue = "true", matchIfMissing = true)
 public class MockAgentCoreAdapter implements AgentCoreAdapter {
 
+    private static final Logger LOGGER =
+            LoggerFactory.getLogger(MockAgentCoreAdapter.class);
+
     private final Map<String, List<AgentEvent>> eventsBySessionId =
             new ConcurrentHashMap<>();
+    private final boolean persistEvents;
+    private final java.io.File eventsFile;
     private final FileStore fileStore;
     private final ObjectMapper objectMapper;
     private final MockIntentModelClient coordinatorAgent;
@@ -69,6 +77,10 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
         this.coordinatorAgentId = properties.getAgentCore().getCoordinatorAgentId();
         this.executionRepository = executionRepository;
         this.cliSubmissions = cliSubmissions;
+        this.persistEvents = properties.getAgentCore().isMockPersistEvents();
+        this.eventsFile = new java.io.File(
+                properties.getAgentCore().getMockEventsFile());
+        loadPersistedEvents();
     }
 
     /** Constructor for tests that don't need full Spring context. */
@@ -79,6 +91,8 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
         this.coordinatorAgentId = properties.getAgentCore().getCoordinatorAgentId();
         this.executionRepository = null;
         this.cliSubmissions = null;
+        this.persistEvents = false;
+        this.eventsFile = null;
     }
 
     @Override
@@ -253,6 +267,32 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
         return new AgentRunResponse(sessionId, "ACCEPTED");
     }
 
+    private void loadPersistedEvents() {
+        if (!persistEvents || !eventsFile.isFile()) {
+            return;
+        }
+        try {
+            Map<String, List<AgentEvent>> loaded = objectMapper.readValue(
+                    eventsFile, new TypeReference<Map<String, List<AgentEvent>>>() { });
+            eventsBySessionId.putAll(loaded);
+        } catch (Exception ex) {
+            LOGGER.warn("Could not load persisted mock events from {}: {}",
+                    eventsFile, ex.getMessage());
+        }
+    }
+
+    private void persistEventsToFile() {
+        if (!persistEvents || eventsFile == null) {
+            return;
+        }
+        try {
+            objectMapper.writeValue(eventsFile, eventsBySessionId);
+        } catch (Exception ex) {
+            LOGGER.warn("Could not persist mock events to {}: {}",
+                    eventsFile, ex.getMessage());
+        }
+    }
+
     private void appendOrStore(String sessionId, List<AgentEvent> events) {
         List<AgentEvent> existing = eventsBySessionId.get(sessionId);
         if (existing != null) {
@@ -265,6 +305,7 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
         } else {
             eventsBySessionId.put(sessionId, events);
         }
+        persistEventsToFile();
     }
 
     // ── Coordinator event generation ────────────────────────────────────
@@ -705,6 +746,7 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
                 "已根据您的回复完成: " + humanResponse, now));
         events.add(streamEndEvent(sessionId, ++seq, now));
 
+        persistEventsToFile();
         AgentEvent chatE = chatEvent(sessionId, ++seq, now);
         chatE.setContent("已根据您的回复完成: " + humanResponse);
         events.add(chatE);

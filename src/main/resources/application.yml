@@ -68,6 +68,8 @@ digital-team:
     auth-header: ${AGENTCORE_AUTH_HEADER:Authorization}
     auth-value: ${AGENTCORE_AUTH_VALUE:}
     artifact-tool-token: ${AGENTCORE_ARTIFACT_TOOL_TOKEN:}
+    mock-persist-events: ${MOCK_PERSIST_EVENTS:false}
+    mock-events-file: ${MOCK_EVENTS_FILE:.mock-agentcore-sessions.json}
   storage:
     type: ${STORAGE_TYPE:minio}
     endpoint: ${MINIO_ENDPOINT:http://127.0.0.1:9000}
