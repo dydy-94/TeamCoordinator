@@ -264,8 +264,15 @@ public class ProjectEventStreamHub {
         if (shouldDeliver(subscriber, event) == false) {
             return;
         }
-        SseEmitter.SseEventBuilder builder = SseEmitter.event()
-                .id(Long.toString(event.getSequence()));
+        SseEmitter.SseEventBuilder builder = SseEmitter.event();
+        if (event.isLiveOnly()) {
+            // live 帧不落库、无数据库序列：id 沿用当前已确认的持久化游标，
+            // 保证任何 EventSource 客户端重连时 Last-Event-ID 仍落在
+            // 数据库序列命名空间（重放多给不丢数据）。
+            builder.id(Long.toString(subscriber.lastSequence));
+        } else {
+            builder.id(Long.toString(event.getSequence()));
+        }
         if (event.getAgentEvent() != null) {
             builder.name(event.getAgentEvent().getType())
                    .data(event.getAgentEvent());
