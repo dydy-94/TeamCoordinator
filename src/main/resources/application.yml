@@ -54,6 +54,8 @@ digital-team:
     agentcore-failure-threshold: ${AGENTCORE_FAILURE_THRESHOLD:60}
   events:
     database-poll-interval-ms: ${EVENT_DATABASE_POLL_INTERVAL_MS:500}
+    heartbeat-interval-ms: ${EVENT_HEARTBEAT_INTERVAL_MS:60000}
+    inactivity-timeout-min: ${EVENT_INACTIVITY_TIMEOUT_MIN:30}
   agent-core:
     mock-enabled: ${AGENTCORE_MOCK_ENABLED:true}
     coordinator-agent-id: ${COORDINATOR_AGENT_ID:coordinator}

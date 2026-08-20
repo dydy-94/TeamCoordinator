@@ -12,6 +12,7 @@ public class DigitalTeamProperties {
     private final Rollout rollout = new Rollout();
     private final Prompt prompt = new Prompt();
     private final Execution execution = new Execution();
+    private final Events events = new Events();
 
     public AgentCore getAgentCore() {
         return agentCore;
@@ -19,6 +20,10 @@ public class DigitalTeamProperties {
 
     public Execution getExecution() {
         return execution;
+    }
+
+    public Events getEvents() {
+        return events;
     }
 
     public Storage getStorage() {
@@ -117,6 +122,20 @@ public class DigitalTeamProperties {
 
         public List<String> getAdminUsers() { return adminUsers; }
         public void setAdminUsers(List<String> value) { this.adminUsers = value; }
+    }
+
+
+
+    public static class Events {
+        /** SSE heartbeat interval: comment frames keep idle connections alive. */
+        private long heartbeatIntervalMs = 60000;
+        /** Close an SSE connection after this many minutes without user messages. */
+        private int inactivityTimeoutMin = 30;
+
+        public long getHeartbeatIntervalMs() { return heartbeatIntervalMs; }
+        public void setHeartbeatIntervalMs(long value) { this.heartbeatIntervalMs = value; }
+        public int getInactivityTimeoutMin() { return inactivityTimeoutMin; }
+        public void setInactivityTimeoutMin(int value) { this.inactivityTimeoutMin = value; }
     }
 
     public static class Execution {

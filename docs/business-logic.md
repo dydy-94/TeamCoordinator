@@ -35,6 +35,7 @@ TeamCoordinator 是一个 AI agent 编排服务：
 | 人类请求 | `human_request` | 协调者提问或专家求助，含问题、状态（PENDING/RESOLVED/EXPIRED）、归属 task |
 | 产物 | `project_artifact` | 专家上传的文件（版本、sha256、状态 AVAILABLE），含依赖血缘 |
 | 事件 | `project_event` | 面向前端的生命周期事件（可持久化重放）；agent 原始事件不落库，经 MARKER 重放 |
+| SSE 生命周期 | 内存（hub） | 每 60s 心跳注释帧保活；按"最近有新事件"刷新活动时间，超 30 分钟无活动发 `inactive` 命名事件后强制断开（配置：`EVENT_HEARTBEAT_INTERVAL_MS` / `EVENT_INACTIVITY_TIMEOUT_MIN`） |
 
 **taskId 是三方唯一共享标识**：AgentCore 运行期无法感知自身 session id，因此所有
 CLI ↔ TeamCoordinator 交互都以 taskId 键控：

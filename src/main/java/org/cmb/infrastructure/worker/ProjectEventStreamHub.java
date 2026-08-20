@@ -10,6 +10,7 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Supplier;
+import org.cmb.common.config.DigitalTeamProperties;
 import org.cmb.infrastructure.persistent.MessageEventRepository;
 import org.cmb.application.domain.AgentCoreAdapter;
 import org.cmb.application.domain.AgentEvent;
@@ -27,13 +28,16 @@ public class ProjectEventStreamHub {
 
     private final MessageEventRepository repository;
     private final AgentCoreAdapter agentCore;
+    private final DigitalTeamProperties properties;
     private final Map<TaskKey, CopyOnWriteArrayList<Subscriber>> subscribers =
             new ConcurrentHashMap<>();
 
     public ProjectEventStreamHub(MessageEventRepository repository,
-                                  AgentCoreAdapter agentCore) {
+                                  AgentCoreAdapter agentCore,
+                                  DigitalTeamProperties properties) {
         this.repository = repository;
         this.agentCore = agentCore;
+        this.properties = properties;
     }
 
     public SseEmitter subscribe(
@@ -43,7 +47,8 @@ public class ProjectEventStreamHub {
             long afterSequence,
             Supplier<List<ProjectEvent>> replaySupplier) {
         TaskKey key = new TaskKey(tenantId, projectId, taskId);
-        SseEmitter emitter = new SseEmitter(30 * 60 * 1000L);
+        // 无固定超时：连接生命周期由心跳扫描的不活跃判定接管。
+        SseEmitter emitter = new SseEmitter(0L);
         Subscriber subscriber = new Subscriber(emitter, afterSequence);
         CopyOnWriteArrayList<Subscriber> projectSubscribers =
                 subscribers.computeIfAbsent(key, ignored -> new CopyOnWriteArrayList<>());
@@ -81,6 +86,7 @@ public class ProjectEventStreamHub {
             return;
         }
         for (Subscriber subscriber : projectSubscribers) {
+            subscriber.lastActivityAt = System.currentTimeMillis();
             try {
                 synchronized (subscriber) {
                     send(subscriber, event);
@@ -90,6 +96,72 @@ public class ProjectEventStreamHub {
                 subscriber.emitter.completeWithError(ex);
             }
         }
+    }
+
+    /**
+     * 心跳扫描：每 heartbeat-interval-ms 给每个连接发 SSE 注释帧保活；
+     * 超过 inactivity-timeout-min 没有活动的连接发送 inactive 事件后强制断开。
+     */
+    @Scheduled(fixedDelayString = "${digital-team.events.heartbeat-interval-ms:60000}")
+    public void sendHeartbeats() {
+        long now = System.currentTimeMillis();
+        long timeoutMillis =
+                properties.getEvents().getInactivityTimeoutMin() * 60_000L;
+        for (Map.Entry<TaskKey, CopyOnWriteArrayList<Subscriber>> entry
+                : subscribers.entrySet()) {
+            for (Subscriber subscriber : entry.getValue()) {
+                synchronized (subscriber) {
+                    try {
+                        if (now - subscriber.lastActivityAt > timeoutMillis) {
+                            sendInactiveFrame(subscriber, now);
+                            try {
+                                subscriber.emitter.complete();
+                            } catch (RuntimeException ignored) {
+                                // already completed/closed
+                            }
+                            // 显式移除，不依赖 completion 回调（回调在真实
+                            // MVC 环境下才会触发）。
+                            entry.getValue().remove(subscriber);
+                        } else {
+                            sendHeartbeatFrame(subscriber);
+                        }
+                    } catch (IOException | RuntimeException ex) {
+                        entry.getValue().remove(subscriber);
+                        try {
+                            subscriber.emitter.completeWithError(ex);
+                        } catch (RuntimeException ignored) {
+                            // already completed/closed
+                        }
+                    }
+                }
+            }
+            if (entry.getValue().isEmpty()) {
+                subscribers.remove(entry.getKey(), entry.getValue());
+            }
+        }
+    }
+
+    /** 心跳帧：SSE 注释（":ping"），客户端静默忽略，仅用于保活。 */
+    protected void sendHeartbeatFrame(Subscriber subscriber) throws IOException {
+        subscriber.emitter.send(SseEmitter.event().comment("ping"));
+    }
+
+    /** 不活跃通知：命名事件 inactive，随后由调用方 complete()。 */
+    protected void sendInactiveFrame(Subscriber subscriber, long now)
+            throws IOException {
+        subscriber.emitter.send(SseEmitter.event()
+                .name("inactive")
+                .data(java.util.Collections.singletonMap(
+                        "reason", "no activity for the configured timeout")));
+    }
+
+    /** 当前活跃连接数（运维与测试用）。 */
+    public int activeSubscriberCount() {
+        int count = 0;
+        for (CopyOnWriteArrayList<Subscriber> list : subscribers.values()) {
+            count += list.size();
+        }
+        return count;
     }
 
     @Scheduled(fixedDelayString = "${digital-team.events.database-poll-interval-ms:500}")
@@ -109,6 +181,13 @@ public class ProjectEventStreamHub {
                         entry.getKey().taskId,
                         afterSequence,
                         POLL_BATCH_SIZE);
+                if (!events.isEmpty()) {
+                    // 有内容流动即视为活跃：包括跨实例写入的用户消息。
+                    long now = System.currentTimeMillis();
+                    for (Subscriber subscriber : projectSubscribers) {
+                        subscriber.lastActivityAt = now;
+                    }
+                }
                 for (ProjectEvent event : events) {
                         if (event.getType() == ProjectEventType.AGENT_RUN_MARKER
                                 && event.getPayload() != null
@@ -208,13 +287,15 @@ public class ProjectEventStreamHub {
         }
     }
 
-    private static final class Subscriber {
+    static final class Subscriber {
         private final SseEmitter emitter;
         private long lastSequence;
+        private volatile long lastActivityAt;
 
         private Subscriber(SseEmitter emitter, long lastSequence) {
             this.emitter = emitter;
             this.lastSequence = lastSequence;
+            this.lastActivityAt = System.currentTimeMillis();
         }
     }
 
