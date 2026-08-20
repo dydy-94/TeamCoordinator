@@ -8,14 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.UUID;
 import org.cmb.infrastructure.worker.SingleExpertWorker;
-import org.cmb.application.domain.DispatchWork;
 import org.cmb.infrastructure.persistent.ExecutionRepository;
-import org.cmb.application.domain.CoordinatorDecision;
-import org.cmb.application.domain.TaskIntent;
-import org.cmb.application.domain.PlanningResult;
-import org.cmb.application.service.PlanningService;
-import org.cmb.application.service.ProjectService;
-import org.cmb.application.domain.RequestIdentity;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -39,8 +32,6 @@ class MultiExpertExecutionIntegrationTest {
     @Autowired private JdbcTemplate jdbc;
     @Autowired private SingleExpertWorker worker;
     @Autowired private ExecutionRepository executionRepository;
-    @Autowired private PlanningService planningService;
-    @Autowired private ProjectService projectService;
 
     @Test
     void runsDependentExpertsInOrderAndCompletesPlan() throws Exception {
@@ -81,27 +72,6 @@ class MultiExpertExecutionIntegrationTest {
     }
 
     @Test
-    void schedulesExactlyOneCorrectionWhenAcceptanceFails() throws Exception {
-        String projectId = createProject();
-        submit(projectId, "分析 invalid-result");
-
-        runUntilTaskCount(projectId, 1);
-        runUntilTaskCount(projectId, 2);
-        assertEquals(Integer.valueOf(2), jdbc.queryForObject(
-                "SELECT COUNT(*) FROM coordinator_task WHERE project_id = ?",
-                Integer.class, projectId));
-        assertEquals(Integer.valueOf(1), jdbc.queryForObject(
-                "SELECT COUNT(*) FROM coordinator_task WHERE project_id = ? "
-                        + "AND correction_of IS NOT NULL",
-                Integer.class, projectId));
-
-        worker.runOnce();
-        assertEquals("COMPLETED", jdbc.queryForObject(
-                "SELECT status FROM coordinator_dispatch WHERE project_id = ?",
-                String.class, projectId));
-    }
-
-    @Test
     void startsIndependentTasksTogetherBeforeFanInTask() throws Exception {
         String projectId = createProject();
         submit(projectId, "并行分析两个方面并撰写报告");
@@ -118,48 +88,6 @@ class MultiExpertExecutionIntegrationTest {
         assertEquals("COMPLETED", jdbc.queryForObject(
                 "SELECT status FROM coordinator_dispatch WHERE project_id = ?",
                 String.class, projectId));
-    }
-
-    @Test
-    void createsPlanV2WithoutOverwritingHistoryAndReusesSuccesses() throws Exception {
-        String projectId = createProject();
-        submit(projectId, "分析接口风险并撰写报告");
-        runUntilTaskCount(projectId, 2);
-        worker.runOnce();
-        worker.runOnce();
-
-        String oldPlanId = jdbc.queryForObject(
-                "SELECT business_id FROM coordinator_plan WHERE project_id = ? AND plan_version = 1",
-                String.class, projectId);
-        String dispatchId = jdbc.queryForObject(
-                "SELECT business_id FROM coordinator_dispatch WHERE project_id = ?",
-                String.class, projectId);
-        DispatchWork work = executionRepository.loadWork(dispatchId);
-        String intentJson = jdbc.queryForObject(
-                "SELECT intent_json FROM coordinator_plan WHERE business_id = ?",
-                String.class, oldPlanId);
-        TaskIntent intent = objectMapper.readValue(intentJson, TaskIntent.class);
-        CoordinatorDecision decision = new CoordinatorDecision();
-        decision.setTaskIntent(intent);
-        PlanningResult v2 = planningService.createPlan(
-                intent,
-                projectService.get(
-                        new RequestIdentity("tenant-multi", "multi-owner"), projectId),
-                2, "coordinator", null);
-
-        executionRepository.createReplan(work, decision, v2, oldPlanId);
-
-        assertEquals(Integer.valueOf(2), jdbc.queryForObject(
-                "SELECT COUNT(*) FROM coordinator_plan WHERE project_id = ?",
-                Integer.class, projectId));
-        assertEquals(Integer.valueOf(2), jdbc.queryForObject(
-                "SELECT COUNT(*) FROM coordinator_task t JOIN coordinator_plan p "
-                        + "ON p.business_id = t.plan_id WHERE p.project_id = ? AND p.plan_version = 2 "
-                        + "AND t.reused_from_task_id IS NOT NULL",
-                Integer.class, projectId));
-        assertEquals("SUPERSEDED", jdbc.queryForObject(
-                "SELECT status FROM coordinator_plan WHERE business_id = ?",
-                String.class, oldPlanId));
     }
 
     private List<String> statuses(String projectId) {

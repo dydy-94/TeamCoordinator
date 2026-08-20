@@ -254,6 +254,16 @@ public class ExecutionRepository {
         return mapper.markTaskSucceeded(taskId, resultJson) == 1;
     }
 
+    /** CLI ask-human: RUNNING → WAITING_HUMAN. */
+    public boolean markTaskWaitingHuman(String taskId) {
+        return mapper.markTaskWaitingHuman(taskId) == 1;
+    }
+
+    /** Advance the event cursor only while the task stays RUNNING. */
+    public void advanceRunningTask(String taskId, long sequence) {
+        mapper.advanceRunningTask(taskId, sequence);
+    }
+
     @Transactional
     public boolean recordEvent(String tenantId, String taskId, AgentEvent event) {
         try {

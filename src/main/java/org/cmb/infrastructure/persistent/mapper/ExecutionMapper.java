@@ -156,6 +156,13 @@ public interface ExecutionMapper {
             @Param("taskId") String taskId,
             @Param("resultJson") String resultJson);
 
+    int markTaskWaitingHuman(@Param("taskId") String taskId);
+
+    /** Advance the event cursor only while the task stays RUNNING. */
+    int advanceRunningTask(
+            @Param("taskId") String taskId,
+            @Param("sequence") long sequence);
+
     int insertTaskEvent(
             @Param("id") String id,
             @Param("tenantId") String tenantId,

@@ -10,6 +10,7 @@ import org.cmb.application.domain.AgentCoreAdapter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +19,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.cmb.application.domain.TaskRecord;
 import org.cmb.application.domain.FileStore;
 import org.cmb.infrastructure.persistent.ExecutionRepository;
+import org.cmb.application.service.CliSubmissionService;
+import org.cmb.application.domain.TaskIntent;
+import org.cmb.application.domain.CoordinatorPlanSpec;
+import org.cmb.application.domain.PlannedTask;
+import org.cmb.application.domain.CoordinatorDecision;
+import org.cmb.common.enums.DecisionType;
+import org.cmb.common.enums.ExecutionMode;
 import org.cmb.application.domain.MockFileDescriptor;
 import org.cmb.infrastructure.remoteaccess.MockFileStore;
 import org.cmb.common.config.DigitalTeamProperties;
@@ -39,17 +47,28 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
     private final MockIntentModelClient coordinatorAgent;
     private final String coordinatorAgentId;
     private final ExecutionRepository executionRepository;
+    private final CliSubmissionService cliSubmissions;
+    private final Map<String, String> expertTaskBySession = new ConcurrentHashMap<>();
+    /**
+     * Deferred CLI actions, executed on the next streamEvents call — i.e.
+     * after the worker persisted the run session, mirroring the real
+     * agent's timing (the CLI is called while the run is already RUNNING).
+     */
+    private final Map<String, Runnable> pendingActionsBySession =
+            new ConcurrentHashMap<>();
 
     @Autowired
     public MockAgentCoreAdapter(
             DigitalTeamProperties properties, FileStore fileStore,
             ObjectMapper objectMapper, MockIntentModelClient coordinatorAgent,
-            ExecutionRepository executionRepository) {
+            ExecutionRepository executionRepository,
+            CliSubmissionService cliSubmissions) {
         this.fileStore = fileStore;
         this.objectMapper = objectMapper;
         this.coordinatorAgent = coordinatorAgent;
         this.coordinatorAgentId = properties.getAgentCore().getCoordinatorAgentId();
         this.executionRepository = executionRepository;
+        this.cliSubmissions = cliSubmissions;
     }
 
     /** Constructor for tests that don't need full Spring context. */
@@ -59,6 +78,7 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
         this.coordinatorAgent = new MockIntentModelClient(objectMapper);
         this.coordinatorAgentId = properties.getAgentCore().getCoordinatorAgentId();
         this.executionRepository = null;
+        this.cliSubmissions = null;
     }
 
     @Override
@@ -124,8 +144,19 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
                 resultContent, now));
         events.add(streamEndEvent(sessionId, ++seq, now));
 
-        // 5. Scenario-specific terminal events
+        // 5. Scenario-specific terminal behavior, mirroring the real agent's
+        // CLI interaction: results and human questions are submitted through
+        // the submission service, not the event stream.
+        String cliTaskId = request.getStructuredInput() == null
+                ? null : String.valueOf(request.getStructuredInput().get("taskId"));
+        if (cliTaskId != null && !"null".equals(cliTaskId)) {
+            expertTaskBySession.put(sessionId, cliTaskId);
+        }
         if (normalizedTask.contains("need-human")) {
+            if (cliSubmissions != null && cliTaskId != null) {
+                pendingActionsBySession.put(sessionId, () ->
+                        cliSubmissions.askHuman(cliTaskId, "请补充任务所需信息"));
+            }
             events.add(confirmEvent(sessionId, ++seq, now));
         } else if (normalizedTask.contains("timeout")) {
             AgentEvent timeoutErr = errorEvent(sessionId, ++seq,
@@ -161,6 +192,12 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
             planEnd.setContent(resultContent);
             planEnd.setUsage(planUsage);
             events.add(planEnd);
+            if (cliSubmissions != null && cliTaskId != null) {
+                pendingActionsBySession.put(sessionId, () -> {
+                    uploadResult(cliTaskId, resultContent);
+                    cliSubmissions.submitResult(cliTaskId, resultContent);
+                });
+            }
         } else {
             // Normal success: chat + end
             events.add(liveStatusEvent(sessionId, ++seq, "模型响应中", now));
@@ -208,6 +245,12 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
             endEvent.setAttachments(atts);
             endEvent.setFileType("common");
             events.add(endEvent);
+            if (cliSubmissions != null && cliTaskId != null) {
+                pendingActionsBySession.put(sessionId, () -> {
+                    uploadResult(cliTaskId, resultContent);
+                    cliSubmissions.submitResult(cliTaskId, resultContent);
+                });
+            }
         }
 
         appendOrStore(sessionId, events);
@@ -267,13 +310,32 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
                     "Coordinator error: " + ex.getMessage(), now));
             return events;
         }
-        // Valid decisions are submitted via the submission tool, mirroring
-        // the real AgentCore contract. Invalid-output scenarios deliberately
-        // skip the tool call so repair paths stay exercised.
-        if (decisionJson != null) {
-            events.add(submissionToolEvent(
-                    sessionId, ++seq,
-                    AgentCoreTools.SUBMIT_COORDINATOR_DECISION, decisionJson, now));
+        // The decision (and, for CREATE_PLAN, the plan) is submitted through
+        // the submission service — the same endpoints the tc CLI hits.
+        if (decisionJson != null && cliSubmissions != null) {
+            Object rawContext = request.getStructuredInput().get("context");
+            IntentAnalysisContext ctx = objectMapper.convertValue(
+                    rawContext, IntentAnalysisContext.class);
+            String conversationTaskId = ctx.getConversationTaskId();
+            if (conversationTaskId != null) {
+                cliSubmissions.submitDecision(conversationTaskId, decisionJson);
+                try {
+                    CoordinatorDecision decision = objectMapper.readValue(
+                            decisionJson, CoordinatorDecision.class);
+                    if (decision.getDecisionType() == DecisionType.CREATE_PLAN
+                            && decision.getTaskIntent() != null) {
+                        String planJson = objectMapper.writeValueAsString(
+                                buildPlan(decision.getTaskIntent(), 1));
+                        cliSubmissions.submitPlan(conversationTaskId, planJson);
+                    }
+                } catch (Exception ex) {
+                    // The service validates payloads; a failure here is a
+                    // mock-side bug surfaced as a failed run.
+                    events.add(errorEvent(sessionId, ++seq,
+                            "Mock plan submission failed: " + ex.getMessage(), now));
+                    return events;
+                }
+            }
         }
         AgentEvent endEvent = endEvent(sessionId, ++seq, now);
         if (invalidContent != null) {
@@ -283,6 +345,81 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
         }
         events.add(endEvent);
         return events;
+    }
+
+    // ── Plan generation (former MockPlanModelClient) ────────────────────
+
+    private CoordinatorPlanSpec buildPlan(TaskIntent intent, int planVersion) {
+        CoordinatorPlanSpec plan = new CoordinatorPlanSpec();
+        plan.setPlanVersion(planVersion);
+        if (intent.getExecutionMode() == ExecutionMode.MULTI_EXPERT) {
+            if (intent.getObjective().contains("并行")
+                    || intent.getObjective().toLowerCase().contains("parallel")) {
+                PlannedTask first = task(
+                        "analyze-a", "Analyze aspect A: " + intent.getObjective(),
+                        Collections.<String>emptyList(), "Analysis A",
+                        "Analysis A is complete", Collections.singletonList("analysis"));
+                PlannedTask second = task(
+                        "analyze-b", "Analyze aspect B: " + intent.getObjective(),
+                        Collections.<String>emptyList(), "Analysis B",
+                        "Analysis B is complete", Collections.singletonList("analysis"));
+                PlannedTask summary = task(
+                        "write-summary", "Summarize both analyses",
+                        Arrays.asList("analyze-a", "analyze-b"), "Final summary",
+                        "Summary uses both analyses", Collections.singletonList("writing"));
+                plan.setTasks(Arrays.asList(first, second, summary));
+                return plan;
+            }
+            PlannedTask analysis = task(
+                    "analyze",
+                    "Analyze the request: " + intent.getObjective(),
+                    Collections.<String>emptyList(),
+                    "Structured analysis",
+                    "Analysis addresses the stated objective",
+                    Collections.singletonList("analysis"));
+            PlannedTask writing = task(
+                    "write-report",
+                    "Write the requested report using the analysis",
+                    Collections.singletonList("analyze"),
+                    "Final report",
+                    "Report is complete and grounded in the analysis",
+                    Collections.singletonList("writing"));
+            plan.setTasks(Arrays.asList(analysis, writing));
+        } else {
+            plan.setTasks(Collections.singletonList(task(
+                    "single-task",
+                    intent.getObjective(),
+                    Collections.<String>emptyList(),
+                    intent.getExpectedOutputs().isEmpty()
+                            ? "Task result" : intent.getExpectedOutputs().get(0),
+                    "Result contains a non-empty resultText",
+                    intent.getRequiredCapabilities())));
+        }
+        return plan;
+    }
+
+    private PlannedTask task(
+            String key,
+            String objective,
+            java.util.List<String> dependencies,
+            String output,
+            String criteria,
+            java.util.List<String> capabilities) {
+        PlannedTask task = new PlannedTask();
+        task.setTaskKey(key);
+        task.setObjective(objective);
+        task.setDependencies(dependencies);
+        task.setExpectedOutput(output);
+        task.setAcceptanceCriteria(criteria);
+        task.setRequiredCapabilities(capabilities);
+        return task;
+    }
+
+    /** Mirror the real agent's tc upload-artifact call. */
+    private void uploadResult(String taskId, String content) {
+        cliSubmissions.uploadArtifact(
+                taskId, "result.txt", "text/plain",
+                content.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     // ── Event factory methods ───────────────────────────────────────────
@@ -503,6 +640,11 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
 
     @Override
     public List<AgentEvent> streamEvents(String targetAgentId, String sessionId, Long afterSequence) {
+        // Execute deferred CLI actions now that the run is live.
+        Runnable pending = pendingActionsBySession.remove(sessionId);
+        if (pending != null) {
+            pending.run();
+        }
         List<AgentEvent> events = eventsBySessionId.get(sessionId);
         if (events == null) {
             return Collections.emptyList();
@@ -557,6 +699,12 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
         AgentEvent chatE = chatEvent(sessionId, ++seq, now);
         chatE.setContent("已根据您的回复完成: " + humanResponse);
         events.add(chatE);
+        String cliTaskId = expertTaskBySession.get(sessionId);
+        if (cliSubmissions != null && cliTaskId != null) {
+            pendingActionsBySession.put(sessionId, () ->
+                    cliSubmissions.submitResult(cliTaskId,
+                            "已根据您的回复完成: " + humanResponse));
+        }
 
         AgentEvent endE = endEvent(sessionId, ++seq, now);
         endE.setContent("已根据您的回复完成: " + humanResponse);

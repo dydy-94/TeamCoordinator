@@ -109,22 +109,20 @@ public class IntentAnalysisService {
         if (!agentResult.isComplete()) {
             return null;
         }
-        String output = agentResult.getOutput();
-        ParseResult parsed = parse(output);
-        boolean repaired = agentResult.isRepaired();
-        if (parsed == null && !repaired) {
-            coordinatorAgent.prepareRepair(identity, runKey, output);
-            agentResult = coordinatorAgent.execute(
-                    identity, projectId, taskId, messageId, runKey,
-                    businessSessionId, coordinatorSessionId, context, eventSink);
-            if (!agentResult.isComplete()) {
-                return null;
-            }
-            output = agentResult.getOutput();
-            parsed = parse(output);
-            repaired = parsed != null;
+        // Strict CLI channel: the decision is validated at submission time
+        // by the CLI endpoints. A run that ended without a submission is a
+        // hard failure, not something to repair or fall back from.
+        if (agentResult.getOutput() == null) {
+            throw new IllegalStateException(agentResult.getFailure() != null
+                    ? agentResult.getFailure()
+                    : "Coordinator run produced no CLI decision.");
         }
-        CoordinatorDecision decision = parsed == null ? fallbackDecision() : parsed.decision;
+        ParseResult parsed = parse(agentResult.getOutput());
+        if (parsed == null) {
+            throw new IllegalStateException(
+                    "CLI decision submission failed validation.");
+        }
+        CoordinatorDecision decision = parsed.decision;
         decision.setCoordinatorSessionId(agentResult.getSessionId());
         decision.setEffectiveAgentId(agentResult.getEffectiveAgentId());
         String decisionJson = write(decision);
@@ -139,7 +137,7 @@ public class IntentAnalysisService {
                 SCHEMA_VERSION,
                 decision,
                 decisionJson,
-                repaired);
+                false);
         decision.setAnalysisId(analysisId);
         if (decision.getDecisionType() == DecisionType.ASK_HUMAN) {
             decision.setHumanRequestId(analysisRepository.insertHumanRequest(
@@ -239,13 +237,6 @@ public class IntentAnalysisService {
                 && decision.getTaskIntent() == null) {
             throw new IllegalArgumentException("CREATE_PLAN requires task_intent.");
         }
-    }
-
-    private CoordinatorDecision fallbackDecision() {
-        CoordinatorDecision decision = new CoordinatorDecision();
-        decision.setDecisionType(DecisionType.ASK_HUMAN);
-        decision.setQuestion("暂时无法可靠理解该请求，请补充目标和期望输出后重试。");
-        return decision;
     }
 
     private String write(Object value) {

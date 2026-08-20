@@ -5,12 +5,9 @@ import java.security.MessageDigest;
 import java.util.Map;
 import javax.validation.Valid;
 import org.cmb.application.dto.CliSubmissionRequest;
-import org.cmb.application.service.ArtifactService;
 import org.cmb.application.service.CliSubmissionService;
-import org.cmb.application.domain.AgentArtifactUploadContext;
 import org.cmb.common.config.DigitalTeamProperties;
 import org.cmb.common.exception.ApiException;
-import org.cmb.infrastructure.persistent.ArtifactRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -37,18 +34,12 @@ public class CliSubmissionController {
     private static final String TOOL_TOKEN_HEADER = "X-AgentCore-Tool-Token";
 
     private final CliSubmissionService submissions;
-    private final ArtifactRepository artifactRepository;
-    private final ArtifactService artifacts;
     private final String expectedToken;
 
     public CliSubmissionController(
             CliSubmissionService submissions,
-            ArtifactRepository artifactRepository,
-            ArtifactService artifacts,
             DigitalTeamProperties properties) {
         this.submissions = submissions;
-        this.artifactRepository = artifactRepository;
-        this.artifacts = artifacts;
         this.expectedToken = properties.getAgentCore().getArtifactToolToken();
     }
 
@@ -111,17 +102,22 @@ public class CliSubmissionController {
             @PathVariable String taskId,
             @RequestPart("file") MultipartFile file) throws Exception {
         authenticate(toolToken);
-        AgentArtifactUploadContext context =
-                artifactRepository.findUploadContextByTaskId(taskId);
-        if (context == null) {
-            throw ApiException.forbidden(
-                    "AGENT_ARTIFACT_CONTEXT_INVALID",
-                    "Task is not in an executable state: " + taskId);
-        }
-        return artifacts.uploadFromAgent(
-                artifactRepository.findProjectIdByTaskId(taskId),
-                context, file.getOriginalFilename(),
+        return submissions.uploadArtifact(
+                taskId, file.getOriginalFilename(),
                 file.getContentType(), file.getBytes());
+    }
+
+    /** The expert asks the user for input; the answer resumes the run. */
+    @PostMapping("/tasks/{taskId}/human-request")
+    public Map<String, String> askHuman(
+            @RequestHeader(TOOL_TOKEN_HEADER) String toolToken,
+            @PathVariable String taskId,
+            @Valid @RequestBody CliQuestionRequest request) {
+        authenticate(toolToken);
+        String questionId = submissions.askHuman(taskId, request.getQuestion());
+        Map<String, String> response = new java.util.LinkedHashMap<>();
+        response.put("question_id", questionId);
+        return response;
     }
 
     private void authenticate(String suppliedToken) {
@@ -136,6 +132,15 @@ public class CliSubmissionController {
             throw ApiException.unauthorized(
                     "AGENT_TOOL_TOKEN_INVALID", "Agent tool token does not match.");
         }
+    }
+
+    /** Request body for the CLI ask-human command. */
+    public static class CliQuestionRequest {
+        @javax.validation.constraints.NotBlank
+        private String question;
+
+        public String getQuestion() { return question; }
+        public void setQuestion(String value) { this.question = value; }
     }
 
     /** Request body for the CLI result write-back. */

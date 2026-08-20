@@ -1,8 +1,9 @@
 # tc — TeamCoordinator 配套 CLI
 
 在 AgentCore 运行机器上执行的命令行工具：agent 通过内置 shell 能力调用本 CLI，
-把**决定后续动作的格式化数据**直写回 TeamCoordinator 的表（决策 / 计划 / 审查结论），
-或上传产出物文件——不再依赖 TeamCoordinator 解析流式文本。
+把**决定后续动作的格式化数据**直写回 TeamCoordinator 的表（决策 / 计划 / 专家结果 /
+人类问题），或上传产出物文件。**AgentCore 事件流现在只负责过程展示**（推给前端），
+不再驱动任务状态机——产出通道完全由 CLI 承担。
 
 - 零依赖：Node 18+（AgentCore 基于 Claude Agent SDK，Node 必然存在），Linux/macOS 通用
 - 本地校验：内置与 `coordinator/*-schema-v1.json` 一致的校验逻辑（由
@@ -37,6 +38,9 @@ tc submit-verdict --task <会话taskId> --file verdict.json
 # 拉取任务详情（渲染后的执行提示词 + 验收标准 + 上游产物）
 tc get-task --task <协调taskId>
 
+# 需要用户介入：直写 WAITING_HUMAN + 建问题；回答由服务端 resumeRun 推回
+tc ask-human --task <协调taskId> --question "需要接口清单，请上传"
+
 # 写回执行结果（result_json + SUCCEEDED）
 tc submit-result --task <协调taskId> --file result.txt
 # 或 tc submit-result --task <协调taskId> --text "结果文本"
@@ -60,8 +64,10 @@ AgentCore 调用 agent 时使用 task-id 键控的 CLI 版提示词（V24 迁移
 `expert.result_check` v4 / `expert.execution` v3——coordinator 在 run 内生成 JSON 后调用
 `tc submit-decision --task <会话taskId>` 等提交；专家被派发时只拿到 task id，通过
 `tc get-task` 拉取完整契约、`tc submit-result` 写回结果、`tc upload-artifact` 上传产物。
-TeamCoordinator 消费优先级：**CLI 提交记录 > toolUsed(input) > end.content**（提交按
-(task, kind) 幂等，消费后删除防跨消息串用）。
+TeamCoordinator 消费规则：**决策/计划/结果只认 CLI 提交**（提交按 (task, kind)
+幂等，消费后删除防跨消息串用）；AgentCore 流只做展示透传——`chat`/`end`/`confirm`
+事件不再驱动状态机，`error` 事件仍作为平台级失败信号保留。run 结束却没有 CLI 提交
+决策 → 该次执行明确失败。
 
 ## 与 schema 文件的一致性
 

@@ -22,6 +22,7 @@
  *   tc submit-verdict  --task <conversationTaskId> [--file out.json | stdin]
  *   tc get-task        --task <coordinatorTaskId>
  *   tc submit-result   --task <coordinatorTaskId> [--file out.txt | --text "..." | stdin]
+ *   tc ask-human       --task <coordinatorTaskId> [--question "..." | stdin]
  *   tc upload-artifact <file-path> --task <coordinatorTaskId>
  *   tc validate decision|plan|verdict [--file f.json | stdin]
  *   tc health
@@ -305,6 +306,31 @@ async function getTask() {
   console.log(await response.text());
 }
 
+async function askHuman() {
+  const taskId = requireFlag("task");
+  const qIndex = process.argv.indexOf("--question");
+  let question;
+  if (qIndex !== -1) {
+    question = process.argv[qIndex + 1] || "";
+  } else {
+    question = readFileSync(0, "utf8");
+  }
+  if (!question || !question.trim()) {
+    fail("ask-human requires a non-empty question");
+  }
+  const response = await fetch(
+    `${baseUrl()}/api/v1/agent-tools/cli/tasks/${taskId}/human-request`,
+    {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ question }),
+    });
+  if (!response.ok) {
+    fail(`ask-human rejected (HTTP ${response.status}): ${await response.text()}`);
+  }
+  console.log(await response.text());
+}
+
 async function submitResult() {
   const taskId = requireFlag("task");
   const textIndex = process.argv.indexOf("--text");
@@ -360,6 +386,7 @@ const routes = {
   "submit-verdict": () => submit("verdict", "/api/v1/agent-tools/cli/submit-verdict"),
   "get-task": getTask,
   "submit-result": submitResult,
+  "ask-human": askHuman,
   "upload-artifact": uploadArtifact,
   "validate": validate,
   "health": health,
@@ -369,7 +396,7 @@ if (!routes[command]) {
   console.error(`tc: unknown command "${command || ""}"\n`);
   console.error(
     "commands: submit-decision | submit-plan | submit-verdict | get-task | "
-      + "submit-result | upload-artifact <file> | validate | health");
+      + "submit-result | ask-human | upload-artifact <file> | validate | health");
   process.exit(1);
 }
 

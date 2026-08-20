@@ -11,7 +11,6 @@ import java.util.Map;
 import java.util.function.Consumer;
 import org.cmb.infrastructure.persistent.CoordinatorAgentRunRepository;
 import org.cmb.application.domain.AgentCoreAdapter;
-import org.cmb.application.domain.AgentCoreTools;
 import org.cmb.application.domain.AgentEvent;
 import org.cmb.application.domain.AgentRunRequest;
 import org.cmb.application.domain.AgentRunResponse;
@@ -77,7 +76,7 @@ public class CoordinatorAgentClient {
         if ("SUCCEEDED".equals(run.getStatus()) || "FAILED".equals(run.getStatus())) {
             String sid = run.getSessionId();
             return new Result(true, run.getOutputJson(), sid, effectiveAgent,
-                    "REPAIR".equals(run.getStage()));
+                    "REPAIR".equals(run.getStage()), null);
         }
         // Submit if no session yet, or if repairing (need new events within same conversation)
         if (run.getSessionId() == null || "REPAIR".equals(run.getStage())) {
@@ -85,53 +84,44 @@ public class CoordinatorAgentClient {
             run = runs.find(identity.getTenantId(), runKey);
         }
 
-        // CLI submission channel: a decision written by the companion CLI
-        // takes priority over the run's streamed output (toolUsed / end).
-        // Keyed by the conversation task id — the identifier the AgentCore
-        // runtime and the CLI reliably share.
-        String cliDecision = conversationTaskId == null ? null
-                : cliSubmissions.find(
-                        conversationTaskId, CliSubmissionRepository.KIND_DECISION);
-        if (cliDecision != null) {
-            return new Result(true, cliDecision, run.getSessionId(),
-                    effectiveAgent, false);
-        }
-
+        // The decision is submitted exclusively through the companion CLI,
+        // keyed by the conversation task id. The stream is consumed only to
+        // forward progress events and to detect run completion.
         List<AgentEvent> events = agentCore.streamEvents(
                 effectiveAgent, run.getSessionId(),
                 run.getLastSequence(), run.getBusinessSessionId());
         events.sort(Comparator.comparingLong(AgentEvent::getSequence));
-        String toolSubmission = null;
         for (AgentEvent event : events) {
-            // Forward intermediate events to the task SSE stream
             if (eventSink != null) {
                 event.setAgentId(effectiveAgent);
                 eventSink.accept(event);
             }
-            // Structured output via submission tool: highest priority over
-            // whatever the run's end event carries as plain text.
-            if ("toolUsed".equals(event.getType())
-                    && AgentCoreTools.SUBMIT_COORDINATOR_DECISION.equals(event.getTool())
-                    && event.getInput() != null) {
-                toolSubmission = write(event.getInput());
-            }
-
             if ("end".equals(event.getType())) {
-                String output = toolSubmission != null
-                        ? toolSubmission : event.getContent();
-                runs.complete(run.getId(), event.getSequence(), output);
-                return new Result(true, output, run.getSessionId(), effectiveAgent,
-                        "REPAIR".equals(run.getStage()));
+                String cliDecision = conversationTaskId == null ? null
+                        : cliSubmissions.find(conversationTaskId,
+                                CliSubmissionRepository.KIND_DECISION);
+                if (cliDecision != null) {
+                    runs.complete(run.getId(), event.getSequence(), cliDecision);
+                    return new Result(true, cliDecision, run.getSessionId(),
+                            effectiveAgent, false, null);
+                }
+                String failure = "Coordinator run ended without submitting "
+                        + "a decision via the CLI (tc submit-decision).";
+                runs.fail(run.getId(), failure);
+                return new Result(true, null, run.getSessionId(),
+                        effectiveAgent, false, failure);
             }
             if (isFailure(event)) {
                 runs.fail(run.getId(), event.getContent());
-                return new Result(true, null, run.getSessionId(), effectiveAgent,
-                        "REPAIR".equals(run.getStage()));
+                return new Result(true, null, run.getSessionId(),
+                        effectiveAgent, false,
+                        event.getContent() == null
+                                ? "Coordinator run failed." : event.getContent());
             }
             runs.advance(run.getId(), event);
         }
         return new Result(false, null, run.getSessionId(), effectiveAgent,
-                "REPAIR".equals(run.getStage()));
+                false, null);
     }
 
     /**
@@ -142,12 +132,6 @@ public class CoordinatorAgentClient {
             String businessSessionId, IntentAnalysisContext context) {
         return execute(identity, projectId, null, messageId, runKey,
                 businessSessionId, null, context, null);
-    }
-
-    public void prepareRepair(
-            RequestIdentity identity, String runKey, String invalidOutput) {
-        CoordinatorAgentRun run = runs.find(identity.getTenantId(), runKey);
-        runs.prepareRepair(run.getId(), invalidOutput);
     }
 
     /** Resolve the effective coordinator agent ID: project override > global config. */
@@ -216,14 +200,16 @@ public class CoordinatorAgentClient {
         private final String sessionId;
         private final String effectiveAgentId;
         private final boolean repaired;
+        private final String failure;
 
         Result(boolean complete, String output, String sessionId,
-                String effectiveAgentId, boolean repaired) {
+                String effectiveAgentId, boolean repaired, String failure) {
             this.complete = complete;
             this.output = output;
             this.sessionId = sessionId;
             this.effectiveAgentId = effectiveAgentId;
             this.repaired = repaired;
+            this.failure = failure;
         }
 
         public boolean isComplete() { return complete; }
@@ -231,5 +217,6 @@ public class CoordinatorAgentClient {
         public String getSessionId() { return sessionId; }
         public String getEffectiveAgentId() { return effectiveAgentId; }
         public boolean isRepaired() { return repaired; }
+        public String getFailure() { return failure; }
     }
 }

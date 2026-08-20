@@ -13,7 +13,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -43,19 +42,14 @@ import org.cmb.application.domain.CoordinatorDecision;
 import org.cmb.common.enums.DecisionType;
 import org.cmb.application.dto.IntentAnalysisRequest;
 import org.cmb.application.service.IntentAnalysisService;
-import org.cmb.application.domain.TaskIntent;
 import org.cmb.application.service.ArtifactService;
 import org.cmb.application.service.ExpertSelector;
 import org.cmb.application.domain.PlanningResult;
-import org.cmb.application.service.PlanningService;
 import org.cmb.application.service.ProjectService;
 import org.cmb.application.dto.ProjectView;
 import org.cmb.application.domain.RequestIdentity;
 import org.cmb.infrastructure.persistent.CliSubmissionRepository;
 import org.cmb.application.domain.CoordinatorPlanSpec;
-import org.cmb.application.service.PromptService;
-import org.cmb.application.dto.RenderedPrompt;
-import org.cmb.application.domain.SemanticCheckClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -122,15 +116,11 @@ public class SingleExpertWorker {
     private final IntentAnalysisService analysisService;
     private final AgentCoreAdapter agentCore;
     private final ProjectService projectService;
-    private final PlanningService planningService;
     private final ExpertSelector expertSelector;
     private final MessageEventRepository eventRepository;
     private final ProjectEventStreamHub streamHub;
     private final ObjectMapper objectMapper;
     private final HumanRequestRepository humanRequests;
-    private final ArtifactService artifactService;
-    private final PromptService prompts;
-    private final SemanticCheckClient semanticChecks;
     private final CliSubmissionRepository cliSubmissions;
     private final DigitalTeamProperties properties;
 
@@ -139,30 +129,22 @@ public class SingleExpertWorker {
             IntentAnalysisService analysisService,
             AgentCoreAdapter agentCore,
             ProjectService projectService,
-            PlanningService planningService,
             ExpertSelector expertSelector,
             MessageEventRepository eventRepository,
             ProjectEventStreamHub streamHub,
             ObjectMapper objectMapper,
             HumanRequestRepository humanRequests,
-            ArtifactService artifactService,
-            PromptService prompts,
-            SemanticCheckClient semanticChecks,
             CliSubmissionRepository cliSubmissions,
             DigitalTeamProperties properties) {
         this.executionRepository = executionRepository;
         this.analysisService = analysisService;
         this.agentCore = agentCore;
         this.projectService = projectService;
-        this.planningService = planningService;
         this.expertSelector = expertSelector;
         this.eventRepository = eventRepository;
         this.streamHub = streamHub;
         this.objectMapper = objectMapper;
         this.humanRequests = humanRequests;
-        this.artifactService = artifactService;
-        this.prompts = prompts;
-        this.semanticChecks = semanticChecks;
         this.cliSubmissions = cliSubmissions;
         this.properties = properties;
     }
@@ -357,49 +339,27 @@ public class SingleExpertWorker {
             return;
         }
 
-        TaskIntent intent = decision.getTaskIntent();
-        ProjectView project = projectService.get(identity, work.getProjectId());
         emitPhase(work, PHASE_PLANNING, "Coordinator is creating an execution plan.");
-        String planAgentId = decision.getEffectiveAgentId() != null
-                ? decision.getEffectiveAgentId()
-                : CoordinatorAgentClient.COORDINATOR_AGENT_ID;
-        // Forward planning agent events to SSE (live-only, MARKER for replay)
-        Consumer<AgentEvent> planEventSink = event -> {
-            event.setAgentId(planAgentId);
-            publishAgentEventLive(work, event);
-        };
-        PlanningResult planning;
-        // CLI-driven flow: the plan is submitted by the companion CLI
-        // instead of being generated in a separate planning run. Keyed by
-        // the conversation task id.
+        // Strict CLI channel: the plan is submitted exclusively through
+        // tc submit-plan, keyed by the conversation task id. A missing plan
+        // after the decision arrived is a hard failure.
         String planPayload = cliSubmissions.find(
                 work.getConversationId(), CliSubmissionRepository.KIND_PLAN);
-        if (planPayload != null) {
-            CoordinatorPlanSpec planSpec;
-            try {
-                planSpec = objectMapper.treeToValue(
-                        objectMapper.readTree(planPayload), CoordinatorPlanSpec.class);
-            } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
-                throw new IllegalStateException(
-                        "CLI plan submission is not valid plan JSON.", ex);
-            }
-            planning = new PlanningResult(planSpec, planPayload, 0, null);
-            cliSubmissions.delete(work.getConversationId(),
-                    CliSubmissionRepository.KIND_PLAN);
-        } else {
-            planning = planningService.createPlan(
-                    intent, project, 1, planAgentId, planEventSink);
+        if (planPayload == null) {
+            throw new IllegalStateException(
+                    "Coordinator submitted no plan via the CLI (tc submit-plan).");
         }
-        // Insert AGENT_RUN_MARKER for the planning AgentCore call
-        if (planning.getSessionId() != null) {
-            ObjectNode planMarkerPayload = objectMapper.createObjectNode();
-            planMarkerPayload.put("sessionId", planning.getSessionId());
-            planMarkerPayload.put("expertId", planAgentId);
-            eventRepository.insertEvent(
-                    identity, work.getProjectId(), work.getConversationId(),
-                    work.getMessageId(), ProjectEventType.AGENT_RUN_MARKER,
-                    EventVisibility.PUBLIC, planMarkerPayload);
+        CoordinatorPlanSpec planSpec;
+        try {
+            planSpec = objectMapper.treeToValue(
+                    objectMapper.readTree(planPayload), CoordinatorPlanSpec.class);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+            throw new IllegalStateException(
+                    "CLI plan submission is not valid plan JSON.", ex);
         }
+        PlanningResult planning = new PlanningResult(planSpec, planPayload, 0, null);
+        cliSubmissions.delete(work.getConversationId(),
+                CliSubmissionRepository.KIND_PLAN);
         executionRepository.createPlan(work, decision, planning);
 
         // Emit plan update
@@ -649,69 +609,21 @@ public class SingleExpertWorker {
 
         String type = event.getType();
 
-        // State machine: progress events keep task RUNNING
+        // State machine: progress events advance the cursor, but never
+        // regress a task that a CLI submission moved to WAITING_HUMAN
+        // (the agent asked the user for input mid-stream).
         if (PROGRESS_EVENT_TYPES.contains(type)) {
-            executionRepository.advanceTask(
-                    task.getId(), event.getSequence(), "RUNNING", null);
+            executionRepository.advanceRunningTask(
+                    task.getId(), event.getSequence());
             return;
         }
 
-        // Human-in-the-loop (AgentCore confirm)
-        if ("confirm".equals(type)) {
-            if (executionRepository.advanceTask(
-                    task.getId(), event.getSequence(), "WAITING_HUMAN",
-                    writeMap(event))) {
-                task.setStatus("WAITING_HUMAN");
-                String question = event.getContent() != null
-                        ? event.getContent() : "Agent requires input.";
-                String questionId = event.getQuestionId() != null
-                        ? event.getQuestionId() : "agent-question-" + task.getId();
-                humanRequests.createExpertClarification(
-                        work.getTenantId(), work.getProjectId(), task.getId(),
-                        questionId, question);
-            }
-            return;
-        }
-
-        // Success: chat or end
-        if ("chat".equals(type) || "end".equals(type)) {
-            // Skip if already terminal or if a correction is in progress
-            // (failResult already created a correction task and end should
-            // not override the CORRECTING status back to SUCCEEDED).
-            if (isTerminal(task.getStatus())
-                    || "CORRECTING".equals(task.getStatus())) {
-                return;
-            }
-            String resultText = event.getContent();
-            if (resultText == null || resultText.trim().isEmpty()) {
-                failResult(work, task, event, "Expert result did not contain content.");
-                return;
-            }
-            // Second-pass semantic review: judge whether resultText actually
-            // satisfies the objective and acceptance criteria before success.
-            SemanticCheckClient.SemanticCheckResult review =
-                    reviewExpertResult(work, task, resultText);
-            if (review.isConclusive() && !review.isConsistent()) {
-                failResult(work, task, event,
-                        "Expert result failed semantic review: " + review.getReason());
-                return;
-            }
-            List<String> artifactIds = registerArtifacts(work, task, event);
-            if (executionRepository.advanceTask(
-                    task.getId(), event.getSequence(), "SUCCEEDED",
-                    writeMap(event))) {
-                task.setStatus("SUCCEEDED");
-                // Persist expert session so future messages in this task
-                // can reuse it for context continuity.
-                executionRepository.saveExpertSession(
-                        work.getTenantId(), work.getProjectId(),
-                        work.getConversationId(),
-                        task.getExpertId(), task.getSessionId(),
-                        work.getMessageId());
-                if (task.getCorrectionOf() != null) {
-                    executionRepository.acceptCorrection(task, writeMap(event));
-                }
-            }
+        // Human-in-the-loop and result events are display-only: the expert
+        // state changes come exclusively from CLI submissions (tc ask-human /
+        // tc submit-result). The stream keeps the frontend informed.
+        if ("confirm".equals(type)
+                || "chat".equals(type)
+                || "end".equals(type)) {
             return;
         }
 
@@ -750,78 +662,6 @@ public class SingleExpertWorker {
     }
 
     // ── Artifact registration ───────────────────────────────────────────
-
-    /**
-     * Ask the Coordinator to judge whether the expert result actually
-     * satisfies the subtask. Best-effort: an inconclusive review passes the
-     * result through — only an explicit rejection fails it.
-     */
-    private SemanticCheckClient.SemanticCheckResult reviewExpertResult(
-            DispatchWork work, TaskRecord task, String resultText) {
-        Map<String, Object> context = new LinkedHashMap<>();
-        context.put("overallRequest", work.getText());
-        context.put("taskKey", task.getTaskKey());
-        context.put("objective", task.getObjective());
-        context.put("expectedOutput", task.getExpectedOutput());
-        context.put("acceptanceCriteria", task.getAcceptanceCriteria());
-        context.put("resultText", resultText);
-        String judgeAgent = judgeAgentId(work);
-        RenderedPrompt prompt = prompts.render(
-                PromptService.EXPERT_RESULT_CHECK, context,
-                work.getTenantId(), work.getProjectId(), work.getConversationId(),
-                task.getRequestId() + ":review", judgeAgent);
-        return semanticChecks.check(prompt.getContent(), judgeAgent, null);
-    }
-
-    /** Resolve the review judge: project coordinator override > global default. */
-    private String judgeAgentId(DispatchWork work) {
-        RequestIdentity identity =
-                new RequestIdentity(work.getTenantId(), work.getUserId());
-        ProjectView project = projectService.get(identity, work.getProjectId());
-        String override = project.getCoordinatorAgentId();
-        return (override != null && !override.trim().isEmpty())
-                ? override : properties.getAgentCore().getCoordinatorAgentId();
-    }
-
-    private void failResult(
-            DispatchWork work, TaskRecord task, AgentEvent event, String message) {
-        TaskRecord correction = executionRepository.createCorrection(work, task, message);
-        if (correction != null) {
-            task.setStatus("CORRECTING");
-            AgentEvent correctionEvent = AgentEvent.of("coordinatorNewPlanStep");
-            correctionEvent.setAgentId(task.getExpertId());
-            correctionEvent.setContent(message + " A correction task was scheduled.");
-            publishAgentEvent(work, correctionEvent);
-            return;
-        }
-        executionRepository.advanceTask(
-                task.getId(), event.getSequence(), "FAILED", writeMap(event));
-        task.setStatus("FAILED");
-        AgentEvent failEvent = AgentEvent.of("coordinatorError");
-        failEvent.setAgentId(task.getExpertId());
-        failEvent.setContent(message);
-        publishAgentEvent(work, failEvent);
-        executionRepository.completePlanAndDispatch(
-                task.getPlanId(), work.getDispatchId(), "FAILED", message);
-    }
-
-    private List<String> registerArtifacts(
-            DispatchWork work, TaskRecord task, AgentEvent event) {
-        // Extract artifact file IDs from attachments in chat/end events
-        if (event.getAttachments() != null) {
-            List<String> result = new ArrayList<>();
-            for (AgentEvent.AttachmentInfo att : event.getAttachments()) {
-                if (att.getPath() != null) {
-                    result.add(artifactService.registerExpertArtifact(
-                            work, task, att.getPath()));
-                }
-            }
-            if (!result.isEmpty()) {
-                return result;
-            }
-        }
-        return Collections.emptyList();
-    }
 
     // ── Helpers ─────────────────────────────────────────────────────────
 

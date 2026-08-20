@@ -320,11 +320,11 @@
 
     <select id="findTaskDetail" resultType="map">
         SELECT t.business_id AS task_id, t.task_key, t.expert_id,
-        t.objective, t.expected_output, t.acceptance_criteria,
+        t.session_id, t.objective, t.expected_output, t.acceptance_criteria,
         t.dependencies, t.required_capabilities, t.correction_of,
         p.business_id AS plan_id, p.conversation_id,
         c.tenant_id, c.project_id, c.session_id AS business_session_id,
-        m.message_text AS overall_request,
+        p.message_id, m.message_text AS overall_request,
         pr.name AS project_name, pr.description AS project_description
         FROM coordinator_task t
         JOIN coordinator_plan p ON p.business_id = t.plan_id
@@ -339,6 +339,19 @@
         result_accepted = TRUE, updated_at = CURRENT_TIMESTAMP
         WHERE business_id = #{taskId} AND status NOT IN
         ('SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT')
+    </update>
+
+    <update id="markTaskWaitingHuman">
+        UPDATE coordinator_task SET status = 'WAITING_HUMAN',
+        updated_at = CURRENT_TIMESTAMP
+        WHERE business_id = #{taskId} AND status = 'RUNNING'
+    </update>
+
+    <update id="advanceRunningTask">
+        UPDATE coordinator_task SET last_sequence = #{sequence},
+        updated_at = CURRENT_TIMESTAMP
+        WHERE business_id = #{taskId} AND last_sequence &lt; #{sequence}
+        AND status = 'RUNNING'
     </update>
 
     <select id="findTask" resultMap="taskRecord">

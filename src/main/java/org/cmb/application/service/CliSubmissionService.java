@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.cmb.application.domain.AgentRunAttachment;
 import org.cmb.application.domain.CoordinatorDecision;
 import org.cmb.application.domain.CoordinatorPlanSpec;
@@ -18,6 +19,7 @@ import org.cmb.common.exception.ApiException;
 import org.cmb.infrastructure.persistent.ArtifactRepository;
 import org.cmb.infrastructure.persistent.CliSubmissionRepository;
 import org.cmb.infrastructure.persistent.ExecutionRepository;
+import org.cmb.infrastructure.persistent.HumanRequestRepository;
 import org.springframework.stereotype.Service;
 
 /**
@@ -36,6 +38,7 @@ public class CliSubmissionService {
     private final ExecutionRepository executionRepository;
     private final ArtifactRepository artifactRepository;
     private final ArtifactService artifactService;
+    private final HumanRequestRepository humanRequests;
     private final PromptService prompts;
     private final DecisionSchemaValidator decisionValidator;
     private final PlanSchemaValidator planValidator;
@@ -46,6 +49,7 @@ public class CliSubmissionService {
             ExecutionRepository executionRepository,
             ArtifactRepository artifactRepository,
             ArtifactService artifactService,
+            HumanRequestRepository humanRequests,
             PromptService prompts,
             DecisionSchemaValidator decisionValidator,
             PlanSchemaValidator planValidator,
@@ -54,6 +58,7 @@ public class CliSubmissionService {
         this.executionRepository = executionRepository;
         this.artifactRepository = artifactRepository;
         this.artifactService = artifactService;
+        this.humanRequests = humanRequests;
         this.prompts = prompts;
         this.decisionValidator = decisionValidator;
         this.planValidator = planValidator;
@@ -205,9 +210,73 @@ public class CliSubmissionService {
                     "TASK_NOT_RUNNING",
                     "Task is already in a terminal state: " + task.getStatus());
         }
-        if (task.getCorrectionOf() != null) {
-            executionRepository.acceptCorrection(task, resultJson);
+        // Persist the expert session so future messages in this conversation
+        // reuse it for context continuity.
+        Map<String, Object> detail = executionRepository.findTaskDetail(taskId);
+        if (detail != null && task.getSessionId() != null) {
+            executionRepository.saveExpertSession(
+                    (String) detail.get("tenant_id"),
+                    (String) detail.get("project_id"),
+                    (String) detail.get("conversation_id"),
+                    task.getExpertId(), task.getSessionId(),
+                    (String) detail.get("message_id"));
         }
+    }
+
+    /**
+     * CLI ask-human: the expert needs input from the user. Marks the task
+     * WAITING_HUMAN and registers the clarification request; the answer is
+     * delivered back via the existing server-side resume path.
+     */
+    public String askHuman(String taskId, String question) {
+        if (question == null || question.trim().isEmpty()) {
+            throw ApiException.badRequest(
+                    "CLI_QUESTION_EMPTY", "Question must not be empty.");
+        }
+        Map<String, Object> detail = executionRepository.findTaskDetail(taskId);
+        if (detail == null) {
+            throw ApiException.notFound(
+                    "TASK_NOT_FOUND", "Task was not found: " + taskId);
+        }
+        if (!executionRepository.markTaskWaitingHuman(taskId)) {
+            throw ApiException.conflict(
+                    "TASK_NOT_RUNNING",
+                    "Task is not RUNNING and cannot ask for input: " + taskId);
+        }
+        return humanRequests.createExpertClarification(
+                (String) detail.get("tenant_id"),
+                (String) detail.get("project_id"),
+                taskId,
+                "cli-question-" + UUID.randomUUID(),
+                question);
+    }
+
+    /**
+     * CLI artifact upload for an expert task: stores the file and records
+     * its dependency lineage so downstream tasks can consume it.
+     */
+    public org.cmb.application.dto.ArtifactView uploadArtifact(
+            String taskId, String fileName, String mediaType, byte[] content) {
+        Map<String, Object> detail = executionRepository.findTaskDetail(taskId);
+        if (detail == null) {
+            throw ApiException.notFound(
+                    "TASK_NOT_FOUND", "Task was not found: " + taskId);
+        }
+        org.cmb.application.domain.AgentArtifactUploadContext context =
+                artifactRepository.findUploadContextByTaskId(taskId);
+        if (context == null) {
+            throw ApiException.forbidden(
+                    "AGENT_ARTIFACT_CONTEXT_INVALID",
+                    "Task is not in an executable state: " + taskId);
+        }
+        org.cmb.application.dto.ArtifactView view = artifactService.uploadFromAgent(
+                artifactRepository.findProjectIdByTaskId(taskId),
+                context, fileName, mediaType, content);
+        artifactRepository.recordDependencyLineage(
+                view.getArtifactId(),
+                (String) detail.get("plan_id"),
+                readList((String) detail.get("dependencies")));
+        return view;
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────
