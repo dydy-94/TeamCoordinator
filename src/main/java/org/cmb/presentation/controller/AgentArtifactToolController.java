@@ -65,9 +65,11 @@ public class AgentArtifactToolController {
     }
 
     private void authenticate(String suppliedToken) {
+        // No token configured on the server: authentication is disabled
+        // (dev mode). When configured, the client must supply the exact
+        // value.
         if (expectedToken == null || expectedToken.trim().isEmpty()) {
-            throw ApiException.unauthorized(
-                    "AGENT_TOOL_NOT_CONFIGURED", "Agent artifact tool is not configured.");
+            return;
         }
         boolean matches = MessageDigest.isEqual(
                 expectedToken.getBytes(StandardCharsets.UTF_8),

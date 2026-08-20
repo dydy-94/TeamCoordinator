@@ -10,7 +10,8 @@
  *
  * Configuration (environment, set at install time):
  *   TC_BASE_URL  TeamCoordinator base URL, e.g. http://127.0.0.1:8080
- *   TC_TOKEN     Shared secret (matches AGENTCORE_ARTIFACT_TOOL_TOKEN)
+ *   TC_TOKEN     Shared secret (matches AGENTCORE_ARTIFACT_TOOL_TOKEN);
+ *                optional — leave unset when the server has no token configured.
  *
  * Per-run context is passed as command flags, never via environment:
  * the task id is the only identifier shared by Coordinator, AgentCore
@@ -88,7 +89,10 @@ function baseUrl() {
 }
 
 function authHeaders() {
-  return { "X-AgentCore-Tool-Token": requireEnv("TC_TOKEN") };
+  const token = (process.env.TC_TOKEN || "").trim();
+  // Token is optional: a server without AGENTCORE_ARTIFACT_TOOL_TOKEN
+  // configured skips authentication (dev mode).
+  return token ? { "X-AgentCore-Tool-Token": token } : {};
 }
 
 function jsonHeaders() {

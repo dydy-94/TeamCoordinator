@@ -35,7 +35,7 @@ export TC_TOKEN="<共享密钥，对应 AGENTCORE_ARTIFACT_TOOL_TOKEN>"
 | 环境变量 | 说明 |
 |---|---|
 | `TC_BASE_URL` | TeamCoordinator 部署地址 |
-| `TC_TOKEN` | 共享密钥，对应 TeamCoordinator 的 `AGENTCORE_ARTIFACT_TOOL_TOKEN` |
+| `TC_TOKEN` | 共享密钥，对应 TeamCoordinator 的 `AGENTCORE_ARTIFACT_TOOL_TOKEN`；**可选**——服务端未配置 token 时留空即跳过认证（开发模式） |
 
 **Per-run 上下文（task id 等）一律通过命令参数传入，不依赖环境注入**——task id 是
 Coordinator、AgentCore 与 CLI 三方唯一可靠共享的标识：
