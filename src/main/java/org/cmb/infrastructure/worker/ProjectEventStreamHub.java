@@ -3,6 +3,7 @@ import org.cmb.common.enums.ProjectEventType;
 import org.cmb.application.domain.ProjectEvent;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -233,15 +234,30 @@ public class ProjectEventStreamHub {
             return;
         }
         events.sort(Comparator.comparingLong(AgentEvent::getSequence));
-        for (AgentEvent ae : events) {
-            if (ae.getSequence() <= subscriber.lastSequence) {
-                continue;
-            }
+        for (AgentEvent ae : filterAgentReplay(subscriber, sessionId, events)) {
             subscriber.emitter.send(SseEmitter.event()
                     .id(Long.toString(markerSequence))
                     .name(ae.getType())
                     .data(ae));
         }
+    }
+
+    /**
+     * agent 事件的会话级游标过滤：与持久化序列命名空间无关。
+     * 同一连接内多次遇到同一 session 的 MARKER 时只补发新事件；
+     * 重连产生的新订阅游标为空，会完整重放。
+     */
+    protected List<AgentEvent> filterAgentReplay(
+            Subscriber subscriber, String sessionId, List<AgentEvent> events) {
+        long cursor = subscriber.agentCursors.getOrDefault(sessionId, 0L);
+        List<AgentEvent> result = new ArrayList<>();
+        for (AgentEvent ae : events) {
+            if (ae.getSequence() > cursor) {
+                result.add(ae);
+                subscriber.agentCursors.put(sessionId, ae.getSequence());
+            }
+        }
+        return result;
     }
 
     private long minimumSequence(List<Subscriber> projectSubscribers) {
@@ -307,6 +323,8 @@ public class ProjectEventStreamHub {
         private final SseEmitter emitter;
         private long lastSequence;
         private volatile long lastActivityAt;
+        /** agent 会话级事件游标：与持久化序列命名空间独立。 */
+        private final Map<String, Long> agentCursors = new ConcurrentHashMap<>();
 
         Subscriber(SseEmitter emitter, long lastSequence) {
             this.emitter = emitter;

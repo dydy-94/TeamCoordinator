@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.cmb.application.domain.AgentEvent;
 import org.cmb.application.domain.ProjectEvent;
 import org.cmb.common.config.DigitalTeamProperties;
 import org.cmb.infrastructure.persistent.MessageEventRepository;
@@ -64,6 +65,34 @@ class ProjectEventStreamHubTest {
         assertEquals(1, hub.heartbeats.get(), "active connection must get a heartbeat");
         assertEquals(0, hub.inactive.get());
         assertEquals(1, hub.activeSubscriberCount(), "active connection must stay open");
+    }
+
+    @Test
+    void agentReplayUsesSessionCursorNotPersistedCursor() {
+        RecordingHub hub = new RecordingHub(properties(30));
+        // 持久化游标已推进到 114——绝不能再用来过滤 agent 会话序列。
+        ProjectEventStreamHub.Subscriber subscriber =
+                new ProjectEventStreamHub.Subscriber(new SseEmitter(0L), 114L);
+
+        java.util.List<AgentEvent> events = new java.util.ArrayList<>();
+        for (int i = 1; i <= 5; i++) {
+            AgentEvent ae = AgentEvent.of("liveStatus");
+            ae.setSequence(i);
+            events.add(ae);
+        }
+
+        // 首次重放：完整下发 1..5
+        assertEquals(5, hub.filterAgentReplay(subscriber, "session-a", events).size());
+        // 同一连接再次遇到同一 session 的 MARKER：只补发新事件
+        AgentEvent extra = AgentEvent.of("chat");
+        extra.setSequence(7);
+        java.util.List<AgentEvent> second = new java.util.ArrayList<>(events);
+        second.add(extra);
+        assertEquals(1, hub.filterAgentReplay(subscriber, "session-a", second).size());
+        // 新订阅（重连）：游标为空，完整重放
+        ProjectEventStreamHub.Subscriber fresh =
+                new ProjectEventStreamHub.Subscriber(new SseEmitter(0L), 114L);
+        assertEquals(5, hub.filterAgentReplay(fresh, "session-a", events).size());
     }
 
     @Test
