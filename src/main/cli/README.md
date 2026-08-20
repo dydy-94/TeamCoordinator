@@ -6,6 +6,27 @@
 不再驱动任务状态机——产出通道完全由 CLI 承担。
 
 - 零依赖：Node 18+（AgentCore 基于 Claude Agent SDK，Node 必然存在），Linux/macOS 通用
+
+## 安装
+
+```bash
+cd src/main/cli
+./install.sh                    # 安装到 ~/bin/tc（会检查 node 版本并给出配置指引）
+# 或指定目录：
+TC_INSTALL_DIR=/usr/local/bin ./install.sh
+```
+
+之后把安装目录加入 PATH 并配置连接（`install.sh` 会打印对应指引）：
+
+```bash
+export PATH="$HOME/bin:$PATH"
+export TC_BASE_URL="http://<team-coordinator 地址>"
+export TC_TOKEN="<共享密钥，对应 AGENTCORE_ARTIFACT_TOOL_TOKEN>"
+```
+
+验证：`tc health`；本地校验自测：`tc validate decision --file decision.json`。
+
+> tc 是单文件脚本，也可以直接 `cp tc.mjs ~/bin/tc && chmod +x ~/bin/tc` 完成安装。
 - 本地校验：内置与 `coordinator/*-schema-v1.json` 一致的校验逻辑（由
   `CliSchemaConsistencyTest` 守护 schema 副本一致性），提交前即时拦截格式错误
 
