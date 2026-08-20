@@ -67,7 +67,7 @@ public class ProjectEventStreamHub {
                                 stringFromPayload(event.getPayload(), "expertId"),
                                 event.getPayload().get("sessionId").asText(),
                                 event.getSequence(),
-                                startSequenceFromPayload(event.getPayload()));
+                                startSequenceOrNull(event.getPayload()));
                     } else {
                         send(subscriber, event);
                     }
@@ -201,8 +201,8 @@ public class ProjectEventStreamHub {
                                     event.getPayload().get("sessionId").asText();
                             String expertId = stringFromPayload(
                                     event.getPayload(), "expertId");
-                            long startSequence =
-                                    startSequenceFromPayload(event.getPayload());
+                            Long startSequence =
+                                    startSequenceOrNull(event.getPayload());
                             for (Subscriber subscriber : projectSubscribers) {
                                 replayAgentEvents(subscriber, expertId,
                                         sessionId, event.getSequence(),
@@ -232,41 +232,45 @@ public class ProjectEventStreamHub {
      */
     private void replayAgentEvents(Subscriber subscriber, String expertId,
                                     String sessionId, long markerSequence,
-                                    long startSequence)
+                                    Long startSequence)
             throws IOException {
         List<AgentEvent> events = agentCore.streamEvents(expertId, sessionId, 0L);
         if (events == null || events.isEmpty()) {
             return;
         }
         events.sort(Comparator.comparingLong(AgentEvent::getSequence));
-        for (AgentEvent ae : filterAgentReplay(events, startSequence)) {
+        // 新 MARKER 用 startSequence 窗口；旧 MARKER（无该字段）回退到
+        // 本连接内同一会话已回放到的游标——两种数据都能正确归位。
+        long floor = startSequence != null
+                ? startSequence
+                : subscriber.agentCursors.getOrDefault(sessionId, 0L);
+        for (AgentEvent ae : filterAgentReplay(events, floor)) {
             subscriber.emitter.send(SseEmitter.event()
                     .id(Long.toString(markerSequence))
                     .name(ae.getType())
                     .data(ae));
+            subscriber.agentCursors.put(sessionId, ae.getSequence());
         }
     }
 
     /**
-     * 按消息窗口过滤 agent 回放：只下发 startSequence 之后（含）本消息
-     * 产生的 agent 事件。startSequence 由 MARKER 在提交时记录（该 session
-     * 的历史水位），避免把之前消息的事件重放到错误的时间线位置。
+     * 按窗口过滤 agent 回放：只下发 floor 之后的事件。
      */
     protected List<AgentEvent> filterAgentReplay(
-            List<AgentEvent> events, long startSequence) {
+            List<AgentEvent> events, long floor) {
         List<AgentEvent> result = new ArrayList<>();
         for (AgentEvent ae : events) {
-            if (ae.getSequence() > startSequence) {
+            if (ae.getSequence() > floor) {
                 result.add(ae);
             }
         }
         return result;
     }
 
-    private static long startSequenceFromPayload(
+    private static Long startSequenceOrNull(
             com.fasterxml.jackson.databind.JsonNode payload) {
         return payload != null && payload.has("startSequence")
-                ? payload.get("startSequence").asLong() : 0L;
+                ? payload.get("startSequence").asLong() : null;
     }
 
     private long minimumSequence(List<Subscriber> projectSubscribers) {
@@ -332,6 +336,8 @@ public class ProjectEventStreamHub {
         private final SseEmitter emitter;
         private long lastSequence;
         private volatile long lastActivityAt;
+        /** 会话级回放游标：旧 MARKER 无 startSequence 时的窗口兜底。 */
+        private final Map<String, Long> agentCursors = new ConcurrentHashMap<>();
         Subscriber(SseEmitter emitter, long lastSequence) {
             this.emitter = emitter;
             this.lastSequence = lastSequence;

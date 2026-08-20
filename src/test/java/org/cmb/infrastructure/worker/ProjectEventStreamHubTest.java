@@ -88,6 +88,9 @@ class ProjectEventStreamHubTest {
             session.add(ae);
         }
         assertEquals(6, hub.filterAgentReplay(session, 6L).size());
+        // 旧 MARKER（无 startSequence，floor=0 兜底）也会整段下发，
+        // 由调用方以会话游标推进保证多 MARKER 各归其位。
+        assertEquals(12, hub.filterAgentReplay(session, 0L).size());
     }
 
     @Test
