@@ -204,9 +204,11 @@ public class ProjectEventStreamHub {
                             Long startSequence =
                                     startSequenceOrNull(event.getPayload());
                             for (Subscriber subscriber : projectSubscribers) {
-                                replayAgentEvents(subscriber, expertId,
-                                        sessionId, event.getSequence(),
-                                        startSequence);
+                                synchronized (subscriber) {
+                                    replayAgentEvents(subscriber, expertId,
+                                            sessionId, event.getSequence(),
+                                            startSequence);
+                                }
                             }
                             continue;
                         }
