@@ -148,7 +148,8 @@ tc submit-result --task <taskId>     写回结果 → result_json + SUCCEEDED（
 tc submit-decision --task <会话taskId> --file decision.json   # 决策（ANSWER/ASK_HUMAN/CREATE_PLAN）
 tc submit-plan     --task <会话taskId> --file plan.json       # 计划（直写 plan+tasks）
 tc submit-verdict  --task <会话taskId> --file verdict.json    # 审查结论
-tc get-task        --task <协调taskId>                         # 拉取专家任务契约
+tc get-task        --task <协调taskId>                         # 拉取专家任务契约（含附件列表）
+tc get-artifact    --task <协调taskId> [--name 文件] [--output 路径]  # 下载产物
 tc submit-result   --task <协调taskId> --text "..."            # 写回专家结果
 tc ask-human       --task <协调taskId> --question "..."        # 专家求助
 tc upload-artifact --task <协调taskId> <file>                  # 上传产物

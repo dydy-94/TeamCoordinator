@@ -35,8 +35,12 @@ tc submit-plan --task <会话taskId> --file plan.json
 # 提交语义审查结论 {"consistent": bool, "reason": "..."}
 tc submit-verdict --task <会话taskId> --file verdict.json
 
-# 拉取任务详情（渲染后的执行提示词 + 验收标准 + 上游产物）
+# 拉取任务详情（渲染后的执行提示词 + 验收标准 + 上游产物附件列表）
 tc get-task --task <协调taskId>
+
+# 下载产物：默认取第一个附件；--name 按文件名选，--output 指定保存路径
+tc get-artifact --task <协调taskId> --name spec.txt
+tc get-artifact --task <协调taskId> --output /tmp/result.pdf
 
 # 需要用户介入：直写 WAITING_HUMAN + 建问题；回答由服务端 resumeRun 推回
 tc ask-human --task <协调taskId> --question "需要接口清单，请上传"

@@ -21,6 +21,8 @@
  *   tc submit-plan     --task <conversationTaskId> [--file out.json | stdin]
  *   tc submit-verdict  --task <conversationTaskId> [--file out.json | stdin]
  *   tc get-task        --task <coordinatorTaskId>
+ *   tc get-artifact    --task <coordinatorTaskId> [--name <fileName>]
+ *                                    [--output <path>]
  *   tc submit-result   --task <coordinatorTaskId> [--file out.txt | --text "..." | stdin]
  *   tc ask-human       --task <coordinatorTaskId> [--question "..." | stdin]
  *   tc upload-artifact <file-path> --task <coordinatorTaskId>
@@ -29,7 +31,7 @@
  *
  * Exit code 0 on success, 1 on validation or transport failure.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -306,6 +308,43 @@ async function getTask() {
   console.log(await response.text());
 }
 
+async function getArtifact() {
+  const taskId = requireFlag("task");
+  const nameIndex = process.argv.indexOf("--name");
+  const outputIndex = process.argv.indexOf("--output");
+  const wantedName = nameIndex === -1 ? "" : (process.argv[nameIndex + 1] || "");
+
+  const response = await fetch(
+    `${baseUrl()}/api/v1/agent-tools/cli/tasks/${taskId}`,
+    { method: "GET", headers: authHeaders() });
+  if (!response.ok) {
+    fail(`get-artifact rejected (HTTP ${response.status}): ${await response.text()}`);
+  }
+  const detail = JSON.parse(await response.text());
+  const attachments = Array.isArray(detail.attachments) ? detail.attachments : [];
+  if (attachments.length === 0) {
+    fail("get-artifact: no attachments available for this task");
+  }
+  const picked = wantedName
+      ? attachments.find((a) => a.fileName === wantedName)
+      : attachments[0];
+  if (!picked) {
+    fail(`get-artifact: no attachment named "${wantedName}"`);
+  }
+  let url = picked.fileDownloadUrl;
+  if (url && url.startsWith("/")) {
+    url = baseUrl() + url;
+  }
+  const outputPath = outputIndex === -1 ? picked.fileName : process.argv[outputIndex + 1];
+  const fileResponse = await fetch(url);
+  if (!fileResponse.ok) {
+    fail(`get-artifact download failed (HTTP ${fileResponse.status})`);
+  }
+  const bytes = new Uint8Array(await fileResponse.arrayBuffer());
+  writeFileSync(outputPath, bytes);
+  console.log(`get-artifact: ${outputPath} (${bytes.length} bytes)`);
+}
+
 async function askHuman() {
   const taskId = requireFlag("task");
   const qIndex = process.argv.indexOf("--question");
@@ -385,6 +424,7 @@ const routes = {
   "submit-plan": () => submit("plan", "/api/v1/agent-tools/cli/submit-plan"),
   "submit-verdict": () => submit("verdict", "/api/v1/agent-tools/cli/submit-verdict"),
   "get-task": getTask,
+  "get-artifact": getArtifact,
   "submit-result": submitResult,
   "ask-human": askHuman,
   "upload-artifact": uploadArtifact,
@@ -396,7 +436,8 @@ if (!routes[command]) {
   console.error(`tc: unknown command "${command || ""}"\n`);
   console.error(
     "commands: submit-decision | submit-plan | submit-verdict | get-task | "
-      + "submit-result | ask-human | upload-artifact <file> | validate | health");
+      + "get-artifact | submit-result | ask-human | upload-artifact <file> | "
+      + "validate | health");
   process.exit(1);
 }
 
