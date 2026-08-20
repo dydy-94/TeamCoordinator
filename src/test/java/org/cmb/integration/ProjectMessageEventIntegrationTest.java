@@ -50,7 +50,7 @@ class ProjectMessageEventIntegrationTest {
         String projectId = createProject("message-owner");
         String taskId = createTask(projectId);
         String requestBody = "{\"client_message_id\":\"client-1\",\"text\":\"analyze this\","
-                + "\"attachment_refs\":[\"file-1\"],\"idempotency_key\":\"idem-1\"}";
+                + "\"attachment_refs\":[\"file-1\"]}";
 
         String first = mockMvc.perform(post("/api/v1/projects/" + projectId
                         + "/tasks/" + taskId + "/messages")
@@ -112,7 +112,7 @@ class ProjectMessageEventIntegrationTest {
         assertEquals("", afterCursor.getResponse().getContentAsString());
 
         String liveRequest = "{\"client_message_id\":\"client-2\",\"text\":\"follow up\","
-                + "\"attachment_refs\":[],\"idempotency_key\":\"idem-2\"}";
+                + "\"attachment_refs\":[]}";
         mockMvc.perform(post("/api/v1/projects/" + projectId
                         + "/tasks/" + taskId + "/messages")
                         .headers(identity("tenant-message", "message-owner"))
@@ -208,8 +208,7 @@ class ProjectMessageEventIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"client_message_id\":\"" + clientId
                                 + "\",\"text\":\"" + text
-                                + "\",\"attachment_refs\":[],\"idempotency_key\":\""
-                                + clientId + "\"}"))
+                                + "\",\"attachment_refs\":[]}"))
                 .andExpect(status().isAccepted());
     }
 

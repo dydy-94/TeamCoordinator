@@ -292,8 +292,7 @@ class ExecutionFaultToleranceIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"client_message_id\":\"client-" + UUID.randomUUID()
                                 + "\",\"text\":\"" + text
-                                + "\",\"attachment_refs\":[],\"idempotency_key\":\"idem-"
-                                + UUID.randomUUID() + "\"}"))
+                                + "\",\"attachment_refs\":[]}"))
                 .andExpect(status().isAccepted());
     }
 

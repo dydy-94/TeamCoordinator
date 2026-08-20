@@ -155,7 +155,6 @@ class ArtifactIntegrationTest {
                         .headers(identity("artifact-owner"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"client_message_id\":\"" + requestId
-                                + "\",\"idempotency_key\":\"" + requestId
                                 + "\",\"text\":\"analyze and create a file\"}"))
                 .andExpect(status().isAccepted());
     }

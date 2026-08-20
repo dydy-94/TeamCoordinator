@@ -293,8 +293,7 @@ class CliSubmissionIntegrationTest {
                         .content("{\"client_message_id\":\"client-" + UUID.randomUUID()
                                 + "\",\"text\":\"" + text
                                 + "\",\"attachment_refs\":" + refs
-                                + ",\"idempotency_key\":\"idem-"
-                                + UUID.randomUUID() + "\"}"))
+                                + "}"))
                 .andExpect(status().isAccepted());
     }
 
