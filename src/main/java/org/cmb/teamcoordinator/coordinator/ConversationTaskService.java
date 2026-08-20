@@ -1,10 +1,12 @@
 package org.cmb.teamcoordinator.coordinator;
+import org.cmb.application.dto.CreateConversationTaskRequest;
+import org.cmb.application.dto.ConversationTaskView;
 
 import java.util.List;
 import org.cmb.infrastructure.persistent.ConversationTaskRepository;
-import org.cmb.teamcoordinator.common.ApiException;
+import org.cmb.common.exception.ApiException;
 import org.cmb.teamcoordinator.project.ProjectService;
-import org.cmb.teamcoordinator.project.RequestIdentity;
+import org.cmb.application.domain.RequestIdentity;
 import org.springframework.stereotype.Service;
 
 @Service

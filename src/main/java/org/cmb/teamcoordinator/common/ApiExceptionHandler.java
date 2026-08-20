@@ -1,4 +1,6 @@
 package org.cmb.teamcoordinator.common;
+import org.cmb.common.exception.ApiException;
+import org.cmb.application.dto.ApiErrorResponse;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

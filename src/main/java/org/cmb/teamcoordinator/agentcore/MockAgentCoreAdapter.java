@@ -1,4 +1,11 @@
 package org.cmb.teamcoordinator.agentcore;
+import org.cmb.application.domain.Skill;
+import org.cmb.application.domain.AgentCoreTools;
+import org.cmb.application.domain.AgentRunAttachment;
+import org.cmb.application.domain.AgentRunResponse;
+import org.cmb.application.domain.AgentRunRequest;
+import org.cmb.application.domain.AgentEvent;
+import org.cmb.application.domain.AgentCoreAdapter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
@@ -8,11 +15,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import org.cmb.teamcoordinator.artifact.FileStore;
-import org.cmb.teamcoordinator.artifact.MockFileDescriptor;
+import org.cmb.application.domain.FileStore;
+import org.cmb.application.domain.MockFileDescriptor;
 import org.cmb.teamcoordinator.artifact.MockFileStore;
-import org.cmb.teamcoordinator.config.DigitalTeamProperties;
-import org.cmb.teamcoordinator.intent.IntentAnalysisContext;
+import org.cmb.common.config.DigitalTeamProperties;
+import org.cmb.application.domain.IntentAnalysisContext;
 import org.cmb.teamcoordinator.intent.MockIntentModelClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;

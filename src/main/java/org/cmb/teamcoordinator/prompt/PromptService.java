@@ -1,12 +1,15 @@
 package org.cmb.teamcoordinator.prompt;
+import org.cmb.application.dto.CreatePromptTemplateRequest;
+import org.cmb.application.dto.RenderedPrompt;
+import org.cmb.application.dto.PromptTemplateView;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
 import org.cmb.infrastructure.persistent.PromptRepository;
-import org.cmb.teamcoordinator.common.ApiException;
-import org.cmb.teamcoordinator.config.DigitalTeamProperties;
-import org.cmb.teamcoordinator.project.RequestIdentity;
+import org.cmb.common.exception.ApiException;
+import org.cmb.common.config.DigitalTeamProperties;
+import org.cmb.application.domain.RequestIdentity;
 import org.springframework.stereotype.Service;
 
 @Service

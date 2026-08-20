@@ -11,7 +11,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
 import org.cmb.teamcoordinator.prompt.PromptService;
-import org.cmb.teamcoordinator.prompt.RenderedPrompt;
+import org.cmb.application.dto.RenderedPrompt;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;

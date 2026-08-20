@@ -7,11 +7,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.cmb.teamcoordinator.config.DigitalTeamProperties;
+import org.cmb.common.config.DigitalTeamProperties;
 import org.cmb.infrastructure.persistent.PromptRepository;
 import org.cmb.teamcoordinator.prompt.PromptService;
-import org.cmb.teamcoordinator.prompt.PromptTemplateView;
-import org.cmb.teamcoordinator.prompt.RenderedPrompt;
+import org.cmb.application.dto.PromptTemplateView;
+import org.cmb.application.dto.RenderedPrompt;
 import org.junit.jupiter.api.Test;
 
 class PromptServiceTest {

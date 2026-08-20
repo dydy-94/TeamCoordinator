@@ -4,8 +4,8 @@ import java.sql.Timestamp;
 import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import org.cmb.teamcoordinator.execution.DispatchWork;
-import org.cmb.teamcoordinator.execution.TaskRecord;
+import org.cmb.application.domain.DispatchWork;
+import org.cmb.application.domain.TaskRecord;
 
 /**
  * SQL access for the execution engine (coordinator_dispatch,

@@ -1,7 +1,7 @@
 package org.cmb.teamcoordinator.api;
 
 import java.util.List;
-import org.cmb.teamcoordinator.project.Skill;
+import org.cmb.application.domain.Skill;
 import org.cmb.infrastructure.persistent.SkillRepository;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;

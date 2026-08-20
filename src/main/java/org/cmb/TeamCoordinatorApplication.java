@@ -1,6 +1,6 @@
 package org.cmb;
 
-import org.cmb.teamcoordinator.config.DigitalTeamProperties;
+import org.cmb.common.config.DigitalTeamProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;

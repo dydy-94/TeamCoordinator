@@ -1,4 +1,6 @@
 package org.cmb.teamcoordinator.agentcore;
+import org.cmb.application.domain.ExpertRegistry;
+import org.cmb.application.domain.ExpertDescriptor;
 
 import java.util.Arrays;
 import java.util.List;

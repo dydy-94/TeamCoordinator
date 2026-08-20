@@ -1,8 +1,8 @@
 package org.cmb.infrastructure.persistent;
 
 import org.cmb.infrastructure.persistent.mapper.IntentAnalysisMapper;
-import org.cmb.teamcoordinator.intent.CoordinatorDecision;
-import org.cmb.teamcoordinator.project.RequestIdentity;
+import org.cmb.application.domain.CoordinatorDecision;
+import org.cmb.application.domain.RequestIdentity;
 import org.springframework.stereotype.Repository;
 
 /**

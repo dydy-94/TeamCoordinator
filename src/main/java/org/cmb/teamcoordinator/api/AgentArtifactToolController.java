@@ -2,12 +2,12 @@ package org.cmb.teamcoordinator.api;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import org.cmb.teamcoordinator.artifact.AgentArtifactUploadContext;
+import org.cmb.application.domain.AgentArtifactUploadContext;
 import org.cmb.infrastructure.persistent.ArtifactRepository;
 import org.cmb.teamcoordinator.artifact.ArtifactService;
-import org.cmb.teamcoordinator.artifact.ArtifactView;
-import org.cmb.teamcoordinator.common.ApiException;
-import org.cmb.teamcoordinator.config.DigitalTeamProperties;
+import org.cmb.application.dto.ArtifactView;
+import org.cmb.common.exception.ApiException;
+import org.cmb.common.config.DigitalTeamProperties;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PathVariable;

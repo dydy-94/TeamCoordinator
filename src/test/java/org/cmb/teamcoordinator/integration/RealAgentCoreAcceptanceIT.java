@@ -5,11 +5,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
-import org.cmb.teamcoordinator.agentcore.AgentEvent;
-import org.cmb.teamcoordinator.agentcore.AgentRunRequest;
-import org.cmb.teamcoordinator.agentcore.AgentRunResponse;
+import org.cmb.application.domain.AgentEvent;
+import org.cmb.application.domain.AgentRunRequest;
+import org.cmb.application.domain.AgentRunResponse;
 import org.cmb.teamcoordinator.agentcore.HttpAgentCoreAdapter;
-import org.cmb.teamcoordinator.config.DigitalTeamProperties;
+import org.cmb.common.config.DigitalTeamProperties;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.web.client.RestTemplate;

@@ -1,14 +1,15 @@
 package org.cmb.teamcoordinator.semantic;
+import org.cmb.application.domain.SemanticCheckClient;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.function.Consumer;
-import org.cmb.teamcoordinator.agentcore.AgentCoreAdapter;
-import org.cmb.teamcoordinator.agentcore.AgentCoreTools;
-import org.cmb.teamcoordinator.agentcore.AgentEvent;
-import org.cmb.teamcoordinator.agentcore.AgentRunRequest;
-import org.cmb.teamcoordinator.agentcore.AgentRunResponse;
+import org.cmb.application.domain.AgentCoreAdapter;
+import org.cmb.application.domain.AgentCoreTools;
+import org.cmb.application.domain.AgentEvent;
+import org.cmb.application.domain.AgentRunRequest;
+import org.cmb.application.domain.AgentRunResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;

@@ -9,15 +9,15 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import org.cmb.teamcoordinator.agentcore.AgentCoreAdapter;
-import org.cmb.teamcoordinator.agentcore.AgentCoreTools;
-import org.cmb.teamcoordinator.agentcore.AgentEvent;
-import org.cmb.teamcoordinator.agentcore.AgentRunRequest;
-import org.cmb.teamcoordinator.agentcore.AgentRunResponse;
-import org.cmb.teamcoordinator.config.DigitalTeamProperties;
-import org.cmb.teamcoordinator.intent.TaskIntent;
+import org.cmb.application.domain.AgentCoreAdapter;
+import org.cmb.application.domain.AgentCoreTools;
+import org.cmb.application.domain.AgentEvent;
+import org.cmb.application.domain.AgentRunRequest;
+import org.cmb.application.domain.AgentRunResponse;
+import org.cmb.common.config.DigitalTeamProperties;
+import org.cmb.application.domain.TaskIntent;
 import org.cmb.teamcoordinator.planning.HttpPlanModelClient;
-import org.cmb.teamcoordinator.planning.PlanModelClient;
+import org.cmb.application.domain.PlanModelClient;
 import org.junit.jupiter.api.Test;
 
 class HttpPlanModelClientTest {

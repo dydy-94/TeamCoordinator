@@ -3,7 +3,7 @@ package org.cmb.infrastructure.persistent.mapper;
 import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import org.cmb.teamcoordinator.prompt.PromptTemplateView;
+import org.cmb.application.dto.PromptTemplateView;
 
 /**
  * SQL access for prompt management (prompt_template, prompt_execution).

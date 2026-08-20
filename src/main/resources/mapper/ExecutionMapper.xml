@@ -10,7 +10,7 @@
         t.correction_count, t.dependencies, t.required_capabilities, t.last_sequence
     </sql>
 
-    <resultMap id="taskRecord" type="org.cmb.teamcoordinator.execution.TaskRecord">
+    <resultMap id="taskRecord" type="org.cmb.application.domain.TaskRecord">
         <result column="database_id" property="databaseId"/>
         <result column="business_id" property="businessId"/>
         <result column="plan_id" property="planId"/>
@@ -32,7 +32,7 @@
         <result column="last_sequence" property="lastSequence"/>
     </resultMap>
 
-    <resultMap id="dispatchWork" type="org.cmb.teamcoordinator.execution.DispatchWork">
+    <resultMap id="dispatchWork" type="org.cmb.application.domain.DispatchWork">
         <result column="dispatch_id" property="dispatchId"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="project_id" property="projectId"/>

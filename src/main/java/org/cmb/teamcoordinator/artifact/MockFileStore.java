@@ -1,4 +1,6 @@
 package org.cmb.teamcoordinator.artifact;
+import org.cmb.application.domain.FileStore;
+import org.cmb.application.domain.MockFileDescriptor;
 
 import java.security.MessageDigest;
 import java.util.Map;

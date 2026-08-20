@@ -3,9 +3,9 @@ package org.cmb.infrastructure.persistent.mapper;
 import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import org.cmb.teamcoordinator.project.ProjectExpert;
-import org.cmb.teamcoordinator.project.ProjectMember;
-import org.cmb.teamcoordinator.project.ProjectRecord;
+import org.cmb.application.domain.ProjectExpert;
+import org.cmb.application.domain.ProjectMember;
+import org.cmb.application.domain.ProjectRecord;
 
 /**
  * SQL access for projects (project, project_member, project_expert,

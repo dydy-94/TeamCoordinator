@@ -5,11 +5,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import java.util.List;
-import org.cmb.teamcoordinator.agentcore.AgentEvent;
-import org.cmb.teamcoordinator.agentcore.AgentRunRequest;
-import org.cmb.teamcoordinator.agentcore.AgentRunResponse;
+import org.cmb.application.domain.AgentEvent;
+import org.cmb.application.domain.AgentRunRequest;
+import org.cmb.application.domain.AgentRunResponse;
 import org.cmb.teamcoordinator.agentcore.MockAgentCoreAdapter;
-import org.cmb.teamcoordinator.config.DigitalTeamProperties;
+import org.cmb.common.config.DigitalTeamProperties;
 import org.junit.jupiter.api.Test;
 
 class MockAgentCoreAdapterTest {

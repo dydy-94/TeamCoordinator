@@ -2,10 +2,10 @@ package org.cmb.teamcoordinator.api;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
-import org.cmb.teamcoordinator.intent.CoordinatorDecision;
-import org.cmb.teamcoordinator.intent.IntentAnalysisRequest;
+import org.cmb.application.domain.CoordinatorDecision;
+import org.cmb.application.dto.IntentAnalysisRequest;
 import org.cmb.teamcoordinator.intent.IntentAnalysisService;
-import org.cmb.teamcoordinator.project.IdentityProvider;
+import org.cmb.application.domain.IdentityProvider;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

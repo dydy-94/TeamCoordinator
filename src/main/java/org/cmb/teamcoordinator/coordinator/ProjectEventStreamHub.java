@@ -1,4 +1,6 @@
 package org.cmb.teamcoordinator.coordinator;
+import org.cmb.common.enums.ProjectEventType;
+import org.cmb.application.domain.ProjectEvent;
 
 import java.io.IOException;
 import java.util.Comparator;
@@ -9,8 +11,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Supplier;
 import org.cmb.infrastructure.persistent.MessageEventRepository;
-import org.cmb.teamcoordinator.agentcore.AgentCoreAdapter;
-import org.cmb.teamcoordinator.agentcore.AgentEvent;
+import org.cmb.application.domain.AgentCoreAdapter;
+import org.cmb.application.domain.AgentEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;

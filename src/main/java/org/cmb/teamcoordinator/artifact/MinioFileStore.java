@@ -1,4 +1,6 @@
 package org.cmb.teamcoordinator.artifact;
+import org.cmb.application.domain.FileStore;
+import org.cmb.application.domain.MockFileDescriptor;
 
 import io.minio.BucketExistsArgs;
 import io.minio.GetObjectArgs;
@@ -15,7 +17,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.PostConstruct;
-import org.cmb.teamcoordinator.config.DigitalTeamProperties;
+import org.cmb.common.config.DigitalTeamProperties;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StreamUtils;

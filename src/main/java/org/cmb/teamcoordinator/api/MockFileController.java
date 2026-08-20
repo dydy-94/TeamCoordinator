@@ -1,8 +1,8 @@
 package org.cmb.teamcoordinator.api;
 
 import java.util.Map;
-import org.cmb.teamcoordinator.artifact.MockFileDescriptor;
-import org.cmb.teamcoordinator.artifact.FileStore;
+import org.cmb.application.domain.MockFileDescriptor;
+import org.cmb.application.domain.FileStore;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;

@@ -13,11 +13,11 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
-import org.cmb.teamcoordinator.agentcore.AgentEvent;
-import org.cmb.teamcoordinator.agentcore.AgentRunRequest;
-import org.cmb.teamcoordinator.agentcore.AgentRunResponse;
+import org.cmb.application.domain.AgentEvent;
+import org.cmb.application.domain.AgentRunRequest;
+import org.cmb.application.domain.AgentRunResponse;
 import org.cmb.teamcoordinator.agentcore.HttpAgentCoreAdapter;
-import org.cmb.teamcoordinator.config.DigitalTeamProperties;
+import org.cmb.common.config.DigitalTeamProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;

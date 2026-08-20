@@ -2,7 +2,7 @@ package org.cmb.infrastructure.persistent;
 
 import java.util.List;
 import org.cmb.infrastructure.persistent.mapper.SkillMapper;
-import org.cmb.teamcoordinator.project.Skill;
+import org.cmb.application.domain.Skill;
 import org.springframework.stereotype.Repository;
 
 /**

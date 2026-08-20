@@ -7,9 +7,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.cmb.infrastructure.persistent.mapper.HumanRequestMapper;
-import org.cmb.teamcoordinator.human.HumanDecision;
-import org.cmb.teamcoordinator.human.HumanRequestType;
-import org.cmb.teamcoordinator.project.RequestIdentity;
+import org.cmb.common.enums.HumanDecision;
+import org.cmb.common.enums.HumanRequestType;
+import org.cmb.application.domain.RequestIdentity;
 import org.springframework.stereotype.Repository;
 
 /**

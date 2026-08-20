@@ -1,7 +1,8 @@
 package org.cmb.teamcoordinator.semantic;
+import org.cmb.application.domain.SemanticCheckClient;
 
 import java.util.function.Consumer;
-import org.cmb.teamcoordinator.agentcore.AgentEvent;
+import org.cmb.application.domain.AgentEvent;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 

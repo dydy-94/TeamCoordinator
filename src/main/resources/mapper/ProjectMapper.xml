@@ -8,7 +8,7 @@
         p.status, p.coordinator_agent_id, p.created_by, p.created_at, p.updated_at
     </sql>
 
-    <resultMap id="projectRecord" type="org.cmb.teamcoordinator.project.ProjectRecord">
+    <resultMap id="projectRecord" type="org.cmb.application.domain.ProjectRecord">
         <result column="database_id" property="databaseId"/>
         <result column="business_id" property="businessId"/>
         <result column="tenant_id" property="tenantId"/>
@@ -21,12 +21,12 @@
         <result column="updated_at" property="updatedAt"/>
     </resultMap>
 
-    <resultMap id="projectMember" type="org.cmb.teamcoordinator.project.ProjectMember">
+    <resultMap id="projectMember" type="org.cmb.application.domain.ProjectMember">
         <result column="user_id" property="userId"/>
         <result column="role" property="role"/>
     </resultMap>
 
-    <resultMap id="projectExpert" type="org.cmb.teamcoordinator.project.ProjectExpert">
+    <resultMap id="projectExpert" type="org.cmb.application.domain.ProjectExpert">
         <result column="expert_id" property="expertId"/>
         <result column="enabled" property="enabled"/>
     </resultMap>

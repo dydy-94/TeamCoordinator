@@ -6,12 +6,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import java.util.Arrays;
 import java.util.Collections;
 import javax.validation.Validation;
-import org.cmb.teamcoordinator.agentcore.ExpertDescriptor;
-import org.cmb.teamcoordinator.planning.CoordinatorPlanSpec;
-import org.cmb.teamcoordinator.planning.PlanValidationException;
+import org.cmb.application.domain.ExpertDescriptor;
+import org.cmb.application.domain.CoordinatorPlanSpec;
+import org.cmb.common.exception.PlanValidationException;
 import org.cmb.teamcoordinator.planning.PlanValidator;
-import org.cmb.teamcoordinator.planning.PlannedTask;
-import org.cmb.teamcoordinator.project.ProjectView;
+import org.cmb.application.domain.PlannedTask;
+import org.cmb.application.dto.ProjectView;
 import org.junit.jupiter.api.Test;
 
 class PlanValidatorTest {

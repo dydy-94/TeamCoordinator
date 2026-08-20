@@ -1,16 +1,18 @@
 package org.cmb.teamcoordinator.planning;
+import org.cmb.common.exception.PlanValidationException;
+import org.cmb.application.domain.PlanModelClient;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Comparator;
 import java.util.List;
 import java.util.function.Consumer;
-import org.cmb.teamcoordinator.agentcore.AgentCoreAdapter;
-import org.cmb.teamcoordinator.agentcore.AgentCoreTools;
-import org.cmb.teamcoordinator.agentcore.AgentEvent;
-import org.cmb.teamcoordinator.agentcore.AgentRunRequest;
-import org.cmb.teamcoordinator.agentcore.AgentRunResponse;
-import org.cmb.teamcoordinator.config.DigitalTeamProperties;
-import org.cmb.teamcoordinator.intent.TaskIntent;
+import org.cmb.application.domain.AgentCoreAdapter;
+import org.cmb.application.domain.AgentCoreTools;
+import org.cmb.application.domain.AgentEvent;
+import org.cmb.application.domain.AgentRunRequest;
+import org.cmb.application.domain.AgentRunResponse;
+import org.cmb.common.config.DigitalTeamProperties;
+import org.cmb.application.domain.TaskIntent;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 

@@ -11,8 +11,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import org.cmb.teamcoordinator.intent.DecisionSchemaValidator;
-import org.cmb.teamcoordinator.intent.DecisionType;
-import org.cmb.teamcoordinator.intent.IntentAnalysisContext;
+import org.cmb.common.enums.DecisionType;
+import org.cmb.application.domain.IntentAnalysisContext;
 import org.cmb.teamcoordinator.intent.MockIntentModelClient;
 import org.junit.jupiter.api.Test;
 

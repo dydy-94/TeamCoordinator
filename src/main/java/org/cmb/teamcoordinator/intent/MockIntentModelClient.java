@@ -1,4 +1,11 @@
 package org.cmb.teamcoordinator.intent;
+import org.cmb.common.enums.RiskLevel;
+import org.cmb.common.enums.ExecutionMode;
+import org.cmb.common.enums.DecisionType;
+import org.cmb.application.domain.IntentModelClient;
+import org.cmb.application.domain.IntentAnalysisContext;
+import org.cmb.application.domain.TaskIntent;
+import org.cmb.application.domain.CoordinatorDecision;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;

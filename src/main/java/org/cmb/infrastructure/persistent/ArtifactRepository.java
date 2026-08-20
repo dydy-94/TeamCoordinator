@@ -3,7 +3,7 @@ package org.cmb.infrastructure.persistent;
 import java.util.Collections;
 import java.util.List;
 import org.cmb.infrastructure.persistent.mapper.ArtifactMapper;
-import org.cmb.teamcoordinator.artifact.AgentArtifactUploadContext;
+import org.cmb.application.domain.AgentArtifactUploadContext;
 import org.springframework.stereotype.Repository;
 
 /**

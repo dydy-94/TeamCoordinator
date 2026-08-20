@@ -19,7 +19,7 @@
     </resultMap>
 
     <resultMap id="agentUploadContext"
-               type="org.cmb.teamcoordinator.artifact.AgentArtifactUploadContext">
+               type="org.cmb.application.domain.AgentArtifactUploadContext">
         <constructor>
             <arg column="tenant_id" name="tenantId" javaType="String"/>
             <arg column="coordinator_task_id" name="coordinatorTaskId" javaType="String"/>

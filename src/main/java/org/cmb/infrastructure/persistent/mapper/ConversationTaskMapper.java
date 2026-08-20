@@ -3,7 +3,7 @@ package org.cmb.infrastructure.persistent.mapper;
 import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import org.cmb.teamcoordinator.coordinator.ConversationTaskView;
+import org.cmb.application.dto.ConversationTaskView;
 
 /**
  * SQL access for conversation tasks (project_conversation). Queries that

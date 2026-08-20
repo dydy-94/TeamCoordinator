@@ -2,8 +2,8 @@ package org.cmb.teamcoordinator.api;
 
 import javax.servlet.http.HttpServletRequest;
 import org.cmb.teamcoordinator.execution.SingleExpertWorker;
-import org.cmb.teamcoordinator.execution.TaskRecord;
-import org.cmb.teamcoordinator.project.IdentityProvider;
+import org.cmb.application.domain.TaskRecord;
+import org.cmb.application.domain.IdentityProvider;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;

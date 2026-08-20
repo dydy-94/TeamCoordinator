@@ -3,8 +3,8 @@ package org.cmb.infrastructure.persistent;
 import java.util.List;
 import java.util.UUID;
 import org.cmb.infrastructure.persistent.mapper.ConversationTaskMapper;
-import org.cmb.teamcoordinator.coordinator.ConversationTaskView;
-import org.cmb.teamcoordinator.project.RequestIdentity;
+import org.cmb.application.dto.ConversationTaskView;
+import org.cmb.application.domain.RequestIdentity;
 import org.springframework.stereotype.Repository;
 
 /**

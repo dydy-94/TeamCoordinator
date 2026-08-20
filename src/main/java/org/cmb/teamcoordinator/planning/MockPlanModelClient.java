@@ -1,12 +1,15 @@
 package org.cmb.teamcoordinator.planning;
+import org.cmb.application.domain.PlanModelClient;
+import org.cmb.application.domain.PlannedTask;
+import org.cmb.application.domain.CoordinatorPlanSpec;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.function.Consumer;
-import org.cmb.teamcoordinator.agentcore.AgentEvent;
-import org.cmb.teamcoordinator.intent.ExecutionMode;
-import org.cmb.teamcoordinator.intent.TaskIntent;
+import org.cmb.application.domain.AgentEvent;
+import org.cmb.common.enums.ExecutionMode;
+import org.cmb.application.domain.TaskIntent;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 

@@ -1,4 +1,8 @@
 package org.cmb.teamcoordinator.intent;
+import org.cmb.common.enums.DecisionType;
+import org.cmb.application.dto.IntentAnalysisRequest;
+import org.cmb.application.domain.IntentAnalysisContext;
+import org.cmb.application.domain.CoordinatorDecision;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,16 +15,16 @@ import java.util.function.Consumer;
 import javax.validation.ConstraintViolation;
 import javax.validation.Validator;
 import org.cmb.infrastructure.persistent.IntentAnalysisRepository;
-import org.cmb.teamcoordinator.agentcore.AgentEvent;
-import org.cmb.teamcoordinator.agentcore.ExpertDescriptor;
-import org.cmb.teamcoordinator.agentcore.ExpertRegistry;
+import org.cmb.application.domain.AgentEvent;
+import org.cmb.application.domain.ExpertDescriptor;
+import org.cmb.application.domain.ExpertRegistry;
 import org.cmb.infrastructure.persistent.ArtifactRepository;
-import org.cmb.teamcoordinator.artifact.FileStore;
-import org.cmb.teamcoordinator.artifact.MockFileDescriptor;
-import org.cmb.teamcoordinator.project.ProjectExpert;
+import org.cmb.application.domain.FileStore;
+import org.cmb.application.domain.MockFileDescriptor;
+import org.cmb.application.domain.ProjectExpert;
 import org.cmb.teamcoordinator.project.ProjectService;
-import org.cmb.teamcoordinator.project.ProjectView;
-import org.cmb.teamcoordinator.project.RequestIdentity;
+import org.cmb.application.dto.ProjectView;
+import org.cmb.application.domain.RequestIdentity;
 import org.springframework.stereotype.Service;
 
 @Service

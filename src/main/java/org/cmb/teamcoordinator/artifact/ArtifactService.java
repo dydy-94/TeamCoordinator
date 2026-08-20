@@ -1,4 +1,9 @@
 package org.cmb.teamcoordinator.artifact;
+import org.cmb.application.domain.FileStore;
+import org.cmb.application.dto.ArtifactUploadRequest;
+import org.cmb.application.dto.ArtifactView;
+import org.cmb.application.domain.AgentArtifactUploadContext;
+import org.cmb.application.domain.MockFileDescriptor;
 
 import java.security.MessageDigest;
 import java.util.ArrayList;
@@ -6,12 +11,12 @@ import java.util.List;
 import java.util.UUID;
 import org.cmb.infrastructure.persistent.ArtifactRepository;
 import org.cmb.infrastructure.persistent.ArtifactRepository.ArtifactRecord;
-import org.cmb.teamcoordinator.agentcore.AgentRunAttachment;
-import org.cmb.teamcoordinator.common.ApiException;
-import org.cmb.teamcoordinator.execution.DispatchWork;
-import org.cmb.teamcoordinator.execution.TaskRecord;
+import org.cmb.application.domain.AgentRunAttachment;
+import org.cmb.common.exception.ApiException;
+import org.cmb.application.domain.DispatchWork;
+import org.cmb.application.domain.TaskRecord;
 import org.cmb.teamcoordinator.project.ProjectService;
-import org.cmb.teamcoordinator.project.RequestIdentity;
+import org.cmb.application.domain.RequestIdentity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

@@ -3,12 +3,12 @@ package org.cmb.infrastructure.persistent;
 import java.util.List;
 import java.util.UUID;
 import org.cmb.infrastructure.persistent.mapper.ProjectMapper;
-import org.cmb.teamcoordinator.project.ProjectExpert;
-import org.cmb.teamcoordinator.project.ProjectMember;
-import org.cmb.teamcoordinator.project.ProjectRecord;
-import org.cmb.teamcoordinator.project.ProjectRole;
-import org.cmb.teamcoordinator.project.ProjectStatus;
-import org.cmb.teamcoordinator.project.RequestIdentity;
+import org.cmb.application.domain.ProjectExpert;
+import org.cmb.application.domain.ProjectMember;
+import org.cmb.application.domain.ProjectRecord;
+import org.cmb.common.enums.ProjectRole;
+import org.cmb.common.enums.ProjectStatus;
+import org.cmb.application.domain.RequestIdentity;
 import org.springframework.stereotype.Repository;
 
 /**

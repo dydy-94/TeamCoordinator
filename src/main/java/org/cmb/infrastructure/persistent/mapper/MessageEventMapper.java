@@ -3,8 +3,8 @@ package org.cmb.infrastructure.persistent.mapper;
 import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import org.cmb.teamcoordinator.coordinator.MessageAcceptedResponse;
-import org.cmb.teamcoordinator.coordinator.ProjectEvent;
+import org.cmb.application.dto.MessageAcceptedResponse;
+import org.cmb.application.domain.ProjectEvent;
 
 /**
  * SQL access for project messages and their events (project_message,

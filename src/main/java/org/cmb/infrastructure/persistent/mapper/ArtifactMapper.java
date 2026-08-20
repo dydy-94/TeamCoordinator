@@ -4,7 +4,7 @@ import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.cmb.infrastructure.persistent.ArtifactRepository.ArtifactRecord;
-import org.cmb.teamcoordinator.artifact.AgentArtifactUploadContext;
+import org.cmb.application.domain.AgentArtifactUploadContext;
 
 /**
  * SQL access for artifacts (project_artifact, project_artifact_lineage).

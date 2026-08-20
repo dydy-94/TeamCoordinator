@@ -1,4 +1,8 @@
 package org.cmb.teamcoordinator.planning;
+import org.cmb.common.exception.PlanValidationException;
+import org.cmb.application.domain.PlanModelClient;
+import org.cmb.application.domain.PlanningResult;
+import org.cmb.application.domain.CoordinatorPlanSpec;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -6,14 +10,14 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Consumer;
-import org.cmb.teamcoordinator.agentcore.AgentEvent;
-import org.cmb.teamcoordinator.agentcore.ExpertRegistry;
+import org.cmb.application.domain.AgentEvent;
+import org.cmb.application.domain.ExpertRegistry;
 import org.cmb.teamcoordinator.common.OutputSchemaProvider;
-import org.cmb.teamcoordinator.intent.TaskIntent;
-import org.cmb.teamcoordinator.project.ProjectView;
+import org.cmb.application.domain.TaskIntent;
+import org.cmb.application.dto.ProjectView;
 import org.cmb.teamcoordinator.prompt.PromptService;
-import org.cmb.teamcoordinator.prompt.RenderedPrompt;
-import org.cmb.teamcoordinator.semantic.SemanticCheckClient;
+import org.cmb.application.dto.RenderedPrompt;
+import org.cmb.application.domain.SemanticCheckClient;
 import org.springframework.stereotype.Service;
 
 @Service

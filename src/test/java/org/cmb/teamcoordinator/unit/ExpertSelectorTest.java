@@ -9,11 +9,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.cmb.teamcoordinator.agentcore.ExpertDescriptor;
-import org.cmb.teamcoordinator.agentcore.ExpertRegistry;
+import org.cmb.application.domain.ExpertDescriptor;
+import org.cmb.application.domain.ExpertRegistry;
 import org.cmb.infrastructure.persistent.ExecutionRepository;
 import org.cmb.teamcoordinator.planning.ExpertSelector;
-import org.cmb.teamcoordinator.project.ProjectView;
+import org.cmb.application.dto.ProjectView;
 import org.junit.jupiter.api.Test;
 
 class ExpertSelectorTest {

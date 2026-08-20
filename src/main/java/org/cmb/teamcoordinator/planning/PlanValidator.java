@@ -1,4 +1,7 @@
 package org.cmb.teamcoordinator.planning;
+import org.cmb.common.exception.PlanValidationException;
+import org.cmb.application.domain.PlannedTask;
+import org.cmb.application.domain.CoordinatorPlanSpec;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -7,9 +10,9 @@ import java.util.Map;
 import java.util.Set;
 import javax.validation.ConstraintViolation;
 import javax.validation.Validator;
-import org.cmb.teamcoordinator.agentcore.ExpertDescriptor;
-import org.cmb.teamcoordinator.project.ProjectExpert;
-import org.cmb.teamcoordinator.project.ProjectView;
+import org.cmb.application.domain.ExpertDescriptor;
+import org.cmb.application.domain.ProjectExpert;
+import org.cmb.application.dto.ProjectView;
 import org.springframework.stereotype.Component;
 
 @Component

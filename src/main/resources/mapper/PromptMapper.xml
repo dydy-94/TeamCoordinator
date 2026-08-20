@@ -9,7 +9,7 @@
     </sql>
 
     <resultMap id="promptTemplateView"
-               type="org.cmb.teamcoordinator.prompt.PromptTemplateView">
+               type="org.cmb.application.dto.PromptTemplateView">
         <result column="business_id" property="id"/>
         <result column="prompt_key" property="promptKey"/>
         <result column="agent_scope" property="agentScope"/>

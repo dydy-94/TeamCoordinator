@@ -3,14 +3,14 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="org.cmb.infrastructure.persistent.mapper.MessageEventMapper">
 
-    <resultMap id="messageAcceptedResponse" type="org.cmb.teamcoordinator.coordinator.MessageAcceptedResponse">
+    <resultMap id="messageAcceptedResponse" type="org.cmb.application.dto.MessageAcceptedResponse">
         <result column="id" property="messageId"/>
         <result column="conversation_id" property="taskId"/>
         <result column="session_id" property="sessionId"/>
         <result column="status" property="status"/>
     </resultMap>
 
-    <resultMap id="projectEvent" type="org.cmb.teamcoordinator.coordinator.ProjectEvent">
+    <resultMap id="projectEvent" type="org.cmb.application.domain.ProjectEvent">
         <result column="id" property="id"/>
         <result column="project_id" property="projectId"/>
         <result column="conversation_id" property="conversationId"/>

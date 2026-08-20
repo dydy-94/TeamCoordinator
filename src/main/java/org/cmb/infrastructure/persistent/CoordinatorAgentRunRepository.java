@@ -3,9 +3,9 @@ package org.cmb.infrastructure.persistent;
 import java.util.List;
 import java.util.UUID;
 import org.cmb.infrastructure.persistent.mapper.CoordinatorAgentRunMapper;
-import org.cmb.teamcoordinator.agentcore.AgentEvent;
-import org.cmb.teamcoordinator.intent.CoordinatorAgentRun;
-import org.cmb.teamcoordinator.project.RequestIdentity;
+import org.cmb.application.domain.AgentEvent;
+import org.cmb.application.domain.CoordinatorAgentRun;
+import org.cmb.application.domain.RequestIdentity;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Repository;
 

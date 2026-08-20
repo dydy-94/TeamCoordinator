@@ -3,7 +3,7 @@ package org.cmb.infrastructure.persistent.mapper;
 import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import org.cmb.teamcoordinator.project.Skill;
+import org.cmb.application.domain.Skill;
 
 /**
  * SQL access for platform-level skills and project-skill associations

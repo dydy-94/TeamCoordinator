@@ -5,7 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.cmb.infrastructure.persistent.mapper.WorkspaceMapper;
-import org.cmb.teamcoordinator.project.ProjectView;
+import org.cmb.application.dto.ProjectView;
 import org.springframework.stereotype.Service;
 
 /**

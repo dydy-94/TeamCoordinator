@@ -1,4 +1,10 @@
 package org.cmb.teamcoordinator.agentcore;
+import org.cmb.application.domain.AgentRunResponse;
+import org.cmb.application.domain.AgentRunRequest;
+import org.cmb.application.domain.AgentEvent;
+import org.cmb.application.domain.AgentCoreConversationResponse;
+import org.cmb.application.domain.AgentCoreConversationRequest;
+import org.cmb.application.domain.AgentCoreAdapter;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -8,7 +14,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.cmb.teamcoordinator.config.DigitalTeamProperties;
+import org.cmb.common.config.DigitalTeamProperties;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;

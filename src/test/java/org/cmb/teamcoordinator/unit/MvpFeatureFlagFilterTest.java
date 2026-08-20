@@ -3,7 +3,7 @@ package org.cmb.teamcoordinator.unit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.cmb.teamcoordinator.common.MvpFeatureFlagFilter;
-import org.cmb.teamcoordinator.config.DigitalTeamProperties;
+import org.cmb.common.config.DigitalTeamProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;

@@ -1,4 +1,6 @@
 package org.cmb.teamcoordinator.intent;
+import org.cmb.application.domain.IntentAnalysisContext;
+import org.cmb.application.domain.CoordinatorAgentRun;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -8,18 +10,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import org.cmb.infrastructure.persistent.CoordinatorAgentRunRepository;
-import org.cmb.teamcoordinator.agentcore.AgentCoreAdapter;
-import org.cmb.teamcoordinator.agentcore.AgentCoreTools;
-import org.cmb.teamcoordinator.agentcore.AgentEvent;
-import org.cmb.teamcoordinator.agentcore.AgentRunRequest;
-import org.cmb.teamcoordinator.agentcore.AgentRunResponse;
+import org.cmb.application.domain.AgentCoreAdapter;
+import org.cmb.application.domain.AgentCoreTools;
+import org.cmb.application.domain.AgentEvent;
+import org.cmb.application.domain.AgentRunRequest;
+import org.cmb.application.domain.AgentRunResponse;
 import org.cmb.infrastructure.persistent.ArtifactRepository;
 import org.cmb.teamcoordinator.artifact.ArtifactService;
 import org.cmb.teamcoordinator.common.OutputSchemaProvider;
-import org.cmb.teamcoordinator.config.DigitalTeamProperties;
+import org.cmb.common.config.DigitalTeamProperties;
 import org.cmb.teamcoordinator.prompt.PromptService;
-import org.cmb.teamcoordinator.prompt.RenderedPrompt;
-import org.cmb.teamcoordinator.project.RequestIdentity;
+import org.cmb.application.dto.RenderedPrompt;
+import org.cmb.application.domain.RequestIdentity;
 import org.springframework.stereotype.Component;
 
 @Component

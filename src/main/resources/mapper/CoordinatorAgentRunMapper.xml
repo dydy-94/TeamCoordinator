@@ -3,7 +3,7 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="org.cmb.infrastructure.persistent.mapper.CoordinatorAgentRunMapper">
 
-    <resultMap id="coordinatorAgentRun" type="org.cmb.teamcoordinator.intent.CoordinatorAgentRun">
+    <resultMap id="coordinatorAgentRun" type="org.cmb.application.domain.CoordinatorAgentRun">
         <result column="database_id" property="databaseId"/>
         <result column="business_id" property="businessId"/>
         <result column="session_id" property="sessionId"/>
