@@ -494,6 +494,8 @@ public class SingleExpertWorker {
         Map<String, Object> promptContext = new HashMap<>();
         promptContext.put("projectName", project.getName());
         promptContext.put("projectDescription", project.getDescription());
+        promptContext.put("projectId", work.getProjectId());
+        promptContext.put("taskId", task.getId());
         promptContext.put("overallRequest", work.getText());
         promptContext.put("taskKey", task.getTaskKey());
         promptContext.put("objective", task.getObjective());

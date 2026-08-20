@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.InputStream;
 import org.cmb.teamcoordinator.agentcore.AgentCoreTools;
+import org.cmb.teamcoordinator.api.AgentArtifactToolController;
 import org.junit.jupiter.api.Test;
 
 class AgentCoreToolsTest {
@@ -27,6 +28,17 @@ class AgentCoreToolsTest {
                 verdict.get("name").asText());
         assertTrue(verdict.get("parameters").get("required")
                 .toString().contains("consistent"));
+    }
+
+    @Test
+    void uploadArtifactToolMatchesEndpointContract() throws Exception {
+        JsonNode upload = loadTool("upload-artifact.json");
+        assertEquals(AgentArtifactToolController.TOOL_NAME,
+                upload.get("name").asText());
+        // The endpoint consumes a multipart "file" part; the definition
+        // must require it so the platform enforces the shape on the agent.
+        assertTrue(upload.get("parameters").get("required")
+                .toString().contains("file"));
     }
 
     @Test

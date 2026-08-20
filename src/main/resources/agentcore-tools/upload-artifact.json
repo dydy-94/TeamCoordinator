@@ -1,0 +1,17 @@
+{
+  "name": "upload_artifact",
+  "description": "Upload a generated file as a project artifact. Call this tool after creating a file: the platform injects the project/task/session context. The response contains artifactId — include every returned artifactId in RUN_SUCCEEDED and reference the same file in the chat/end event attachments. Do not upload files produced by other agents. Endpoint contract: POST {baseUrl}/api/v1/agent-tools/projects/{projectId}/tasks/{taskId}/artifacts with multipart part \"file\" (original file name and media type preserved). {baseUrl} is the TeamCoordinator deployment address configured when mounting this tool; {projectId} and {taskId} are substituted by the platform from the run structured input (fields projectId, taskId); headers X-AgentCore-Tool-Token (configured shared secret), X-Session-Id (structured input businessSessionId), X-Agent-Run-Id and X-Agent-Id are injected by the platform from the run context. The upload is rejected unless the agent run belongs to the supplied project task and session.",
+  "parameters": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "required": ["file"],
+    "properties": {
+      "file": {
+        "type": "string",
+        "contentEncoding": "binary",
+        "description": "The generated file to upload (multipart part, with original file name and media type)."
+      }
+    },
+    "additionalProperties": false
+  }
+}

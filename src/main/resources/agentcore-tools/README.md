@@ -11,10 +11,25 @@
 | `submit_coordinator_decision` | coordinator agent | 提交决策（ANSWER / ASK_HUMAN / CREATE_PLAN） | `coordinator/task-intent-schema-v1.json` |
 | `submit_coordinator_plan` | coordinator agent（规划场景） | 提交执行计划 | `coordinator/plan-schema-v1.json` |
 | `submit_review_verdict` | coordinator agent（审查场景） | 提交语义审查结论 `{"consistent", "reason"}` | 见工具定义文件 |
+| `upload_artifact` | 专家 agent（执行场景） | 上传生成的文件，返回 `artifactId`（写进 RUN_SUCCEEDED 的 `artifactIds`） | 见工具定义文件 |
 
 > 注意：`submit_coordinator_decision` / `submit_coordinator_plan` 的 `parameters` 与
 > `src/main/resources/coordinator/*-schema-v1.json` 必须保持一致（由
 > `AgentCoreToolsTest` 守护），修改任何一侧都要同步另一侧。
+>
+> `upload_artifact` 是 HTTP 工具：挂载时需将工具指向
+> `POST {baseUrl}/api/v1/agent-tools/projects/{projectId}/tasks/{taskId}/artifacts`
+> （实现见 `AgentArtifactToolController`）。
+>
+> - `{baseUrl}`：TeamCoordinator 部署地址，**挂载时在 AgentCore 平台侧配置**
+>   （仓库只定义相对路径；TeamCoordinator 自身不声明对外地址）
+> - `{projectId}` / `{taskId}`：平台从 run 的 structured input 注入
+>   （字段 `projectId`、`taskId`，`startTask` 已随 run request 下发）
+> - 请求头：`X-AgentCore-Tool-Token` 为配置的共享密钥
+>   （`AGENTCORE_ARTIFACT_TOOL_TOKEN`）；`X-Session-Id` 取 structured input 的
+>   `businessSessionId`；`X-Agent-Run-Id` / `X-Agent-Id` 由平台从 run 上下文注入
+>
+> 工具名与端点契约由 `AgentCoreToolsTest` 守护。
 
 ## 事件契约（AgentCore → TeamCoordinator）
 
