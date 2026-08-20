@@ -54,6 +54,8 @@ import org.cmb.application.dto.ProjectView;
 import org.cmb.application.domain.RequestIdentity;
 import org.cmb.application.domain.Skill;
 import org.cmb.infrastructure.persistent.SkillRepository;
+import org.cmb.infrastructure.persistent.CliSubmissionRepository;
+import org.cmb.application.domain.CoordinatorPlanSpec;
 import org.cmb.application.service.PromptService;
 import org.cmb.application.dto.RenderedPrompt;
 import org.cmb.application.domain.SemanticCheckClient;
@@ -134,6 +136,7 @@ public class SingleExpertWorker {
     private final PromptService prompts;
     private final SkillRepository skillRepository;
     private final SemanticCheckClient semanticChecks;
+    private final CliSubmissionRepository cliSubmissions;
     private final DigitalTeamProperties properties;
 
     public SingleExpertWorker(
@@ -152,6 +155,7 @@ public class SingleExpertWorker {
             PromptService prompts,
             SkillRepository skillRepository,
             SemanticCheckClient semanticChecks,
+            CliSubmissionRepository cliSubmissions,
             DigitalTeamProperties properties) {
         this.executionRepository = executionRepository;
         this.analysisService = analysisService;
@@ -168,6 +172,7 @@ public class SingleExpertWorker {
         this.prompts = prompts;
         this.skillRepository = skillRepository;
         this.semanticChecks = semanticChecks;
+        this.cliSubmissions = cliSubmissions;
         this.properties = properties;
     }
 
@@ -368,8 +373,34 @@ public class SingleExpertWorker {
             event.setAgentId(planAgentId);
             publishAgentEventLive(work, event);
         };
-        PlanningResult planning = planningService.createPlan(
-                intent, project, 1, planAgentId, planEventSink);
+        PlanningResult planning;
+        String coordinatorSession = decision.getCoordinatorSessionId();
+        if (coordinatorSession != null && cliSubmissions.find(
+                coordinatorSession, CliSubmissionRepository.KIND_DECISION) != null) {
+            // CLI-driven flow: the plan is submitted by the companion CLI
+            // instead of being generated in a separate planning run.
+            String planPayload = cliSubmissions.find(
+                    coordinatorSession, CliSubmissionRepository.KIND_PLAN);
+            if (planPayload == null) {
+                // The agent is still working; release and retry on the next
+                // poll instead of starting a redundant planning run.
+                executionRepository.releaseDispatch(work.getDispatchId());
+                return;
+            }
+            CoordinatorPlanSpec planSpec;
+            try {
+                planSpec = objectMapper.treeToValue(
+                        objectMapper.readTree(planPayload), CoordinatorPlanSpec.class);
+            } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+                throw new IllegalStateException(
+                        "CLI plan submission is not valid plan JSON.", ex);
+            }
+            planning = new PlanningResult(
+                    planSpec, planPayload, 0, coordinatorSession);
+        } else {
+            planning = planningService.createPlan(
+                    intent, project, 1, planAgentId, planEventSink);
+        }
         // Insert AGENT_RUN_MARKER for the planning AgentCore call
         if (planning.getSessionId() != null) {
             ObjectNode planMarkerPayload = objectMapper.createObjectNode();

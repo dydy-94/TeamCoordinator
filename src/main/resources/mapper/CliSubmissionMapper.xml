@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.cmb.infrastructure.persistent.mapper.CliSubmissionMapper">
+
+    <insert id="insert">
+        INSERT INTO coordinator_cli_submission
+        (business_id, session_id, kind, payload)
+        VALUES (#{businessId}, #{sessionId}, #{kind}, #{payload})
+    </insert>
+
+    <update id="replace">
+        UPDATE coordinator_cli_submission SET payload = #{payload},
+        created_at = CURRENT_TIMESTAMP
+        WHERE session_id = #{sessionId} AND kind = #{kind}
+    </update>
+
+    <select id="findBySession" resultType="string">
+        SELECT payload FROM coordinator_cli_submission
+        WHERE session_id = #{sessionId}
+    </select>
+
+    <select id="find" resultType="string">
+        SELECT payload FROM coordinator_cli_submission
+        WHERE session_id = #{sessionId} AND kind = #{kind}
+    </select>
+
+</mapper>

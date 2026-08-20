@@ -228,6 +228,18 @@
         WHERE business_id = #{conversationId}
     </select>
 
+    <select id="findConversationByCoordinatorSession" resultType="string">
+        SELECT business_id FROM project_conversation
+        WHERE coordinator_session_id = #{sessionId}
+    </select>
+
+    <select id="findDispatchForConversation" resultType="string">
+        SELECT business_id FROM coordinator_dispatch
+        WHERE conversation_id = #{conversationId}
+        AND status IN ('PENDING', 'RUNNING')
+        ORDER BY created_at DESC
+    </select>
+
     <insert id="insertTaskEvent">
         INSERT INTO coordinator_task_event
         (business_id, tenant_id, task_id, event_id, sequence, event_type, payload)

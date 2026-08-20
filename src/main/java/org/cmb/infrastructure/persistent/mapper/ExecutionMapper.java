@@ -146,6 +146,10 @@ public interface ExecutionMapper {
 
     List<String> loadCoordinatorAgent(@Param("conversationId") String conversationId);
 
+    List<String> findConversationByCoordinatorSession(@Param("sessionId") String sessionId);
+
+    List<String> findDispatchForConversation(@Param("conversationId") String conversationId);
+
     int insertTaskEvent(
             @Param("id") String id,
             @Param("tenantId") String tenantId,

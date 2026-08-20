@@ -235,6 +235,14 @@ public class ExecutionRepository {
         return rows.isEmpty() || rows.get(0) == null ? "" : rows.get(0);
     }
 
+    public List<String> findConversationByCoordinatorSession(String sessionId) {
+        return mapper.findConversationByCoordinatorSession(sessionId);
+    }
+
+    public List<String> findDispatchForConversation(String conversationId) {
+        return mapper.findDispatchForConversation(conversationId);
+    }
+
     @Transactional
     public boolean recordEvent(String tenantId, String taskId, AgentEvent event) {
         try {

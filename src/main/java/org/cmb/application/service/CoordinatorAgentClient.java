@@ -16,10 +16,8 @@ import org.cmb.application.domain.AgentEvent;
 import org.cmb.application.domain.AgentRunRequest;
 import org.cmb.application.domain.AgentRunResponse;
 import org.cmb.infrastructure.persistent.ArtifactRepository;
-import org.cmb.application.service.ArtifactService;
-import org.cmb.application.service.OutputSchemaProvider;
+import org.cmb.infrastructure.persistent.CliSubmissionRepository;
 import org.cmb.common.config.DigitalTeamProperties;
-import org.cmb.application.service.PromptService;
 import org.cmb.application.dto.RenderedPrompt;
 import org.cmb.application.domain.RequestIdentity;
 import org.springframework.stereotype.Component;
@@ -37,12 +35,14 @@ public class CoordinatorAgentClient {
     private final OutputSchemaProvider outputSchemas;
     private final ArtifactRepository artifacts;
     private final ArtifactService artifactService;
+    private final CliSubmissionRepository cliSubmissions;
 
     public CoordinatorAgentClient(
             AgentCoreAdapter agentCore, CoordinatorAgentRunRepository runs,
             ObjectMapper objectMapper, DigitalTeamProperties properties,
             PromptService prompts, OutputSchemaProvider outputSchemas,
-            ArtifactRepository artifacts, ArtifactService artifactService) {
+            ArtifactRepository artifacts, ArtifactService artifactService,
+            CliSubmissionRepository cliSubmissions) {
         this.agentCore = agentCore;
         this.runs = runs;
         this.objectMapper = objectMapper;
@@ -51,6 +51,7 @@ public class CoordinatorAgentClient {
         this.outputSchemas = outputSchemas;
         this.artifacts = artifacts;
         this.artifactService = artifactService;
+        this.cliSubmissions = cliSubmissions;
     }
 
     /**
@@ -81,6 +82,15 @@ public class CoordinatorAgentClient {
         if (run.getSessionId() == null || "REPAIR".equals(run.getStage())) {
             submit(identity, projectId, run, context, coordinatorSessionId);
             run = runs.find(identity.getTenantId(), runKey);
+        }
+
+        // CLI submission channel: a decision written by the companion CLI
+        // takes priority over the run's streamed output (toolUsed / end).
+        String cliDecision = cliSubmissions.find(
+                run.getSessionId(), CliSubmissionRepository.KIND_DECISION);
+        if (cliDecision != null) {
+            return new Result(true, cliDecision, run.getSessionId(),
+                    effectiveAgent, false);
         }
 
         List<AgentEvent> events = agentCore.streamEvents(
