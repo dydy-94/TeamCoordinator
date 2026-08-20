@@ -104,7 +104,7 @@ public class IntentAnalysisService {
         projectService.requireTaskInitiator(identity, projectId);
         IntentAnalysisContext context = buildContext(identity, projectId, taskId, request);
         CoordinatorAgentClient.Result agentResult = coordinatorAgent.execute(
-                identity, projectId, messageId, runKey,
+                identity, projectId, taskId, messageId, runKey,
                 businessSessionId, coordinatorSessionId, context, eventSink);
         if (!agentResult.isComplete()) {
             return null;
@@ -115,7 +115,7 @@ public class IntentAnalysisService {
         if (parsed == null && !repaired) {
             coordinatorAgent.prepareRepair(identity, runKey, output);
             agentResult = coordinatorAgent.execute(
-                    identity, projectId, messageId, runKey,
+                    identity, projectId, taskId, messageId, runKey,
                     businessSessionId, coordinatorSessionId, context, eventSink);
             if (!agentResult.isComplete()) {
                 return null;
@@ -156,6 +156,7 @@ public class IntentAnalysisService {
         context.setProjectName(project.getName());
         context.setProjectDescription(project.getDescription());
         context.setCoordinatorAgentId(project.getCoordinatorAgentId());
+        context.setConversationTaskId(taskId);
         context.setText(request.getText());
         context.setAttachmentRefs(request.getAttachmentRefs());
         // Conversation history lives in AgentCore's session — no need to duplicate.

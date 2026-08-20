@@ -22,6 +22,8 @@ public class IntentAnalysisContext {
     private String pendingExpertName;
     /** Project-level override for the Coordinator agent ID. */
     private String coordinatorAgentId;
+    /** The conversation task id — the CLI's --task argument. */
+    private String conversationTaskId;
 
     public String getProjectName() { return projectName; }
     public void setProjectName(String projectName) { this.projectName = projectName; }
@@ -45,4 +47,6 @@ public class IntentAnalysisContext {
     public void setPendingExpertName(String value) { this.pendingExpertName = value; }
     public String getCoordinatorAgentId() { return coordinatorAgentId; }
     public void setCoordinatorAgentId(String v) { this.coordinatorAgentId = v; }
+    public String getConversationTaskId() { return conversationTaskId; }
+    public void setConversationTaskId(String v) { this.conversationTaskId = v; }
 }

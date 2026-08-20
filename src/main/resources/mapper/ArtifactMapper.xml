@@ -62,6 +62,18 @@
         WHERE business_id = #{id} AND status = 'UPLOADING'
     </update>
 
+    <select id="findUploadContextByTaskId" resultMap="agentUploadContext">
+        SELECT t.tenant_id, t.business_id AS coordinator_task_id,
+        t.expert_id AS agent_id, t.session_id AS agent_run_id
+        FROM coordinator_task t
+        WHERE t.business_id = #{taskId}
+        AND t.status IN ('RUNNING', 'WAITING_HUMAN')
+    </select>
+
+    <select id="findProjectIdByTaskId" resultType="string">
+        SELECT project_id FROM coordinator_task WHERE business_id = #{taskId}
+    </select>
+
     <select id="findAgentUploadContext" resultMap="agentUploadContext">
         SELECT t.tenant_id, t.business_id AS coordinator_task_id,
         #{agentId} AS agent_id, #{agentRunId} AS agent_run_id

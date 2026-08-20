@@ -2,23 +2,33 @@ package org.cmb.presentation.controller;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.Map;
 import javax.validation.Valid;
-import org.cmb.application.service.CliSubmissionService;
 import org.cmb.application.dto.CliSubmissionRequest;
-import org.cmb.common.exception.ApiException;
+import org.cmb.application.service.ArtifactService;
+import org.cmb.application.service.CliSubmissionService;
+import org.cmb.application.domain.AgentArtifactUploadContext;
 import org.cmb.common.config.DigitalTeamProperties;
+import org.cmb.common.exception.ApiException;
+import org.cmb.infrastructure.persistent.ArtifactRepository;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
- * Endpoints for the companion CLI: the agent submits its structured
- * Coordinator output (decision / plan / verdict) directly, and the payload
- * is validated and stored so the execution engine can act on it without
- * parsing the run's streamed text.
+ * Endpoints for the companion CLI. Everything is keyed by task id — the
+ * identifier the AgentCore runtime and the CLI reliably share. Coordinator
+ * outputs (decision / plan / verdict) use the conversation task id; expert
+ * operations (task detail fetch, result write-back, artifact upload) use
+ * the coordinator task id.
  */
 @RestController
 @RequestMapping("/api/v1/agent-tools/cli")
@@ -27,40 +37,91 @@ public class CliSubmissionController {
     private static final String TOOL_TOKEN_HEADER = "X-AgentCore-Tool-Token";
 
     private final CliSubmissionService submissions;
+    private final ArtifactRepository artifactRepository;
+    private final ArtifactService artifacts;
     private final String expectedToken;
 
     public CliSubmissionController(
             CliSubmissionService submissions,
+            ArtifactRepository artifactRepository,
+            ArtifactService artifacts,
             DigitalTeamProperties properties) {
         this.submissions = submissions;
+        this.artifactRepository = artifactRepository;
+        this.artifacts = artifacts;
         this.expectedToken = properties.getAgentCore().getArtifactToolToken();
     }
 
+    // ── Coordinator outputs (conversation task id) ─────────────────────
+
     @PostMapping("/submit-decision")
-    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.OK)
+    @ResponseStatus(HttpStatus.OK)
     public void submitDecision(
             @RequestHeader(TOOL_TOKEN_HEADER) String toolToken,
             @Valid @RequestBody CliSubmissionRequest request) {
         authenticate(toolToken);
-        submissions.submitDecision(request.getSessionId(), request.getPayload());
+        submissions.submitDecision(request.getTaskId(), request.getPayload());
     }
 
     @PostMapping("/submit-plan")
-    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.OK)
+    @ResponseStatus(HttpStatus.OK)
     public void submitPlan(
             @RequestHeader(TOOL_TOKEN_HEADER) String toolToken,
             @Valid @RequestBody CliSubmissionRequest request) {
         authenticate(toolToken);
-        submissions.submitPlan(request.getSessionId(), request.getPayload());
+        submissions.submitPlan(request.getTaskId(), request.getPayload());
     }
 
     @PostMapping("/submit-verdict")
-    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.OK)
+    @ResponseStatus(HttpStatus.OK)
     public void submitVerdict(
             @RequestHeader(TOOL_TOKEN_HEADER) String toolToken,
             @Valid @RequestBody CliSubmissionRequest request) {
         authenticate(toolToken);
-        submissions.submitVerdict(request.getSessionId(), request.getPayload());
+        submissions.submitVerdict(request.getTaskId(), request.getPayload());
+    }
+
+    // ── Expert operations (coordinator task id) ────────────────────────
+
+    /** The task detail an expert agent pulls after a taskId-only dispatch. */
+    @GetMapping("/tasks/{taskId}")
+    public Map<String, Object> getTaskDetail(
+            @RequestHeader(TOOL_TOKEN_HEADER) String toolToken,
+            @PathVariable String taskId) {
+        authenticate(toolToken);
+        return submissions.getTaskDetail(taskId);
+    }
+
+    @PostMapping("/tasks/{taskId}/result")
+    @ResponseStatus(HttpStatus.OK)
+    public void submitResult(
+            @RequestHeader(TOOL_TOKEN_HEADER) String toolToken,
+            @PathVariable String taskId,
+            @Valid @RequestBody CliResultRequest request) {
+        authenticate(toolToken);
+        submissions.submitResult(taskId, request.getResultText());
+    }
+
+    @PostMapping(
+            value = "/tasks/{taskId}/artifacts",
+            consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @ResponseStatus(HttpStatus.CREATED)
+    public org.cmb.application.dto.ArtifactView uploadArtifact(
+            @RequestHeader(TOOL_TOKEN_HEADER) String toolToken,
+            @PathVariable String taskId,
+            @RequestPart("file") MultipartFile file) throws Exception {
+        authenticate(toolToken);
+        AgentArtifactUploadContext context =
+                artifactRepository.findUploadContextByTaskId(taskId);
+        if (context == null) {
+            throw ApiException.forbidden(
+                    "AGENT_ARTIFACT_CONTEXT_INVALID",
+                    "Task is not in an executable state: " + taskId);
+        }
+        return artifacts.uploadFromAgent(
+                artifactRepository.findProjectIdByTaskId(taskId),
+                context, file.getOriginalFilename(),
+                file.getContentType(), file.getBytes());
     }
 
     private void authenticate(String suppliedToken) {
@@ -75,5 +136,15 @@ public class CliSubmissionController {
             throw ApiException.unauthorized(
                     "AGENT_TOOL_TOKEN_INVALID", "Agent tool token does not match.");
         }
+    }
+
+    /** Request body for the CLI result write-back. */
+    public static class CliResultRequest {
+        @javax.validation.constraints.NotBlank
+        @com.fasterxml.jackson.annotation.JsonProperty("result_text")
+        private String resultText;
+
+        public String getResultText() { return resultText; }
+        public void setResultText(String value) { this.resultText = value; }
     }
 }

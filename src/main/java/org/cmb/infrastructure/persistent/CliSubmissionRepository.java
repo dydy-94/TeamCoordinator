@@ -8,7 +8,9 @@ import org.springframework.stereotype.Repository;
 
 /**
  * Persistence facade for CLI submissions. A submission is idempotent per
- * (session, kind): a re-submission overwrites the previous payload.
+ * (task, kind): a re-submission overwrites the previous payload. Submissions
+ * are deleted once consumed so a stale payload can never leak into the next
+ * message of the same conversation.
  */
 @Repository
 public class CliSubmissionRepository {
@@ -23,22 +25,20 @@ public class CliSubmissionRepository {
         this.mapper = mapper;
     }
 
-    public void save(String sessionId, String kind, String payload) {
+    public void save(String taskId, String kind, String payload) {
         try {
-            mapper.insert("cli-sub-" + UUID.randomUUID(), sessionId, kind, payload);
+            mapper.insert("cli-sub-" + UUID.randomUUID(), taskId, kind, payload);
         } catch (DuplicateKeyException ex) {
-            mapper.replace(sessionId, kind, payload);
+            mapper.replace(taskId, kind, payload);
         }
     }
 
-    /** Latest payload for the given session, if any. */
-    public String findBySession(String sessionId) {
-        List<String> rows = mapper.findBySession(sessionId);
+    public String find(String taskId, String kind) {
+        List<String> rows = mapper.find(taskId, kind);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
-    public String find(String sessionId, String kind) {
-        List<String> rows = mapper.find(sessionId, kind);
-        return rows.isEmpty() ? null : rows.get(0);
+    public void delete(String taskId, String kind) {
+        mapper.delete(taskId, kind);
     }
 }

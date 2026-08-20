@@ -6,26 +6,29 @@ import org.apache.ibatis.annotations.Param;
 
 /**
  * SQL access for coordinator_cli_submission: structured Coordinator outputs
- * submitted by the companion CLI, keyed by the AgentCore session.
+ * submitted by the companion CLI, keyed by the task id the CLI receives
+ * from the Coordinator.
  */
 @Mapper
 public interface CliSubmissionMapper {
 
     int insert(
             @Param("businessId") String businessId,
-            @Param("sessionId") String sessionId,
+            @Param("taskId") String taskId,
             @Param("kind") String kind,
             @Param("payload") String payload);
 
-    /** Overwrite an existing submission for the same (session, kind). */
+    /** Overwrite an existing submission for the same (task, kind). */
     int replace(
-            @Param("sessionId") String sessionId,
+            @Param("taskId") String taskId,
             @Param("kind") String kind,
             @Param("payload") String payload);
-
-    List<String> findBySession(@Param("sessionId") String sessionId);
 
     List<String> find(
-            @Param("sessionId") String sessionId,
+            @Param("taskId") String taskId,
+            @Param("kind") String kind);
+
+    int delete(
+            @Param("taskId") String taskId,
             @Param("kind") String kind);
 }

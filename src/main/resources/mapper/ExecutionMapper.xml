@@ -228,11 +228,6 @@
         WHERE business_id = #{conversationId}
     </select>
 
-    <select id="findConversationByCoordinatorSession" resultType="string">
-        SELECT business_id FROM project_conversation
-        WHERE coordinator_session_id = #{sessionId}
-    </select>
-
     <select id="findDispatchForConversation" resultType="string">
         SELECT business_id FROM coordinator_dispatch
         WHERE conversation_id = #{conversationId}
@@ -313,6 +308,37 @@
     <update id="releaseDispatch">
         UPDATE coordinator_dispatch SET lease_owner = NULL, lease_expires_at = NULL,
         updated_at = CURRENT_TIMESTAMP WHERE business_id = #{dispatchId} AND status = 'RUNNING'
+    </update>
+
+    <select id="findTaskByBusinessId" resultMap="taskRecord">
+        SELECT id AS database_id, business_id, plan_id, request_id, expert_id,
+        session_id, status, last_sequence, objective, expected_output,
+        acceptance_criteria, result_json, correction_of, correction_count,
+        dependencies, required_capabilities
+        FROM coordinator_task WHERE business_id = #{taskId}
+    </select>
+
+    <select id="findTaskDetail" resultType="map">
+        SELECT t.business_id AS task_id, t.task_key, t.expert_id,
+        t.objective, t.expected_output, t.acceptance_criteria,
+        t.dependencies, t.required_capabilities, t.correction_of,
+        p.business_id AS plan_id, p.conversation_id,
+        c.tenant_id, c.project_id, c.session_id AS business_session_id,
+        m.message_text AS overall_request,
+        pr.name AS project_name, pr.description AS project_description
+        FROM coordinator_task t
+        JOIN coordinator_plan p ON p.business_id = t.plan_id
+        JOIN project_conversation c ON c.business_id = p.conversation_id
+        JOIN project_message m ON m.business_id = p.message_id
+        JOIN project pr ON pr.business_id = c.project_id
+        WHERE t.business_id = #{taskId}
+    </select>
+
+    <update id="markTaskSucceeded">
+        UPDATE coordinator_task SET status = 'SUCCEEDED', result_json = #{resultJson},
+        result_accepted = TRUE, updated_at = CURRENT_TIMESTAMP
+        WHERE business_id = #{taskId} AND status NOT IN
+        ('SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT')
     </update>
 
     <select id="findTask" resultMap="taskRecord">

@@ -44,7 +44,6 @@ import org.cmb.common.enums.DecisionType;
 import org.cmb.application.dto.IntentAnalysisRequest;
 import org.cmb.application.service.IntentAnalysisService;
 import org.cmb.application.domain.TaskIntent;
-import org.cmb.infrastructure.persistent.ArtifactRepository;
 import org.cmb.application.service.ArtifactService;
 import org.cmb.application.service.ExpertSelector;
 import org.cmb.application.domain.PlanningResult;
@@ -52,8 +51,6 @@ import org.cmb.application.service.PlanningService;
 import org.cmb.application.service.ProjectService;
 import org.cmb.application.dto.ProjectView;
 import org.cmb.application.domain.RequestIdentity;
-import org.cmb.application.domain.Skill;
-import org.cmb.infrastructure.persistent.SkillRepository;
 import org.cmb.infrastructure.persistent.CliSubmissionRepository;
 import org.cmb.application.domain.CoordinatorPlanSpec;
 import org.cmb.application.service.PromptService;
@@ -131,10 +128,8 @@ public class SingleExpertWorker {
     private final ProjectEventStreamHub streamHub;
     private final ObjectMapper objectMapper;
     private final HumanRequestRepository humanRequests;
-    private final ArtifactRepository artifactRepository;
     private final ArtifactService artifactService;
     private final PromptService prompts;
-    private final SkillRepository skillRepository;
     private final SemanticCheckClient semanticChecks;
     private final CliSubmissionRepository cliSubmissions;
     private final DigitalTeamProperties properties;
@@ -150,10 +145,8 @@ public class SingleExpertWorker {
             ProjectEventStreamHub streamHub,
             ObjectMapper objectMapper,
             HumanRequestRepository humanRequests,
-            ArtifactRepository artifactRepository,
             ArtifactService artifactService,
             PromptService prompts,
-            SkillRepository skillRepository,
             SemanticCheckClient semanticChecks,
             CliSubmissionRepository cliSubmissions,
             DigitalTeamProperties properties) {
@@ -167,10 +160,8 @@ public class SingleExpertWorker {
         this.streamHub = streamHub;
         this.objectMapper = objectMapper;
         this.humanRequests = humanRequests;
-        this.artifactRepository = artifactRepository;
         this.artifactService = artifactService;
         this.prompts = prompts;
-        this.skillRepository = skillRepository;
         this.semanticChecks = semanticChecks;
         this.cliSubmissions = cliSubmissions;
         this.properties = properties;
@@ -320,6 +311,10 @@ public class SingleExpertWorker {
             executionRepository.releaseDispatch(work.getDispatchId());
             return;
         }
+        // A CLI-submitted decision is single-use: consume it so a stale
+        // payload can never leak into the next message of this conversation.
+        cliSubmissions.delete(work.getConversationId(),
+                CliSubmissionRepository.KIND_DECISION);
         // Persist coordinator session + insert MARKER for first-time use
         if (decision.getCoordinatorSessionId() != null) {
             String effectiveAgent = decision.getEffectiveAgentId() != null
@@ -374,19 +369,12 @@ public class SingleExpertWorker {
             publishAgentEventLive(work, event);
         };
         PlanningResult planning;
-        String coordinatorSession = decision.getCoordinatorSessionId();
-        if (coordinatorSession != null && cliSubmissions.find(
-                coordinatorSession, CliSubmissionRepository.KIND_DECISION) != null) {
-            // CLI-driven flow: the plan is submitted by the companion CLI
-            // instead of being generated in a separate planning run.
-            String planPayload = cliSubmissions.find(
-                    coordinatorSession, CliSubmissionRepository.KIND_PLAN);
-            if (planPayload == null) {
-                // The agent is still working; release and retry on the next
-                // poll instead of starting a redundant planning run.
-                executionRepository.releaseDispatch(work.getDispatchId());
-                return;
-            }
+        // CLI-driven flow: the plan is submitted by the companion CLI
+        // instead of being generated in a separate planning run. Keyed by
+        // the conversation task id.
+        String planPayload = cliSubmissions.find(
+                work.getConversationId(), CliSubmissionRepository.KIND_PLAN);
+        if (planPayload != null) {
             CoordinatorPlanSpec planSpec;
             try {
                 planSpec = objectMapper.treeToValue(
@@ -395,8 +383,9 @@ public class SingleExpertWorker {
                 throw new IllegalStateException(
                         "CLI plan submission is not valid plan JSON.", ex);
             }
-            planning = new PlanningResult(
-                    planSpec, planPayload, 0, coordinatorSession);
+            planning = new PlanningResult(planSpec, planPayload, 0, null);
+            cliSubmissions.delete(work.getConversationId(),
+                    CliSubmissionRepository.KIND_PLAN);
         } else {
             planning = planningService.createPlan(
                     intent, project, 1, planAgentId, planEventSink);
@@ -516,40 +505,19 @@ public class SingleExpertWorker {
      * @param expertId
      */
     private void startTask(DispatchWork work, TaskRecord task, String expertId) {
+        // taskId-only dispatch: the expert agent pulls its full contract
+        // (prompt, acceptance criteria, upstream artifacts) from the
+        // Coordinator via the companion CLI. Only identifiers travel here.
         AgentRunRequest runRequest = new AgentRunRequest();
-        List<String> inputRefs = new java.util.ArrayList<>();
-        for (String reference : work.getAttachmentRefs()) {
-            inputRefs.add(artifactRepository.resolveStorageKey(
-                    work.getTenantId(), work.getProjectId(), reference));
-        }
-        inputRefs.addAll(artifactRepository.findAvailableStorageKeys(
-                task.getPlanId(), task.getDependencies()));
-        RequestIdentity identity = new RequestIdentity(work.getTenantId(), work.getUserId());
-        ProjectView project = projectService.get(identity, work.getProjectId());
-        Map<String, Object> promptContext = new HashMap<>();
-        promptContext.put("projectName", project.getName());
-        promptContext.put("projectDescription", project.getDescription());
-        promptContext.put("projectId", work.getProjectId());
-        promptContext.put("taskId", task.getId());
-        promptContext.put("overallRequest", work.getText());
-        promptContext.put("taskKey", task.getTaskKey());
-        promptContext.put("objective", task.getObjective());
-        promptContext.put("expectedOutput", task.getExpectedOutput());
-        promptContext.put("acceptanceCriteria", task.getAcceptanceCriteria());
-        promptContext.put("dependencies", task.getDependencies());
-        promptContext.put("requiredCapabilities", task.getRequiredCapabilities());
-        promptContext.put("inputArtifactRefs", inputRefs);
-        promptContext.put("businessSessionId", work.getBusinessSessionId());
-        RenderedPrompt prompt = prompts.render(
-                PromptService.EXPERT_EXECUTION, promptContext, work.getTenantId(),
-                work.getProjectId(), work.getConversationId(), task.getRequestId(), expertId);
-        runRequest.setSystemPrompt(prompt.getContent());
-        runRequest.setTaskText(task.getObjective());
-        Map<String, Object> structuredInput = new HashMap<>(promptContext);
-        structuredInput.put("promptVersion", prompt.getVersion());
-        structuredInput.put("promptTemplateId", prompt.getTemplateId());
+        runRequest.setTaskText("Execute task " + task.getId()
+                + ". Fetch your task detail by running: "
+                + "tc get-task --task " + task.getId());
+        Map<String, Object> structuredInput = new HashMap<>();
+        structuredInput.put("projectId", work.getProjectId());
+        structuredInput.put("taskId", task.getId());
+        structuredInput.put("tenantId", work.getTenantId());
+        structuredInput.put("businessSessionId", work.getBusinessSessionId());
         runRequest.setStructuredInput(structuredInput);
-        runRequest.setAttachments(artifactService.toAgentAttachments(inputRefs));
         // Reuse existing expert session from a previous message for context continuity
         // (explicitly exclude current message to prevent parallel tasks sharing sessions)
         String existingExpertSession = executionRepository.findExpertSession(
@@ -558,20 +526,10 @@ public class SingleExpertWorker {
         if (existingExpertSession != null) {
             runRequest.setConversationSessionId(existingExpertSession);
         }
-        // Attach project skills to the expert run request
-        List<String> skillNames = new java.util.ArrayList<>();
-        for (Skill skill : skillRepository.findByProject(
-                work.getTenantId(), work.getProjectId())) {
-            if (skill.isEnabled()) {
-                skillNames.add(skill.getId());
-            }
-        }
-        if (!skillNames.isEmpty()) {
-            runRequest.setSkillNames(skillNames);
-        }
         AgentRunResponse response = agentCore.submitRun(expertId, runRequest);
         executionRepository.saveSession(task.getId(), response.getSessionId());
 
+        RequestIdentity identity = new RequestIdentity(work.getTenantId(), work.getUserId());
         // Insert AGENT_RUN_MARKER for replay: when a reconnecting client sees
         // this marker, it fetches the agent's events from AgentCore in real time.
         ObjectNode markerPayload = objectMapper.createObjectNode();

@@ -45,6 +45,11 @@ public interface ArtifactMapper {
             @Param("agentRunId") String agentRunId,
             @Param("agentId") String agentId);
 
+    List<AgentArtifactUploadContext> findUploadContextByTaskId(
+            @Param("taskId") String taskId);
+
+    String findProjectIdByTaskId(@Param("taskId") String taskId);
+
     Integer countAvailableAgentArtifact(
             @Param("tenantId") String tenantId,
             @Param("projectId") String projectId,

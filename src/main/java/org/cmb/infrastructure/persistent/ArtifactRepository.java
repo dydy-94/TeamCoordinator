@@ -43,6 +43,16 @@ public class ArtifactRepository {
         mapper.complete(id, size, sha256);
     }
 
+    public AgentArtifactUploadContext findUploadContextByTaskId(String taskId) {
+        java.util.List<AgentArtifactUploadContext> rows =
+                mapper.findUploadContextByTaskId(taskId);
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
+    public String findProjectIdByTaskId(String taskId) {
+        return mapper.findProjectIdByTaskId(taskId);
+    }
+
     public AgentArtifactUploadContext findAgentUploadContext(
             String projectId, String conversationId, String businessSessionId,
             String agentRunId, String agentId) {

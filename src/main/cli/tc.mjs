@@ -8,16 +8,21 @@
  *
  * Zero dependencies (Node 18+, built-in fetch/fs).
  *
- * Configuration (environment, injected by AgentCore per run):
+ * Configuration (environment, set at install time):
  *   TC_BASE_URL  TeamCoordinator base URL, e.g. http://127.0.0.1:8080
  *   TC_TOKEN     Shared secret (matches AGENTCORE_ARTIFACT_TOOL_TOKEN)
- *   TC_SESSION   The AgentCore session id of the current run
+ *
+ * Per-run context is passed as command flags, never via environment:
+ * the task id is the only identifier shared by Coordinator, AgentCore
+ * and the CLI.
  *
  * Usage:
- *   tc submit-decision [--file out.json | stdin]
- *   tc submit-plan     [--file out.json | stdin]
- *   tc submit-verdict  [--file out.json | stdin]
- *   tc upload-artifact <file-path>
+ *   tc submit-decision --task <conversationTaskId> [--file out.json | stdin]
+ *   tc submit-plan     --task <conversationTaskId> [--file out.json | stdin]
+ *   tc submit-verdict  --task <conversationTaskId> [--file out.json | stdin]
+ *   tc get-task        --task <coordinatorTaskId>
+ *   tc submit-result   --task <coordinatorTaskId> [--file out.txt | --text "..." | stdin]
+ *   tc upload-artifact <file-path> --task <coordinatorTaskId>
  *   tc validate decision|plan|verdict [--file f.json | stdin]
  *   tc health
  *
@@ -51,6 +56,24 @@ function requireEnv(name) {
   const value = process.env[name];
   if (!value || !value.trim()) {
     fail(`environment variable ${name} is not set`);
+  }
+  return value.trim();
+}
+
+/**
+ * Per-run context values are passed as command flags (the agent does not
+ * have per-run environment injection available). Optional values fall
+ * back to "" so optional server-side filters can be skipped.
+ */
+function flagValue(name) {
+  const index = process.argv.indexOf(`--${name}`);
+  return index === -1 ? "" : (process.argv[index + 1] || "");
+}
+
+function requireFlag(name) {
+  const value = flagValue(name);
+  if (!value || !value.trim()) {
+    fail(`missing required flag --${name}`);
   }
   return value.trim();
 }
@@ -204,7 +227,7 @@ function validateVerdict(node) {
 // ── Commands ───────────────────────────────────────────────────────────
 
 async function submit(kind, endpoint) {
-  const sessionId = requireEnv("TC_SESSION");
+  const taskId = requireFlag("task");
   const raw = readPayload(`submit-${kind.toLowerCase()}`);
   const node = parseJson(`submit-${kind.toLowerCase()}`, raw);
   if (kind === "decision") {
@@ -217,7 +240,7 @@ async function submit(kind, endpoint) {
   const response = await fetch(`${baseUrl()}${endpoint}`, {
     method: "POST",
     headers: jsonHeaders(),
-    body: JSON.stringify({ session_id: sessionId, payload: raw.trim() }),
+    body: JSON.stringify({ task_id: taskId, payload: raw.trim() }),
   });
   if (!response.ok) {
     fail(`submit-${kind.toLowerCase()} rejected (HTTP ${response.status}): ${await response.text()}`);
@@ -226,7 +249,7 @@ async function submit(kind, endpoint) {
 }
 
 async function uploadArtifact() {
-  const sessionId = requireEnv("TC_SESSION");
+  const taskId = requireFlag("task");
   const filePath = process.argv[3];
   if (!filePath) {
     fail("upload-artifact requires a file path");
@@ -243,16 +266,10 @@ async function uploadArtifact() {
   const form = new FormData();
   form.append("file", new Blob([content]), filePath.split("/").pop());
   const response = await fetch(
-    `${baseUrl()}/api/v1/agent-tools/projects/${requireEnv("TC_PROJECT")}`
-      + `/tasks/${requireEnv("TC_TASK")}/artifacts`,
+    `${baseUrl()}/api/v1/agent-tools/cli/tasks/${taskId}/artifacts`,
     {
       method: "POST",
-      headers: {
-        "X-AgentCore-Tool-Token": requireEnv("TC_TOKEN"),
-        "X-Session-Id": sessionId,
-        "X-Agent-Run-Id": requireEnv("TC_RUN"),
-        "X-Agent-Id": requireEnv("TC_AGENT"),
-      },
+      headers: authHeaders(),
       body: form,
     });
   if (!response.ok) {
@@ -277,6 +294,55 @@ function validate() {
   console.log(`${kind}: valid`);
 }
 
+async function getTask() {
+  const taskId = requireFlag("task");
+  const response = await fetch(
+    `${baseUrl()}/api/v1/agent-tools/cli/tasks/${taskId}`,
+    { method: "GET", headers: authHeaders() });
+  if (!response.ok) {
+    fail(`get-task rejected (HTTP ${response.status}): ${await response.text()}`);
+  }
+  console.log(await response.text());
+}
+
+async function submitResult() {
+  const taskId = requireFlag("task");
+  const textIndex = process.argv.indexOf("--text");
+  let resultText;
+  if (textIndex !== -1) {
+    resultText = process.argv[textIndex + 1] || "";
+  } else {
+    const fileIndex = process.argv.indexOf("--file");
+    if (fileIndex !== -1) {
+      const path = process.argv[fileIndex + 1];
+      if (!path) {
+        fail("submit-result --file requires a path");
+      }
+      try {
+        resultText = readFileSync(path, "utf8");
+      } catch (ex) {
+        fail(`cannot read file ${path}: ${ex.message}`);
+      }
+    } else {
+      resultText = readFileSync(0, "utf8");
+    }
+  }
+  if (!resultText || !resultText.trim()) {
+    fail("submit-result requires a non-empty result text");
+  }
+  const response = await fetch(
+    `${baseUrl()}/api/v1/agent-tools/cli/tasks/${taskId}/result`,
+    {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ result_text: resultText }),
+    });
+  if (!response.ok) {
+    fail(`submit-result rejected (HTTP ${response.status}): ${await response.text()}`);
+  }
+  console.log("submit-result: accepted");
+}
+
 async function health() {
   const response = await fetch(`${baseUrl()}/health`);
   if (!response.ok) {
@@ -292,6 +358,8 @@ const routes = {
   "submit-decision": () => submit("decision", "/api/v1/agent-tools/cli/submit-decision"),
   "submit-plan": () => submit("plan", "/api/v1/agent-tools/cli/submit-plan"),
   "submit-verdict": () => submit("verdict", "/api/v1/agent-tools/cli/submit-verdict"),
+  "get-task": getTask,
+  "submit-result": submitResult,
   "upload-artifact": uploadArtifact,
   "validate": validate,
   "health": health,
@@ -300,8 +368,8 @@ const routes = {
 if (!routes[command]) {
   console.error(`tc: unknown command "${command || ""}"\n`);
   console.error(
-    "commands: submit-decision | submit-plan | submit-verdict | "
-      + "upload-artifact <file> | validate decision|plan|verdict | health");
+    "commands: submit-decision | submit-plan | submit-verdict | get-task | "
+      + "submit-result | upload-artifact <file> | validate | health");
   process.exit(1);
 }
 

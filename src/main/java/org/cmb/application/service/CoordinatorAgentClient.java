@@ -66,7 +66,8 @@ public class CoordinatorAgentClient {
      *                  final decision (e.g. direct intent analysis)
      */
     public Result execute(
-            RequestIdentity identity, String projectId, String messageId, String runKey,
+            RequestIdentity identity, String projectId, String conversationTaskId,
+            String messageId, String runKey,
             String businessSessionId, String coordinatorSessionId,
             IntentAnalysisContext context,
             Consumer<AgentEvent> eventSink) {
@@ -86,8 +87,11 @@ public class CoordinatorAgentClient {
 
         // CLI submission channel: a decision written by the companion CLI
         // takes priority over the run's streamed output (toolUsed / end).
-        String cliDecision = cliSubmissions.find(
-                run.getSessionId(), CliSubmissionRepository.KIND_DECISION);
+        // Keyed by the conversation task id — the identifier the AgentCore
+        // runtime and the CLI reliably share.
+        String cliDecision = conversationTaskId == null ? null
+                : cliSubmissions.find(
+                        conversationTaskId, CliSubmissionRepository.KIND_DECISION);
         if (cliDecision != null) {
             return new Result(true, cliDecision, run.getSessionId(),
                     effectiveAgent, false);
@@ -136,7 +140,7 @@ public class CoordinatorAgentClient {
     public Result execute(
             RequestIdentity identity, String projectId, String messageId, String runKey,
             String businessSessionId, IntentAnalysisContext context) {
-        return execute(identity, projectId, messageId, runKey,
+        return execute(identity, projectId, null, messageId, runKey,
                 businessSessionId, null, context, null);
     }
 

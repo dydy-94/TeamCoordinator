@@ -11,14 +11,14 @@ import javax.validation.constraints.NotBlank;
 public class CliSubmissionRequest {
 
     @NotBlank
-    @JsonProperty("session_id")
-    private String sessionId;
+    @JsonProperty("task_id")
+    private String taskId;
 
     @NotBlank
     private String payload;
 
-    public String getSessionId() { return sessionId; }
-    public void setSessionId(String value) { this.sessionId = value; }
+    public String getTaskId() { return taskId; }
+    public void setTaskId(String value) { this.taskId = value; }
     public String getPayload() { return payload; }
     public void setPayload(String value) { this.payload = value; }
 }

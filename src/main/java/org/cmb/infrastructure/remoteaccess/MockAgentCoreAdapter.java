@@ -15,7 +15,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import org.cmb.application.domain.TaskRecord;
 import org.cmb.application.domain.FileStore;
+import org.cmb.infrastructure.persistent.ExecutionRepository;
 import org.cmb.application.domain.MockFileDescriptor;
 import org.cmb.infrastructure.remoteaccess.MockFileStore;
 import org.cmb.common.config.DigitalTeamProperties;
@@ -36,15 +38,18 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
     private final ObjectMapper objectMapper;
     private final MockIntentModelClient coordinatorAgent;
     private final String coordinatorAgentId;
+    private final ExecutionRepository executionRepository;
 
     @Autowired
     public MockAgentCoreAdapter(
             DigitalTeamProperties properties, FileStore fileStore,
-            ObjectMapper objectMapper, MockIntentModelClient coordinatorAgent) {
+            ObjectMapper objectMapper, MockIntentModelClient coordinatorAgent,
+            ExecutionRepository executionRepository) {
         this.fileStore = fileStore;
         this.objectMapper = objectMapper;
         this.coordinatorAgent = coordinatorAgent;
         this.coordinatorAgentId = properties.getAgentCore().getCoordinatorAgentId();
+        this.executionRepository = executionRepository;
     }
 
     /** Constructor for tests that don't need full Spring context. */
@@ -53,6 +58,7 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
         this.objectMapper = new ObjectMapper();
         this.coordinatorAgent = new MockIntentModelClient(objectMapper);
         this.coordinatorAgentId = properties.getAgentCore().getCoordinatorAgentId();
+        this.executionRepository = null;
     }
 
     @Override
@@ -69,6 +75,21 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
                 ? null : request.getStructuredInput().get("objective");
         String effectiveTask = objective == null
                 ? request.getTaskText() : String.valueOf(objective);
+        // taskId-only dispatch: pull the task contract from the Coordinator,
+        // mirroring the real agent's tc get-task flow.
+        if (executionRepository != null
+                && request.getStructuredInput() != null
+                && request.getStructuredInput().get("taskId") != null
+                && objective == null) {
+            TaskRecord pulled = executionRepository.findTaskByBusinessId(
+                    String.valueOf(request.getStructuredInput().get("taskId")));
+            if (pulled != null) {
+                effectiveTask = String.valueOf(pulled.getObjective());
+                if (pulled.getAcceptanceCriteria() != null) {
+                    effectiveTask += " " + pulled.getAcceptanceCriteria();
+                }
+            }
+        }
         String normalizedTask = effectiveTask == null ? "" : effectiveTask.toLowerCase();
 
         // Coordinator agent: use MockIntentModelClient to generate a decision

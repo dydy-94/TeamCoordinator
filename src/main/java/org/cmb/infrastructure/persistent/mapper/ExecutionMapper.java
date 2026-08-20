@@ -146,9 +146,15 @@ public interface ExecutionMapper {
 
     List<String> loadCoordinatorAgent(@Param("conversationId") String conversationId);
 
-    List<String> findConversationByCoordinatorSession(@Param("sessionId") String sessionId);
-
     List<String> findDispatchForConversation(@Param("conversationId") String conversationId);
+
+    List<TaskRecord> findTaskByBusinessId(@Param("taskId") String taskId);
+
+    List<java.util.Map<String, Object>> findTaskDetail(@Param("taskId") String taskId);
+
+    int markTaskSucceeded(
+            @Param("taskId") String taskId,
+            @Param("resultJson") String resultJson);
 
     int insertTaskEvent(
             @Param("id") String id,

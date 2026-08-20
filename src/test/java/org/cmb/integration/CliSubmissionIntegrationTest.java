@@ -1,6 +1,7 @@
 package org.cmb.integration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -41,28 +42,29 @@ class CliSubmissionIntegrationTest {
         String projectId = createProject();
         String taskId = createTask(projectId);
         postMessage(projectId, taskId, "CLI 提交测试");
-        String sessionId = coordinatorSession(projectId);
-        assertNotNull(sessionId, "coordinator session was not recorded");
+        driveTicks(projectId);
+        String conversationId = conversationId(projectId);
+        assertNotNull(conversationId, "conversation was not recorded");
 
         String decision = "{\"decision_type\":\"ANSWER\",\"answer\":\"直接回答\"}";
-        submit("submit-decision", sessionId, decision).andExpect(status().isOk());
-        assertEquals(1, submissionCount(sessionId, "DECISION"));
+        submit("submit-decision", conversationId, decision).andExpect(status().isOk());
+        assertEquals(1, submissionCount(conversationId, "DECISION"));
 
         // Re-submission overwrites instead of duplicating.
-        submit("submit-decision", sessionId, decision).andExpect(status().isOk());
-        assertEquals(1, submissionCount(sessionId, "DECISION"));
+        submit("submit-decision", conversationId, decision).andExpect(status().isOk());
+        assertEquals(1, submissionCount(conversationId, "DECISION"));
 
         // Invalid payloads are rejected by the server-side schema check.
-        submit("submit-decision", sessionId,
+        submit("submit-decision", conversationId,
                 "{\"decision_type\":\"ANSWER\"}").andExpect(status().isBadRequest());
-        submit("submit-verdict", sessionId,
+        submit("submit-verdict", conversationId,
                 "{\"reason\":\"no consistent field\"}").andExpect(status().isBadRequest());
 
         // Wrong token is rejected.
         mockMvc.perform(post("/api/v1/agent-tools/cli/submit-decision")
                         .header("X-AgentCore-Tool-Token", "wrong-token")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"session_id\":\"" + sessionId
+                        .content("{\"task_id\":\"" + conversationId
                                 + "\",\"payload\":\"" + decision.replace("\"", "\\\"") + "\"}"))
                 .andExpect(status().isUnauthorized());
         cleanupDispatch(projectId);
@@ -73,8 +75,9 @@ class CliSubmissionIntegrationTest {
         String projectId = createProject();
         String taskId = createTask(projectId);
         postMessage(projectId, taskId, "CLI 计划提交");
-        String sessionId = coordinatorSession(projectId);
-        assertNotNull(sessionId, "coordinator session was not recorded");
+        driveTicks(projectId);
+        String conversationId = conversationId(projectId);
+        assertNotNull(conversationId, "conversation was not recorded");
 
         String decision = "{\"decision_type\":\"CREATE_PLAN\",\"task_intent\":{"
                 + "\"intent\":\"风险分析\",\"objective\":\"分析接口风险\","
@@ -87,25 +90,74 @@ class CliSubmissionIntegrationTest {
                 + "\"expected_output\":\"风险清单\",\"acceptance_criteria\":\"覆盖全部接口\","
                 + "\"required_capabilities\":[\"analysis\"]}]}";
 
-        submit("submit-decision", sessionId, decision).andExpect(status().isOk());
-        submit("submit-plan", sessionId, plan).andExpect(status().isOk());
+        submit("submit-decision", conversationId, decision).andExpect(status().isOk());
+        submit("submit-plan", conversationId, plan).andExpect(status().isOk());
 
-        assertEquals(1, submissionCount(sessionId, "PLAN"));
+        assertEquals(1, submissionCount(conversationId, "PLAN"));
         Integer planCount = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM coordinator_plan p "
-                        + "JOIN project_conversation c ON c.business_id = p.conversation_id "
-                        + "WHERE c.tenant_id = ?",
-                Integer.class, TENANT);
+                        + "WHERE p.conversation_id = ?",
+                Integer.class, conversationId);
         assertNotNull(planCount);
         assertEquals(1, planCount, "plan submission should drive plan creation");
         Integer taskCount = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM coordinator_task t "
                         + "JOIN coordinator_plan p ON p.business_id = t.plan_id "
-                        + "JOIN project_conversation c ON c.business_id = p.conversation_id "
-                        + "WHERE c.tenant_id = ?",
-                Integer.class, TENANT);
+                        + "WHERE p.conversation_id = ?",
+                Integer.class, conversationId);
         assertNotNull(taskCount);
         assertEquals(1, taskCount, "plan submission should create its tasks");
+        cleanupDispatch(projectId);
+    }
+
+    @Test
+    void taskDetailPullAndResultWriteBack() throws Exception {
+        String projectId = createProject();
+        String taskId = createTask(projectId);
+        postMessage(projectId, taskId, "CLI 拉取式执行");
+        // Let the mock flow create the plan and start the expert task.
+        for (int attempt = 0; attempt < 20; attempt++) {
+            Integer running = jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM coordinator_task WHERE project_id = ? "
+                            + "AND status = 'RUNNING'",
+                    Integer.class, projectId);
+            if (running != null && running > 0) {
+                break;
+            }
+            worker.runOnce();
+        }
+        String coordinatorTaskId = jdbc.queryForObject(
+                "SELECT business_id FROM coordinator_task WHERE project_id = ? "
+                        + "ORDER BY created_at LIMIT 1",
+                String.class, projectId);
+        assertNotNull(coordinatorTaskId);
+
+        // The expert pulls its contract via the CLI endpoint.
+        String detail = mockMvc.perform(
+                        org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                                .get("/api/v1/agent-tools/cli/tasks/" + coordinatorTaskId)
+                        .header("X-AgentCore-Tool-Token", "test-agentcore-tool-token"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertTrue(detail.contains("systemPrompt"), "detail must include rendered prompt");
+        assertTrue(detail.contains("objective"), "detail must include objective");
+
+        // The expert writes its result back via the CLI endpoint.
+        mockMvc.perform(post("/api/v1/agent-tools/cli/tasks/" + coordinatorTaskId + "/result")
+                        .header("X-AgentCore-Tool-Token", "test-agentcore-tool-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"result_text\":\"CLI 写回的结果\"}"))
+                .andExpect(status().isOk());
+        assertEquals("SUCCEEDED", jdbc.queryForObject(
+                "SELECT status FROM coordinator_task WHERE business_id = ?",
+                String.class, coordinatorTaskId));
+
+        // Re-submitting a result for a terminal task is rejected.
+        mockMvc.perform(post("/api/v1/agent-tools/cli/tasks/" + coordinatorTaskId + "/result")
+                        .header("X-AgentCore-Tool-Token", "test-agentcore-tool-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"result_text\":\"again\"}"))
+                .andExpect(status().isConflict());
         cleanupDispatch(projectId);
     }
 
@@ -115,7 +167,7 @@ class CliSubmissionIntegrationTest {
             String endpoint, String sessionId, String payload) throws Exception {
         org.cmb.application.dto.CliSubmissionRequest body =
                 new org.cmb.application.dto.CliSubmissionRequest();
-        body.setSessionId(sessionId);
+        body.setTaskId(sessionId);
         body.setPayload(payload);
         return mockMvc.perform(post("/api/v1/agent-tools/cli/" + endpoint)
                         .header("X-AgentCore-Tool-Token", "test-agentcore-tool-token")
@@ -126,26 +178,29 @@ class CliSubmissionIntegrationTest {
     private int submissionCount(String sessionId, String kind) {
         Integer count = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM coordinator_cli_submission "
-                        + "WHERE session_id = ? AND kind = ?",
+                        + "WHERE task_id = ? AND kind = ?",
                 Integer.class, sessionId, kind);
         return count == null ? 0 : count;
     }
 
-    private String coordinatorSession(String projectId) {
-        // Drive ticks until this project's coordinator session is recorded.
-        // claimNext picks the oldest claimable dispatch, so leftovers from
-        // earlier tests may consume a tick or two first.
+    /** Drive ticks until this project's dispatch has been processed. */
+    private void driveTicks(String projectId) {
         for (int attempt = 0; attempt < 20; attempt++) {
-            java.util.List<String> rows = jdbc.queryForList(
-                    "SELECT coordinator_session_id FROM project_conversation "
-                            + "WHERE project_id = ? AND coordinator_session_id IS NOT NULL",
-                    String.class, projectId);
-            if (!rows.isEmpty()) {
-                return rows.get(0);
+            Integer count = jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM project_conversation WHERE project_id = ?",
+                    Integer.class, projectId);
+            if (count != null && count > 0) {
+                return;
             }
             worker.runOnce();
         }
-        return null;
+    }
+
+    private String conversationId(String projectId) {
+        java.util.List<String> rows = jdbc.queryForList(
+                "SELECT business_id FROM project_conversation WHERE project_id = ?",
+                String.class, projectId);
+        return rows.isEmpty() ? null : rows.get(0);
     }
 
     private void cleanupDispatch(String projectId) {

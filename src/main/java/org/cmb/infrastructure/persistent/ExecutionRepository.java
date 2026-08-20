@@ -235,12 +235,23 @@ public class ExecutionRepository {
         return rows.isEmpty() || rows.get(0) == null ? "" : rows.get(0);
     }
 
-    public List<String> findConversationByCoordinatorSession(String sessionId) {
-        return mapper.findConversationByCoordinatorSession(sessionId);
-    }
-
     public List<String> findDispatchForConversation(String conversationId) {
         return mapper.findDispatchForConversation(conversationId);
+    }
+
+    public TaskRecord findTaskByBusinessId(String taskId) {
+        List<TaskRecord> rows = mapper.findTaskByBusinessId(taskId);
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
+    public java.util.Map<String, Object> findTaskDetail(String taskId) {
+        List<java.util.Map<String, Object>> rows = mapper.findTaskDetail(taskId);
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
+    /** Unguarded terminal transition for CLI-submitted expert results. */
+    public boolean markTaskSucceeded(String taskId, String resultJson) {
+        return mapper.markTaskSucceeded(taskId, resultJson) == 1;
     }
 
     @Transactional

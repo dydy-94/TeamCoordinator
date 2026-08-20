@@ -5,24 +5,24 @@
 
     <insert id="insert">
         INSERT INTO coordinator_cli_submission
-        (business_id, session_id, kind, payload)
-        VALUES (#{businessId}, #{sessionId}, #{kind}, #{payload})
+        (business_id, task_id, kind, payload)
+        VALUES (#{businessId}, #{taskId}, #{kind}, #{payload})
     </insert>
 
     <update id="replace">
         UPDATE coordinator_cli_submission SET payload = #{payload},
         created_at = CURRENT_TIMESTAMP
-        WHERE session_id = #{sessionId} AND kind = #{kind}
+        WHERE task_id = #{taskId} AND kind = #{kind}
     </update>
-
-    <select id="findBySession" resultType="string">
-        SELECT payload FROM coordinator_cli_submission
-        WHERE session_id = #{sessionId}
-    </select>
 
     <select id="find" resultType="string">
         SELECT payload FROM coordinator_cli_submission
-        WHERE session_id = #{sessionId} AND kind = #{kind}
+        WHERE task_id = #{taskId} AND kind = #{kind}
     </select>
+
+    <delete id="delete">
+        DELETE FROM coordinator_cli_submission
+        WHERE task_id = #{taskId} AND kind = #{kind}
+    </delete>
 
 </mapper>
