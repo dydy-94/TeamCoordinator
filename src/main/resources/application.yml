@@ -19,7 +19,9 @@ spring:
       connection-timeout: 5000
       maximum-pool-size: 10
   flyway:
-    enabled: true
+    # 默认关闭：数据库由 db/init/*.sql 初始化（compose 挂载自动执行）。
+    # 需要走 Flyway 迁移时设 FLYWAY_ENABLED=true。
+    enabled: ${FLYWAY_ENABLED:false}
     locations: classpath:db/migration
     baseline-on-migrate: true
   redis:

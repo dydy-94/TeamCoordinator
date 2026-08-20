@@ -5,11 +5,12 @@
 -- 可直接用于全新环境的一次性建库初始化（等价于 Flyway 全量执行后的 schema）。
 --
 -- 使用说明:
---   1. 推荐方式：生产环境直接用 Flyway 初始化（application.yml 已启用
---      baseline-on-migrate），结构与种子数据都随版本演进，无需维护本文件。
---   2. 本文件的用途：完整结构参考 / DBA 审阅 / 脱离 Flyway 的一次性建库。
---      注意：种子数据（prompt_template 24 条、skill 5 条）不在本文件内，
---      见各迁移的 INSERT：V11/V17/V18/V22/V24/V25（提示词）与 V16（技能）。
+--   1. 项目已脱离 Flyway：应用默认不执行迁移（application.yml
+--      flyway.enabled=${FLYWAY_ENABLED:false}）。数据库初始化由本目录完成：
+--      docker compose 首次启动时会把 db/init/*.sql 按序挂载到
+--      /docker-entrypoint-initdb.d 自动执行（01-schema.sql 建表、
+--      02-seed.sql 灌种子）。独立建库时手动按序执行这两个文件即可。
+--   2. 测试环境（application-test.yml）仍启用 Flyway 自建 H2。
 --   3. 关键结构事实：V13 之后所有表以 BIGINT 自增 id 为代理主键、
 --      字符串 business_id 为对外业务主键（API 只暴露 business_id）。
 --      project_message.idempotency_key 已在 V13 删除。

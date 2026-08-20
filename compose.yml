@@ -8,6 +8,8 @@ services:
       MYSQL_DATABASE: xservice
     volumes:
       - teamcoordinator-mysql:/var/lib/mysql
+      # 脱离 Flyway：容器首次初始化时按序执行 db/init/*.sql 建库+种子
+      - ./db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-change-me}"]
       interval: 5s
