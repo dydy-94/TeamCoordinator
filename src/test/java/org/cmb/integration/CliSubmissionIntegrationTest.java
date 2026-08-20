@@ -161,6 +161,60 @@ class CliSubmissionIntegrationTest {
         cleanupDispatch(projectId);
     }
 
+    @Test
+    void messageAttachmentsReachExpertTaskDetail() throws Exception {
+        String projectId = createProject();
+        String taskId = createTask(projectId);
+        // User uploads an artifact (reserve + complete, memory store).
+        String reserveBody = mockMvc.perform(post(
+                        "/api/v1/projects/" + projectId + "/artifacts/uploads")
+                        .headers(identity())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"fileName\":\"spec.txt\",\"mediaType\":\"text/plain\"}"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String artifactId = objectMapper.readTree(reserveBody).get("artifactId").asText();
+        String storageKey = jdbc.queryForObject(
+                "SELECT storage_key FROM project_artifact WHERE business_id = ?",
+                String.class, artifactId);
+        // In-memory store: push the file content through the mock endpoint.
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .put("/mock/files/" + storageKey + "/content")
+                        .contentType(MediaType.TEXT_PLAIN)
+                        .content("spec content for experts"))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/projects/" + projectId
+                        + "/artifacts/" + artifactId + "/complete")
+                        .headers(identity()))
+                .andExpect(status().isOk());
+
+        postMessage(projectId, taskId, "分析附件内容",
+                java.util.Arrays.asList(artifactId));
+        String coordinatorTaskId = null;
+        for (int attempt = 0; attempt < 20; attempt++) {
+            java.util.List<String> rows = jdbc.queryForList(
+                    "SELECT business_id FROM coordinator_task WHERE project_id = ? "
+                            + "AND status = 'RUNNING' ORDER BY created_at",
+                    String.class, projectId);
+            if (!rows.isEmpty()) {
+                coordinatorTaskId = rows.get(0);
+                break;
+            }
+            worker.runOnce();
+        }
+        assertNotNull(coordinatorTaskId, "expert task did not start");
+
+        String detail = mockMvc.perform(
+                        org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                                .get("/api/v1/agent-tools/cli/tasks/" + coordinatorTaskId)
+                        .header("X-AgentCore-Tool-Token", "test-agentcore-tool-token"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertTrue(detail.contains("spec.txt"), "message attachment must reach the expert: " + detail);
+        assertTrue(detail.contains("fileDownloadUrl"), "attachment must carry a download URL");
+        cleanupDispatch(projectId);
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────
 
     private org.springframework.test.web.servlet.ResultActions submit(
@@ -219,13 +273,27 @@ class CliSubmissionIntegrationTest {
 
     private void postMessage(String projectId, String taskId, String text)
             throws Exception {
+        postMessage(projectId, taskId, text, java.util.Collections.emptyList());
+    }
+
+    private void postMessage(String projectId, String taskId, String text,
+            java.util.List<String> attachmentRefs) throws Exception {
+        StringBuilder refs = new StringBuilder("[");
+        for (String ref : attachmentRefs) {
+            if (refs.length() > 1) {
+                refs.append(",");
+            }
+            refs.append("\"").append(ref).append("\"");
+        }
+        refs.append("]");
         mockMvc.perform(post("/api/v1/projects/" + projectId
                         + "/tasks/" + taskId + "/messages")
                         .headers(identity())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"client_message_id\":\"client-" + UUID.randomUUID()
                                 + "\",\"text\":\"" + text
-                                + "\",\"attachment_refs\":[],\"idempotency_key\":\"idem-"
+                                + "\",\"attachment_refs\":" + refs
+                                + ",\"idempotency_key\":\"idem-"
                                 + UUID.randomUUID() + "\"}"))
                 .andExpect(status().isAccepted());
     }

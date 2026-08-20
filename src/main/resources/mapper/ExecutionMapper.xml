@@ -325,6 +325,7 @@
         p.business_id AS plan_id, p.conversation_id,
         c.tenant_id, c.project_id, c.session_id AS business_session_id,
         p.message_id, m.message_text AS overall_request,
+        m.attachment_refs AS message_attachment_refs,
         pr.name AS project_name, pr.description AS project_description
         FROM coordinator_task t
         JOIN coordinator_plan p ON p.business_id = t.plan_id

@@ -149,8 +149,18 @@ public class CliSubmissionService {
         List<String> capabilities =
                 readList((String) detail.get("required_capabilities"));
         String planId = (String) detail.get("plan_id");
-        List<String> inputRefs =
-                artifactRepository.findAvailableStorageKeys(planId, dependencies);
+        List<String> inputRefs = new ArrayList<>();
+        // Message attachments uploaded by the user travel with every task.
+        for (String reference
+                : readList((String) detail.get("message_attachment_refs"))) {
+            inputRefs.add(artifactRepository.resolveStorageKey(
+                    (String) detail.get("tenant_id"),
+                    (String) detail.get("project_id"),
+                    reference));
+        }
+        // Upstream artifacts produced by the dependency tasks of this plan.
+        inputRefs.addAll(
+                artifactRepository.findAvailableStorageKeys(planId, dependencies));
         List<AgentRunAttachment> attachments =
                 artifactService.toAgentAttachments(inputRefs);
 
