@@ -1,4 +1,4 @@
-package org.cmb.teamcoordinator.integration;
+package org.cmb.integration;
 
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;

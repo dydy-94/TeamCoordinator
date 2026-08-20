@@ -30,7 +30,7 @@ public class TraceContextFilter extends OncePerRequestFilter {
     private static final Pattern PROJECT_PATH = Pattern.compile(
             "/api/v1/projects/(project-[A-Za-z0-9-]+)(?:/|$)");
     private static final Logger LOGGER = LoggerFactory.getLogger(TraceContextFilter.class);
-    private final Tracer tracer = GlobalOpenTelemetry.getTracer("org.cmb.teamcoordinator");
+    private final Tracer tracer = GlobalOpenTelemetry.getTracer("org.cmb");
 
     @Override
     protected void doFilterInternal(

@@ -1,4 +1,4 @@
-package org.cmb.teamcoordinator.unit;
+package org.cmb.unit;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;

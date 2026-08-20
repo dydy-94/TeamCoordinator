@@ -1,4 +1,4 @@
-package org.cmb.teamcoordinator.integration;
+package org.cmb.integration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
