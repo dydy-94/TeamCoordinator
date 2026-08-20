@@ -151,6 +151,14 @@ class CliSubmissionIntegrationTest {
         assertEquals("SUCCEEDED", jdbc.queryForObject(
                 "SELECT status FROM coordinator_task WHERE business_id = ?",
                 String.class, coordinatorTaskId));
+        // 让 worker 消费一轮事件流（游标随流推进），再断言水位。
+        worker.runOnce();
+        // 事件游标必须随流事件推进（SUCCEEDED 后仍在推进），否则后续
+        // 消息的会话水位恒为 0、重放窗口全量吐出历史。
+        assertTrue(jdbc.queryForObject(
+                "SELECT last_sequence FROM coordinator_task WHERE business_id = ?",
+                Long.class, coordinatorTaskId) > 0L,
+                "task cursor must advance past stream events");
 
         // Re-submitting a result for a terminal task is rejected.
         mockMvc.perform(post("/api/v1/agent-tools/cli/tasks/" + coordinatorTaskId + "/result")
@@ -213,6 +221,48 @@ class CliSubmissionIntegrationTest {
         assertTrue(detail.contains("spec.txt"), "message attachment must reach the expert: " + detail);
         assertTrue(detail.contains("fileDownloadUrl"), "attachment must carry a download URL");
         cleanupDispatch(projectId);
+    }
+
+    @Test
+    void secondMessageExpertMarkerCarriesSessionWatermark() throws Exception {
+        String projectId = createProject();
+        String taskId = createTask(projectId);
+        postMessage(projectId, taskId, "第一条消息");
+        runUntilTerminalFor(projectId);
+        postMessage(projectId, taskId, "第二条消息");
+        runUntilTerminalFor(projectId);
+
+        java.util.List<java.util.Map<String, Object>> markers = jdbc.queryForList(
+                "SELECT payload FROM project_event "
+                        + "WHERE conversation_id = ? AND event_type = 'AGENT_RUN_MARKER' "
+                        + "ORDER BY sequence",
+                taskId);
+        long expertStart = -1L;
+        for (java.util.Map<String, Object> marker : markers) {
+            com.fasterxml.jackson.databind.JsonNode payload = objectMapper.readTree(
+                    String.valueOf(marker.get("payload")));
+            if ("expert-analysis".equals(payload.path("expertId").asText())) {
+                expertStart = payload.path("startSequence").asLong(-1L);
+            }
+        }
+        assertTrue(expertStart > 0L,
+                "second message's expert MARKER must carry the session watermark, "
+                        + "got: " + expertStart);
+        cleanupDispatch(projectId);
+    }
+
+    private void runUntilTerminalFor(String projectId) {
+        for (int attempt = 0; attempt < 40; attempt++) {
+            Integer running = jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM coordinator_dispatch WHERE project_id = ? "
+                            + "AND status IN ('PENDING','RUNNING')",
+                    Integer.class, projectId);
+            if (running != null && running == 0) {
+                return;
+            }
+            worker.runOnce();
+        }
+        throw new AssertionError("dispatch did not finish for project " + projectId);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────

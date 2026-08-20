@@ -193,10 +193,8 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
             planEnd.setUsage(planUsage);
             events.add(planEnd);
             if (cliSubmissions != null && cliTaskId != null) {
-                pendingActionsBySession.put(sessionId, () -> {
-                    uploadResult(cliTaskId, resultContent);
-                    cliSubmissions.submitResult(cliTaskId, resultContent);
-                });
+                pendingActionsBySession.put(sessionId, () ->
+                        submitResultTolerant(cliTaskId, resultContent));
             }
         } else {
             // Normal success: chat + end
@@ -246,10 +244,8 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
             endEvent.setFileType("common");
             events.add(endEvent);
             if (cliSubmissions != null && cliTaskId != null) {
-                pendingActionsBySession.put(sessionId, () -> {
-                    uploadResult(cliTaskId, resultContent);
-                    cliSubmissions.submitResult(cliTaskId, resultContent);
-                });
+                pendingActionsBySession.put(sessionId, () ->
+                        submitResultTolerant(cliTaskId, resultContent));
             }
         }
 
@@ -413,6 +409,19 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
         task.setAcceptanceCriteria(criteria);
         task.setRequiredCapabilities(capabilities);
         return task;
+    }
+
+    /**
+     * 提交专家结果并上传产物；若结果已由其他通道写回（如测试直连端点
+     * 或真实 UI 手动确认），忽略冲突，保持幂等。
+     */
+    private void submitResultTolerant(String taskId, String content) {
+        try {
+            uploadResult(taskId, content);
+            cliSubmissions.submitResult(taskId, content);
+        } catch (org.cmb.common.exception.ApiException ignored) {
+            // result already written by another channel
+        }
     }
 
     /** Mirror the real agent's tc upload-artifact call. */

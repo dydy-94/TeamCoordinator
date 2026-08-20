@@ -358,7 +358,7 @@
         UPDATE coordinator_task SET last_sequence = #{sequence},
         updated_at = CURRENT_TIMESTAMP
         WHERE business_id = #{taskId} AND last_sequence &lt; #{sequence}
-        AND status = 'RUNNING'
+        AND status IN ('RUNNING', 'SUCCEEDED')
     </update>
 
     <select id="findTask" resultMap="taskRecord">

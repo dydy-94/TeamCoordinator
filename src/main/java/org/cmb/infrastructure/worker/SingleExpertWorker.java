@@ -388,9 +388,14 @@ public class SingleExpertWorker {
      * @param tasks 当前调度工作下的任务列表
      */
     private void advancePlan(DispatchWork work, List<TaskRecord> tasks) {
-        // 消费各 RUNNING任务的AgentCore事件
+        // 消费各任务的 AgentCore 事件。SUCCEEDED 也继续消费：CLI 写回
+        // 结果后任务先于流事件到达终态，仍需推进事件游标（会话水位
+        // 依赖它），状态转移本身由终态守卫保护。
         for (TaskRecord task : tasks) {
-            if (task.getSessionId() != null && !isTerminal(task.getStatus())) {
+            if (task.getSessionId() != null
+                    && !"FAILED".equals(task.getStatus())
+                    && !"CANCELLED".equals(task.getStatus())
+                    && !"TIMED_OUT".equals(task.getStatus())) {
                 consumeEvents(work, task);
             }
         }
