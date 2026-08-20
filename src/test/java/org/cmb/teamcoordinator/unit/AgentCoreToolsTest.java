@@ -7,7 +7,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.InputStream;
 import org.cmb.application.domain.AgentCoreTools;
-import org.cmb.teamcoordinator.api.AgentArtifactToolController;
+import org.cmb.presentation.controller.AgentArtifactToolController;
 import org.junit.jupiter.api.Test;
 
 class AgentCoreToolsTest {

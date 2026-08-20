@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.UUID;
 import org.cmb.infrastructure.worker.SingleExpertWorker;
-import org.cmb.teamcoordinator.human.HumanRequestService;
+import org.cmb.application.service.HumanRequestService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;

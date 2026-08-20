@@ -13,7 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.UUID;
 import org.cmb.TeamCoordinatorApplication;
 import org.cmb.common.exception.ApiException;
-import org.cmb.teamcoordinator.project.ProjectService;
+import org.cmb.application.service.ProjectService;
 import org.cmb.application.domain.RequestIdentity;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

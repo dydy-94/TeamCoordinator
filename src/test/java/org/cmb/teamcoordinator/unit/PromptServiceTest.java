@@ -9,7 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.cmb.common.config.DigitalTeamProperties;
 import org.cmb.infrastructure.persistent.PromptRepository;
-import org.cmb.teamcoordinator.prompt.PromptService;
+import org.cmb.application.service.PromptService;
 import org.cmb.application.dto.PromptTemplateView;
 import org.cmb.application.dto.RenderedPrompt;
 import org.junit.jupiter.api.Test;
