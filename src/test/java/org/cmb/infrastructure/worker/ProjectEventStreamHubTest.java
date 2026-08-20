@@ -78,19 +78,20 @@ class ProjectEventStreamHubTest {
             events.add(ae);
         }
 
-        // 第一条消息的 MARKER（startSequence=0）：完整下发 1..6
-        assertEquals(6, hub.filterAgentReplay(events, 0L).size());
-        // 第二条消息的 MARKER（startSequence=6）：只下发本消息的 7..12
+        // 第一条消息的 MARKER（start=0，end=6）：只下发 1..6
+        assertEquals(6, hub.filterAgentReplay(events, 0L, 6L).size());
+        // 第二条消息的 MARKER（start=6，end=无界）：只下发 7..12
         java.util.List<AgentEvent> session = new java.util.ArrayList<>(events);
         for (int i = 7; i <= 12; i++) {
             AgentEvent ae = AgentEvent.of("thinkingDelta");
             ae.setSequence(i);
             session.add(ae);
         }
-        assertEquals(6, hub.filterAgentReplay(session, 6L).size());
-        // 旧 MARKER（无 startSequence，floor=0 兜底）也会整段下发，
-        // 由调用方以会话游标推进保证多 MARKER 各归其位。
-        assertEquals(12, hub.filterAgentReplay(session, 0L).size());
+        assertEquals(6, hub.filterAgentReplay(session, 6L, Long.MAX_VALUE).size());
+        // 无上界 + floor=0（旧数据游标兜底语义）：整段下发
+        assertEquals(12, hub.filterAgentReplay(session, 0L, Long.MAX_VALUE).size());
+        // 上界生效：floor=0、end=6 只下发 1..6
+        assertEquals(6, hub.filterAgentReplay(session, 0L, 6L).size());
     }
 
     @Test

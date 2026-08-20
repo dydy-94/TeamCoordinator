@@ -118,6 +118,15 @@ public class MessageEventRepository {
                 messageId);
     }
 
+/** 同会话中某 MARKER 之后的下一个 MARKER 的 payload（用于窗口上界）。 */
+    public String findNextMarkerPayload(
+            String tenantId, String conversationId, String sessionId,
+            long afterSequence) {
+        java.util.List<String> rows = mapper.findNextMarkerPayload(
+                tenantId, conversationId, sessionId, afterSequence);
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
     public List<ProjectEvent> findPublicEvents(
             String tenantId, String projectId, String taskId, long afterSequence) {
         return findPublicEvents(tenantId, projectId, taskId, afterSequence, 1000);

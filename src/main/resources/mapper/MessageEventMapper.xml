@@ -71,6 +71,14 @@
         'PENDING')
     </insert>
 
+    <select id="findNextMarkerPayload" resultType="string">
+        SELECT payload FROM project_event
+        WHERE tenant_id = #{tenantId} AND conversation_id = #{conversationId}
+        AND event_type = 'AGENT_RUN_MARKER' AND sequence &gt; #{afterSequence}
+        AND payload LIKE CONCAT('%&quot;sessionId&quot;:&quot;', #{sessionId}, '&quot;%')
+        ORDER BY sequence LIMIT 1
+    </select>
+
     <select id="findPublicEvents" resultMap="projectEvent">
         SELECT business_id AS id, project_id, conversation_id, message_id, sequence,
         event_type, payload, created_at FROM project_event

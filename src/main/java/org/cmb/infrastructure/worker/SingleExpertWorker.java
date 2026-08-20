@@ -628,10 +628,14 @@ public class SingleExpertWorker {
 
         // Human-in-the-loop and result events are display-only: the expert
         // state changes come exclusively from CLI submissions (tc ask-human /
-        // tc submit-result). The stream keeps the frontend informed.
+        // tc submit-result). The stream keeps the frontend informed. The
+        // cursor still advances — the session watermark depends on it, and
+        // a stalled cursor makes the next message's MARKER window too narrow.
         if ("confirm".equals(type)
                 || "chat".equals(type)
                 || "end".equals(type)) {
+            executionRepository.advanceRunningTask(
+                    task.getId(), event.getSequence());
             return;
         }
 

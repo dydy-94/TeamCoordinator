@@ -20,6 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.cmb.application.domain.TaskRecord;
 import org.cmb.application.domain.FileStore;
 import org.cmb.infrastructure.persistent.ExecutionRepository;
+import org.cmb.infrastructure.persistent.CoordinatorAgentRunRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.cmb.application.service.CliSubmissionService;

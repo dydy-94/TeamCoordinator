@@ -64,6 +64,12 @@ public interface MessageEventMapper {
             @Param("conversationId") String conversationId,
             @Param("messageId") String messageId);
 
+    List<String> findNextMarkerPayload(
+            @Param("tenantId") String tenantId,
+            @Param("conversationId") String conversationId,
+            @Param("sessionId") String sessionId,
+            @Param("afterSequence") long afterSequence);
+
     List<ProjectEvent> findPublicEvents(
             @Param("tenantId") String tenantId,
             @Param("projectId") String projectId,

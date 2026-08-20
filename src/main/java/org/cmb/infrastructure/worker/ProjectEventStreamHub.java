@@ -5,6 +5,7 @@ import org.cmb.application.domain.ProjectEvent;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -58,16 +59,23 @@ public class ProjectEventStreamHub {
         emitter.onTimeout(() -> remove(key, projectSubscribers, subscriber));
         emitter.onError(error -> remove(key, projectSubscribers, subscriber));
         try {
+            List<ProjectEvent> replayEvents = replaySupplier.get();
+            Map<String, List<long[]>> nextStarts = markerStartBounds(replayEvents);
             synchronized (subscriber) {
-                for (ProjectEvent event : replaySupplier.get()) {
+                for (ProjectEvent event : replayEvents) {
                     if (event.getType() == ProjectEventType.AGENT_RUN_MARKER
                             && event.getPayload() != null
                             && event.getPayload().has("sessionId")) {
+                        String sessionId = event.getPayload().get("sessionId").asText();
+                        Long start = startSequenceOrNull(event.getPayload());
+                        Long end = start == null
+                                ? null
+                                : nextEndBound(nextStarts, sessionId, event.getSequence());
                         replayAgentEvents(subscriber,
                                 stringFromPayload(event.getPayload(), "expertId"),
-                                event.getPayload().get("sessionId").asText(),
+                                sessionId,
                                 event.getSequence(),
-                                startSequenceOrNull(event.getPayload()));
+                                start, end);
                     } else {
                         send(subscriber, event);
                     }
@@ -203,11 +211,18 @@ public class ProjectEventStreamHub {
                                     event.getPayload(), "expertId");
                             Long startSequence =
                                     startSequenceOrNull(event.getPayload());
+                            Long endBound = startSequence == null
+                                    ? null
+                                    : nextMarkerStart(
+                                            entry.getKey().tenantId,
+                                            entry.getKey().taskId,
+                                            sessionId,
+                                            event.getSequence());
                             for (Subscriber subscriber : projectSubscribers) {
                                 synchronized (subscriber) {
                                     replayAgentEvents(subscriber, expertId,
                                             sessionId, event.getSequence(),
-                                            startSequence);
+                                            startSequence, endBound);
                                 }
                             }
                             continue;
@@ -234,19 +249,20 @@ public class ProjectEventStreamHub {
      */
     private void replayAgentEvents(Subscriber subscriber, String expertId,
                                     String sessionId, long markerSequence,
-                                    Long startSequence)
+                                    Long startSequence, Long endSequence)
             throws IOException {
         List<AgentEvent> events = agentCore.streamEvents(expertId, sessionId, 0L);
         if (events == null || events.isEmpty()) {
             return;
         }
         events.sort(Comparator.comparingLong(AgentEvent::getSequence));
-        // 新 MARKER 用 startSequence 窗口；旧 MARKER（无该字段）回退到
-        // 本连接内同一会话已回放到的游标——两种数据都能正确归位。
+        // 窗口 (start, end]：end 为同会话下一 MARKER 的 startSequence，
+        // 保证只下发本消息的事件；旧 MARKER 无 start 时回退会话游标。
         long floor = startSequence != null
                 ? startSequence
                 : subscriber.agentCursors.getOrDefault(sessionId, 0L);
-        for (AgentEvent ae : filterAgentReplay(events, floor)) {
+        long ceiling = endSequence != null ? endSequence : Long.MAX_VALUE;
+        for (AgentEvent ae : filterAgentReplay(events, floor, ceiling)) {
             subscriber.emitter.send(SseEmitter.event()
                     .id(Long.toString(markerSequence))
                     .name(ae.getType())
@@ -256,17 +272,70 @@ public class ProjectEventStreamHub {
     }
 
     /**
-     * 按窗口过滤 agent 回放：只下发 floor 之后的事件。
+     * 按窗口过滤 agent 回放：floor < sequence <= ceiling。
      */
     protected List<AgentEvent> filterAgentReplay(
-            List<AgentEvent> events, long floor) {
+            List<AgentEvent> events, long floor, long ceiling) {
         List<AgentEvent> result = new ArrayList<>();
         for (AgentEvent ae : events) {
-            if (ae.getSequence() > floor) {
+            if (ae.getSequence() > floor && ae.getSequence() <= ceiling) {
                 result.add(ae);
             }
         }
         return result;
+    }
+
+    /**
+     * 预扫描重放事件：会话 → 按 persisted 顺序的 (markerSequence, start)
+     * 列表，供窗口上界计算。旧 MARKER 无 start 时记 null。
+     */
+    private Map<String, List<long[]>> markerStartBounds(
+            List<ProjectEvent> replayEvents) {
+        Map<String, List<long[]>> bounds = new LinkedHashMap<>();
+        for (ProjectEvent event : replayEvents) {
+            if (event.getType() != ProjectEventType.AGENT_RUN_MARKER
+                    || event.getPayload() == null
+                    || !event.getPayload().has("sessionId")) {
+                continue;
+            }
+            String sessionId = event.getPayload().get("sessionId").asText();
+            Long start = startSequenceOrNull(event.getPayload());
+            bounds.computeIfAbsent(sessionId, ignored -> new ArrayList<>())
+                    .add(new long[] {event.getSequence(), start == null ? -1L : start});
+        }
+        return bounds;
+    }
+
+    /**
+     * 窗口上界 = 同会话中下一个 MARKER（persisted 顺序）的 startSequence；
+     * 无后续 MARKER（或后续 MARKER 无 start）时返回 null（无上界）。
+     */
+    private Long nextEndBound(
+            Map<String, List<long[]>> bounds, String sessionId, long markerSequence) {
+        List<long[]> pairs = bounds.get(sessionId);
+        if (pairs == null) {
+            return null;
+        }
+        for (long[] pair : pairs) {
+            if (pair[0] > markerSequence) {
+                return pair[1] < 0 ? null : pair[1];
+            }
+        }
+        return null;
+    }
+
+    private Long nextMarkerStart(
+            String tenantId, String conversationId, String sessionId,
+            long afterSequence) {
+        String payload = repository.findNextMarkerPayload(
+                tenantId, conversationId, sessionId, afterSequence);
+        if (payload == null) {
+            return null;
+        }
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("\"startSequence\"\\s*:\\s*(-?\\d+)")
+                .matcher(payload);
+        return matcher.find() ? Long.parseLong(matcher.group(1)) : null;
     }
 
     private static Long startSequenceOrNull(
