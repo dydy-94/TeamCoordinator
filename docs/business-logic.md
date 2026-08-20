@@ -2,6 +2,7 @@
 
 > 本文档描述当前 main 分支的完整业务逻辑（CLI-only 产出通道 + taskId 键控 + DDD 四层架构）。
 > 配套文档：`docs/refactoring-plan.md`（架构重构方案）、`src/main/cli/README.md`（tc CLI 用法）、
+> `docs/database-schema.sql`（**完整数据库定义**，全部迁移的最终表结构快照，可独立初始化）、
 > `docs/agentcore-tool-contract.md`（平台工具契约，已由 CLI 通道取代，留作历史参考）。
 
 ## 1. 系统定位
