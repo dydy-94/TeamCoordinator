@@ -495,6 +495,9 @@ public class SingleExpertWorker {
         ObjectNode markerPayload = objectMapper.createObjectNode();
         markerPayload.put("sessionId", response.getSessionId());
         markerPayload.put("expertId", expertId);
+        markerPayload.put("startSequence",
+                executionRepository.findLastSequenceBySessionExcludingTask(
+                        response.getSessionId(), task.getId()));
         eventRepository.insertEvent(
                 identity, work.getProjectId(), work.getConversationId(),
                 work.getMessageId(), ProjectEventType.AGENT_RUN_MARKER,
@@ -726,6 +729,11 @@ public class SingleExpertWorker {
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("sessionId", sessionId);
         payload.put("expertId", effectiveAgentId);
+        payload.put("startSequence",
+                CoordinatorAgentClient.COORDINATOR_AGENT_ID.equals(effectiveAgentId)
+                        ? analysisService.sessionWatermarkExcluding(
+                                sessionId, work.getMessageId())
+                        : 0L);
         eventRepository.insertEvent(
                 identity, work.getProjectId(), work.getConversationId(),
                 work.getMessageId(), ProjectEventType.AGENT_RUN_MARKER,

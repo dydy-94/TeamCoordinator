@@ -348,6 +348,12 @@
         WHERE business_id = #{taskId} AND status = 'RUNNING'
     </update>
 
+    <select id="findLastSequenceBySessionExcludingTask" resultType="long">
+        SELECT COALESCE(MAX(last_sequence), 0)
+        FROM coordinator_task
+        WHERE session_id = #{sessionId} AND business_id &lt;&gt; #{taskId}
+    </select>
+
     <update id="advanceRunningTask">
         UPDATE coordinator_task SET last_sequence = #{sequence},
         updated_at = CURRENT_TIMESTAMP

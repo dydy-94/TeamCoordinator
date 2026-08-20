@@ -66,7 +66,8 @@ public class ProjectEventStreamHub {
                         replayAgentEvents(subscriber,
                                 stringFromPayload(event.getPayload(), "expertId"),
                                 event.getPayload().get("sessionId").asText(),
-                                event.getSequence());
+                                event.getSequence(),
+                                startSequenceFromPayload(event.getPayload()));
                     } else {
                         send(subscriber, event);
                     }
@@ -200,9 +201,12 @@ public class ProjectEventStreamHub {
                                     event.getPayload().get("sessionId").asText();
                             String expertId = stringFromPayload(
                                     event.getPayload(), "expertId");
+                            long startSequence =
+                                    startSequenceFromPayload(event.getPayload());
                             for (Subscriber subscriber : projectSubscribers) {
                                 replayAgentEvents(subscriber, expertId,
-                                        sessionId, event.getSequence());
+                                        sessionId, event.getSequence(),
+                                        startSequence);
                             }
                             continue;
                         }
@@ -227,14 +231,15 @@ public class ProjectEventStreamHub {
      * agent event's type as the event name.
      */
     private void replayAgentEvents(Subscriber subscriber, String expertId,
-                                    String sessionId, long markerSequence)
+                                    String sessionId, long markerSequence,
+                                    long startSequence)
             throws IOException {
         List<AgentEvent> events = agentCore.streamEvents(expertId, sessionId, 0L);
         if (events == null || events.isEmpty()) {
             return;
         }
         events.sort(Comparator.comparingLong(AgentEvent::getSequence));
-        for (AgentEvent ae : filterAgentReplay(subscriber, sessionId, events)) {
+        for (AgentEvent ae : filterAgentReplay(events, startSequence)) {
             subscriber.emitter.send(SseEmitter.event()
                     .id(Long.toString(markerSequence))
                     .name(ae.getType())
@@ -243,21 +248,25 @@ public class ProjectEventStreamHub {
     }
 
     /**
-     * agent 事件的会话级游标过滤：与持久化序列命名空间无关。
-     * 同一连接内多次遇到同一 session 的 MARKER 时只补发新事件；
-     * 重连产生的新订阅游标为空，会完整重放。
+     * 按消息窗口过滤 agent 回放：只下发 startSequence 之后（含）本消息
+     * 产生的 agent 事件。startSequence 由 MARKER 在提交时记录（该 session
+     * 的历史水位），避免把之前消息的事件重放到错误的时间线位置。
      */
     protected List<AgentEvent> filterAgentReplay(
-            Subscriber subscriber, String sessionId, List<AgentEvent> events) {
-        long cursor = subscriber.agentCursors.getOrDefault(sessionId, 0L);
+            List<AgentEvent> events, long startSequence) {
         List<AgentEvent> result = new ArrayList<>();
         for (AgentEvent ae : events) {
-            if (ae.getSequence() > cursor) {
+            if (ae.getSequence() > startSequence) {
                 result.add(ae);
-                subscriber.agentCursors.put(sessionId, ae.getSequence());
             }
         }
         return result;
+    }
+
+    private static long startSequenceFromPayload(
+            com.fasterxml.jackson.databind.JsonNode payload) {
+        return payload != null && payload.has("startSequence")
+                ? payload.get("startSequence").asLong() : 0L;
     }
 
     private long minimumSequence(List<Subscriber> projectSubscribers) {
@@ -323,9 +332,6 @@ public class ProjectEventStreamHub {
         private final SseEmitter emitter;
         private long lastSequence;
         private volatile long lastActivityAt;
-        /** agent 会话级事件游标：与持久化序列命名空间独立。 */
-        private final Map<String, Long> agentCursors = new ConcurrentHashMap<>();
-
         Subscriber(SseEmitter emitter, long lastSequence) {
             this.emitter = emitter;
             this.lastSequence = lastSequence;

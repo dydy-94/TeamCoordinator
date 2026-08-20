@@ -3,6 +3,8 @@ package org.cmb.infrastructure.persistent.mapper;
 import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+
+
 import org.cmb.application.domain.CoordinatorAgentRun;
 
 /**
@@ -40,6 +42,10 @@ public interface CoordinatorAgentRunMapper {
             @Param("id") String id,
             @Param("sequence") long sequence,
             @Param("status") String status);
+
+    java.lang.Long findLastSequenceBySessionExcluding(
+            @Param("sessionId") String sessionId,
+            @Param("messageId") String messageId);
 
     int complete(
             @Param("id") String id,

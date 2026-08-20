@@ -48,6 +48,12 @@
         WHERE business_id = #{id} AND last_sequence &lt; #{sequence}
     </update>
 
+    <select id="findLastSequenceBySessionExcluding" resultType="long">
+        SELECT COALESCE(MAX(last_sequence), 0)
+        FROM coordinator_agent_run
+        WHERE session_id = #{sessionId} AND message_id &lt;&gt; #{messageId}
+    </select>
+
     <update id="complete">
         UPDATE coordinator_agent_run SET last_sequence = #{sequence},
         status = 'SUCCEEDED', output_json = #{output}, updated_at = CURRENT_TIMESTAMP

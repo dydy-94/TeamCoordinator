@@ -60,6 +60,14 @@ public class CoordinatorAgentRunRepository {
         mapper.complete(id, sequence, output);
     }
 
+    /** 同一 session 内、除当前消息外已消费到的最大事件序列（会话水位）。 */
+    public long findLastSequenceBySessionExcluding(
+            String sessionId, String messageId) {
+        Long watermark = mapper.findLastSequenceBySessionExcluding(
+                sessionId, messageId);
+        return watermark == null ? 0L : watermark;
+    }
+
     public void prepareRepair(String id, String invalidOutput) {
         // Keep last_sequence so that when the repaired run re-uses the same
         // session, streamEvents(afterSequence) skips the original invalid

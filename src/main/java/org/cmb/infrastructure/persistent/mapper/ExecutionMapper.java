@@ -158,6 +158,10 @@ public interface ExecutionMapper {
 
     int markTaskWaitingHuman(@Param("taskId") String taskId);
 
+    java.lang.Long findLastSequenceBySessionExcludingTask(
+            @Param("sessionId") String sessionId,
+            @Param("taskId") String taskId);
+
     /** Advance the event cursor only while the task stays RUNNING. */
     int advanceRunningTask(
             @Param("taskId") String taskId,

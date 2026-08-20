@@ -87,9 +87,16 @@ public class CoordinatorAgentClient {
         // The decision is submitted exclusively through the companion CLI,
         // keyed by the conversation task id. The stream is consumed only to
         // forward progress events and to detect run completion.
+        // 会话复用：新消息的消费游标从"该 session 的历史水位"起，避免把
+        // 之前消息的 agent 事件当作本消息的 live 输出重推。
+        long cursor = run.getLastSequence();
+        if (cursor == 0L && run.getSessionId() != null) {
+            cursor = runs.findLastSequenceBySessionExcluding(
+                    run.getSessionId(), messageId);
+        }
         List<AgentEvent> events = agentCore.streamEvents(
                 effectiveAgent, run.getSessionId(),
-                run.getLastSequence(), run.getBusinessSessionId());
+                cursor, run.getBusinessSessionId());
         events.sort(Comparator.comparingLong(AgentEvent::getSequence));
         for (AgentEvent event : events) {
             if (eventSink != null) {
@@ -132,6 +139,11 @@ public class CoordinatorAgentClient {
             String businessSessionId, IntentAnalysisContext context) {
         return execute(identity, projectId, null, messageId, runKey,
                 businessSessionId, null, context, null);
+    }
+
+    /** 该 session 的会话水位（排除当前消息），供 MARKER 记录 startSequence。 */
+    public long sessionWatermarkExcluding(String sessionId, String messageId) {
+        return runs.findLastSequenceBySessionExcluding(sessionId, messageId);
     }
 
     /** Resolve the effective coordinator agent ID: project override > global config. */

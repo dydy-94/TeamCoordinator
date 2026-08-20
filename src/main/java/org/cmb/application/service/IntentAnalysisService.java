@@ -77,6 +77,11 @@ public class IntentAnalysisService {
         return decision;
     }
 
+    /** 协调者 session 的会话水位（排除当前消息），供 MARKER 记录 startSequence。 */
+    public long sessionWatermarkExcluding(String sessionId, String messageId) {
+        return coordinatorAgent.sessionWatermarkExcluding(sessionId, messageId);
+    }
+
     public CoordinatorDecision analyzeForDispatch(
             RequestIdentity identity, String projectId, String taskId,
             String messageId, String businessSessionId,

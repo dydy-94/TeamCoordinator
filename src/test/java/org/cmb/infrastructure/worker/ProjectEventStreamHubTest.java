@@ -68,31 +68,26 @@ class ProjectEventStreamHubTest {
     }
 
     @Test
-    void agentReplayUsesSessionCursorNotPersistedCursor() {
+    void agentReplayIsWindowedByMarkerStartSequence() {
         RecordingHub hub = new RecordingHub(properties(30));
-        // 持久化游标已推进到 114——绝不能再用来过滤 agent 会话序列。
-        ProjectEventStreamHub.Subscriber subscriber =
-                new ProjectEventStreamHub.Subscriber(new SseEmitter(0L), 114L);
 
         java.util.List<AgentEvent> events = new java.util.ArrayList<>();
-        for (int i = 1; i <= 5; i++) {
+        for (int i = 1; i <= 6; i++) {
             AgentEvent ae = AgentEvent.of("liveStatus");
             ae.setSequence(i);
             events.add(ae);
         }
 
-        // 首次重放：完整下发 1..5
-        assertEquals(5, hub.filterAgentReplay(subscriber, "session-a", events).size());
-        // 同一连接再次遇到同一 session 的 MARKER：只补发新事件
-        AgentEvent extra = AgentEvent.of("chat");
-        extra.setSequence(7);
-        java.util.List<AgentEvent> second = new java.util.ArrayList<>(events);
-        second.add(extra);
-        assertEquals(1, hub.filterAgentReplay(subscriber, "session-a", second).size());
-        // 新订阅（重连）：游标为空，完整重放
-        ProjectEventStreamHub.Subscriber fresh =
-                new ProjectEventStreamHub.Subscriber(new SseEmitter(0L), 114L);
-        assertEquals(5, hub.filterAgentReplay(fresh, "session-a", events).size());
+        // 第一条消息的 MARKER（startSequence=0）：完整下发 1..6
+        assertEquals(6, hub.filterAgentReplay(events, 0L).size());
+        // 第二条消息的 MARKER（startSequence=6）：只下发本消息的 7..12
+        java.util.List<AgentEvent> session = new java.util.ArrayList<>(events);
+        for (int i = 7; i <= 12; i++) {
+            AgentEvent ae = AgentEvent.of("thinkingDelta");
+            ae.setSequence(i);
+            session.add(ae);
+        }
+        assertEquals(6, hub.filterAgentReplay(session, 6L).size());
     }
 
     @Test
