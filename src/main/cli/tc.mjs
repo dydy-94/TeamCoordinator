@@ -37,6 +37,8 @@ import { dirname, join } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+const VERSION = "1.0.0";
+
 const DECISION_TYPES = ["ANSWER", "ASK_HUMAN", "CREATE_PLAN"];
 const RISK_LEVELS = ["LOW", "MEDIUM", "HIGH"];
 const EXECUTION_MODES = ["SINGLE_EXPERT", "MULTI_EXPERT"];
@@ -225,6 +227,142 @@ function validateVerdict(node) {
   if (node === null || typeof node !== "object" || typeof node.consistent !== "boolean") {
     fail("verdict must be an object with a boolean \"consistent\" field");
   }
+}
+
+// ── Help ──────────────────────────────────────────────────────────────
+
+const COMMAND_HELP = {
+  "submit-decision": {
+    title: "提交协调者决策（ANSWER / ASK_HUMAN / CREATE_PLAN）",
+    usage: "tc submit-decision --task <会话taskId> [--file decision.json | stdin]",
+    flags: [
+      "--task <id>    会话 taskId（必填，取自提示词 coordinator_context.conversation_task_id）",
+      "--file <path>  决策 JSON 文件路径（省略则从 stdin 读取）",
+    ],
+    examples: [
+      "tc submit-decision --task task-123 --file decision.json",
+      "cat decision.json | tc submit-decision --task task-123",
+    ],
+  },
+  "submit-plan": {
+    title: "提交执行计划（服务端校验后直写 plan + tasks）",
+    usage: "tc submit-plan --task <会话taskId> [--file plan.json | stdin]",
+    flags: [
+      "--task <id>    会话 taskId（必填）",
+      "--file <path>  计划 JSON 文件路径（省略则从 stdin 读取）",
+    ],
+    examples: ["tc submit-plan --task task-123 --file plan.json"],
+  },
+  "submit-verdict": {
+    title: "提交语义审查结论 {\"consistent\": bool, \"reason\": \"...\"}",
+    usage: "tc submit-verdict --task <会话taskId> [--file verdict.json | stdin]",
+    flags: [
+      "--task <id>    会话 taskId（必填）",
+      "--file <path>  结论 JSON 文件路径（省略则从 stdin 读取）",
+    ],
+    examples: ["tc submit-verdict --task task-123 --file verdict.json"],
+  },
+  "get-task": {
+    title: "拉取专家任务契约（渲染后的提示词 + 验收标准 + 附件列表）",
+    usage: "tc get-task --task <协调taskId>",
+    flags: ["--task <id>    协调任务 taskId（必填，派发时下发）"],
+    examples: ["tc get-task --task task-456"],
+  },
+  "get-artifact": {
+    title: "下载任务可用的产物（默认第一个附件）",
+    usage: "tc get-artifact --task <协调taskId> [--name <文件名>] [--output <路径>]",
+    flags: [
+      "--task <id>    协调任务 taskId（必填）",
+      "--name <name>  按文件名选择附件（省略则取第一个）",
+      "--output <p>   保存路径（默认保存为原文件名）",
+    ],
+    examples: [
+      "tc get-artifact --task task-456",
+      "tc get-artifact --task task-456 --name spec.txt --output /tmp/spec.txt",
+    ],
+  },
+  "submit-result": {
+    title: "写回专家执行结果（result_json + SUCCEEDED）",
+    usage: "tc submit-result --task <协调taskId> [--text \"...\" | --file result.txt | stdin]",
+    flags: [
+      "--task <id>    协调任务 taskId（必填）",
+      "--text <t>     结果文本",
+      "--file <path>  结果文本文件（与 --text 二选一；都省略则从 stdin 读取）",
+    ],
+    examples: ["tc submit-result --task task-456 --text \"分析完成，风险清单见附件\""],
+  },
+  "ask-human": {
+    title: "向用户求助（任务 RUNNING → WAITING_HUMAN + 创建问题）",
+    usage: "tc ask-human --task <协调taskId> [--question \"...\" | stdin]",
+    flags: [
+      "--task <id>      协调任务 taskId（必填）",
+      "--question <q>   问题文本（省略则从 stdin 读取）",
+    ],
+    examples: ["tc ask-human --task task-456 --question \"需要接口清单，请上传\""],
+  },
+  "upload-artifact": {
+    title: "上传产物文件（版本管理 + 依赖血缘）",
+    usage: "tc upload-artifact --task <协调taskId> <文件路径>",
+    flags: ["--task <id>    协调任务 taskId（必填）"],
+    examples: ["tc upload-artifact --task task-456 result.pdf"],
+  },
+  "validate": {
+    title: "仅本地校验（不发请求）",
+    usage: "tc validate decision|plan|verdict [--file f.json | stdin]",
+    flags: [
+      "decision|plan|verdict   校验对象",
+      "--file <path>           JSON 文件路径（省略则从 stdin 读取）",
+    ],
+    examples: ["tc validate plan --file plan.json"],
+  },
+  "health": {
+    title: "连通性检查（GET /health）",
+    usage: "tc health",
+    flags: [],
+    examples: ["tc health"],
+  },
+};
+
+function printCommandHelp(command) {
+  const help = COMMAND_HELP[command];
+  if (!help) {
+    fail(`unknown command "${command}" (use: tc -h)`);
+  }
+  console.log(`${help.title}`);
+  console.log();
+  console.log(`用法: ${help.usage}`);
+  if (help.flags.length > 0) {
+    console.log();
+    console.log("参数:");
+    for (const flag of help.flags) {
+      console.log(`  ${flag}`);
+    }
+  }
+  console.log();
+  console.log("示例:");
+  for (const example of help.examples) {
+    console.log(`  ${example}`);
+  }
+}
+
+function printOverview() {
+  console.log(`tc ${VERSION} — TeamCoordinator 配套 CLI（taskId 键控）`);
+  console.log();
+  console.log("用法: tc <命令> [参数]");
+  console.log("      tc -h                 本帮助");
+  console.log("      tc <命令> -h          命令详细帮助");
+  console.log("      tc -v / --version     版本");
+  console.log();
+  console.log("命令:");
+  for (const [name, help] of Object.entries(COMMAND_HELP)) {
+    console.log(`  ${name.padEnd(16)} ${help.title}`);
+  }
+  console.log();
+  console.log("环境变量（安装时配置）:");
+  console.log("  TC_BASE_URL  TeamCoordinator 地址（如 http://127.0.0.1:8080）");
+  console.log("  TC_TOKEN     共享密钥（对应 AGENTCORE_ARTIFACT_TOOL_TOKEN）");
+  console.log();
+  console.log("退出码: 0 成功；1 校验失败或传输失败");
 }
 
 // ── Commands ───────────────────────────────────────────────────────────
@@ -419,6 +557,18 @@ async function health() {
 // ── Entry ──────────────────────────────────────────────────────────────
 
 const command = process.argv[2];
+if (command === "-h" || command === "--help" || command === "help") {
+  printOverview();
+  process.exit(0);
+}
+if (command === "-v" || command === "--version") {
+  console.log(VERSION);
+  process.exit(0);
+}
+if (process.argv.includes("-h") || process.argv.includes("--help")) {
+  printCommandHelp(command);
+  process.exit(0);
+}
 const routes = {
   "submit-decision": () => submit("decision", "/api/v1/agent-tools/cli/submit-decision"),
   "submit-plan": () => submit("plan", "/api/v1/agent-tools/cli/submit-plan"),
@@ -434,10 +584,7 @@ const routes = {
 
 if (!routes[command]) {
   console.error(`tc: unknown command "${command || ""}"\n`);
-  console.error(
-    "commands: submit-decision | submit-plan | submit-verdict | get-task | "
-      + "get-artifact | submit-result | ask-human | upload-artifact <file> | "
-      + "validate | health");
+  printOverview();
   process.exit(1);
 }
 
