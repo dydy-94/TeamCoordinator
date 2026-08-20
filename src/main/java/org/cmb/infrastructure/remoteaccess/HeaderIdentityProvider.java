@@ -1,4 +1,4 @@
-package org.cmb.teamcoordinator.project;
+package org.cmb.infrastructure.remoteaccess;
 import org.cmb.application.domain.IdentityProvider;
 import org.cmb.application.domain.RequestIdentity;
 

@@ -12,7 +12,7 @@ import java.util.Map;
 import org.cmb.application.domain.ExpertDescriptor;
 import org.cmb.application.domain.ExpertRegistry;
 import org.cmb.infrastructure.persistent.ExecutionRepository;
-import org.cmb.teamcoordinator.planning.ExpertSelector;
+import org.cmb.application.service.ExpertSelector;
 import org.cmb.application.dto.ProjectView;
 import org.junit.jupiter.api.Test;
 

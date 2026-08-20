@@ -16,7 +16,7 @@ import org.cmb.application.domain.AgentRunRequest;
 import org.cmb.application.domain.AgentRunResponse;
 import org.cmb.common.config.DigitalTeamProperties;
 import org.cmb.application.domain.TaskIntent;
-import org.cmb.teamcoordinator.planning.HttpPlanModelClient;
+import org.cmb.infrastructure.remoteaccess.HttpPlanModelClient;
 import org.cmb.application.domain.PlanModelClient;
 import org.junit.jupiter.api.Test;
 

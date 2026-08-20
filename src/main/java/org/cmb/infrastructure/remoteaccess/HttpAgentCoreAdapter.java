@@ -1,4 +1,4 @@
-package org.cmb.teamcoordinator.agentcore;
+package org.cmb.infrastructure.remoteaccess;
 import org.cmb.application.domain.AgentRunResponse;
 import org.cmb.application.domain.AgentRunRequest;
 import org.cmb.application.domain.AgentEvent;

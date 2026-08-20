@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.UUID;
-import org.cmb.teamcoordinator.execution.SingleExpertWorker;
+import org.cmb.infrastructure.worker.SingleExpertWorker;
 import org.cmb.teamcoordinator.human.HumanRequestService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

@@ -1,4 +1,4 @@
-package org.cmb.teamcoordinator.planning;
+package org.cmb.application.service;
 import org.cmb.common.exception.PlanValidationException;
 import org.cmb.application.domain.PlannedTask;
 import org.cmb.application.domain.CoordinatorPlanSpec;

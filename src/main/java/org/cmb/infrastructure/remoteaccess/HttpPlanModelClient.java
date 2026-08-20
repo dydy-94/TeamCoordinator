@@ -1,4 +1,4 @@
-package org.cmb.teamcoordinator.planning;
+package org.cmb.infrastructure.remoteaccess;
 import org.cmb.common.exception.PlanValidationException;
 import org.cmb.application.domain.PlanModelClient;
 

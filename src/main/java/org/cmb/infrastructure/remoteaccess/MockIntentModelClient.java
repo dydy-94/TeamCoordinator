@@ -1,4 +1,4 @@
-package org.cmb.teamcoordinator.intent;
+package org.cmb.infrastructure.remoteaccess;
 import org.cmb.common.enums.RiskLevel;
 import org.cmb.common.enums.ExecutionMode;
 import org.cmb.common.enums.DecisionType;

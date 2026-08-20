@@ -1,4 +1,4 @@
-package org.cmb.teamcoordinator.intent;
+package org.cmb.application.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.networknt.schema.JsonSchema;

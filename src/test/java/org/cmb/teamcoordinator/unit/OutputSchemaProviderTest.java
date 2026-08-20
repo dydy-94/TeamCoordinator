@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.cmb.teamcoordinator.common.OutputSchemaProvider;
+import org.cmb.application.service.OutputSchemaProvider;
 import org.junit.jupiter.api.Test;
 
 class OutputSchemaProviderTest {

@@ -14,7 +14,7 @@ import org.cmb.application.domain.AgentCoreTools;
 import org.cmb.application.domain.AgentEvent;
 import org.cmb.application.domain.AgentRunRequest;
 import org.cmb.application.domain.AgentRunResponse;
-import org.cmb.teamcoordinator.semantic.HttpSemanticCheckClient;
+import org.cmb.infrastructure.remoteaccess.HttpSemanticCheckClient;
 import org.cmb.application.domain.SemanticCheckClient;
 import org.junit.jupiter.api.Test;
 

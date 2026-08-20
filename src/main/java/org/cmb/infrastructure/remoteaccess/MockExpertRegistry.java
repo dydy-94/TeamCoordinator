@@ -1,4 +1,4 @@
-package org.cmb.teamcoordinator.agentcore;
+package org.cmb.infrastructure.remoteaccess;
 import org.cmb.application.domain.ExpertRegistry;
 import org.cmb.application.domain.ExpertDescriptor;
 

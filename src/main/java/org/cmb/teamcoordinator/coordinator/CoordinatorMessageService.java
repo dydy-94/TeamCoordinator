@@ -1,4 +1,5 @@
 package org.cmb.teamcoordinator.coordinator;
+import org.cmb.infrastructure.worker.ProjectEventStreamHub;
 import org.cmb.common.enums.ProjectEventType;
 import org.cmb.common.enums.EventVisibility;
 import org.cmb.application.dto.MessageAcceptedResponse;

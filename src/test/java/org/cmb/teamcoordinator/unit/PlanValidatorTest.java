@@ -9,7 +9,7 @@ import javax.validation.Validation;
 import org.cmb.application.domain.ExpertDescriptor;
 import org.cmb.application.domain.CoordinatorPlanSpec;
 import org.cmb.common.exception.PlanValidationException;
-import org.cmb.teamcoordinator.planning.PlanValidator;
+import org.cmb.application.service.PlanValidator;
 import org.cmb.application.domain.PlannedTask;
 import org.cmb.application.dto.ProjectView;
 import org.junit.jupiter.api.Test;

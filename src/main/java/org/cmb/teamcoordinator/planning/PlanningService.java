@@ -1,4 +1,6 @@
 package org.cmb.teamcoordinator.planning;
+import org.cmb.application.service.PlanValidator;
+import org.cmb.application.service.PlanSchemaValidator;
 import org.cmb.common.exception.PlanValidationException;
 import org.cmb.application.domain.PlanModelClient;
 import org.cmb.application.domain.PlanningResult;
@@ -12,7 +14,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 import org.cmb.application.domain.AgentEvent;
 import org.cmb.application.domain.ExpertRegistry;
-import org.cmb.teamcoordinator.common.OutputSchemaProvider;
+import org.cmb.application.service.OutputSchemaProvider;
 import org.cmb.application.domain.TaskIntent;
 import org.cmb.application.dto.ProjectView;
 import org.cmb.teamcoordinator.prompt.PromptService;

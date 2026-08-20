@@ -5,7 +5,7 @@ import javax.validation.Valid;
 import org.cmb.teamcoordinator.coordinator.CoordinatorMessageService;
 import org.cmb.application.dto.MessageAcceptedResponse;
 import org.cmb.application.dto.MessageRequest;
-import org.cmb.teamcoordinator.coordinator.ProjectEventStreamHub;
+import org.cmb.infrastructure.worker.ProjectEventStreamHub;
 import org.cmb.application.domain.IdentityProvider;
 import org.cmb.application.domain.RequestIdentity;
 import org.springframework.http.HttpStatus;

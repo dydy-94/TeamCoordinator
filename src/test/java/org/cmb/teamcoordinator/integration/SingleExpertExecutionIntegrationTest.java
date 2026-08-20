@@ -18,7 +18,7 @@ import org.cmb.TeamCoordinatorApplication;
 import org.cmb.application.domain.AgentCoreAdapter;
 import org.cmb.application.domain.AgentEvent;
 import org.cmb.infrastructure.persistent.ExecutionRepository;
-import org.cmb.teamcoordinator.execution.SingleExpertWorker;
+import org.cmb.infrastructure.worker.SingleExpertWorker;
 import org.cmb.application.domain.TaskRecord;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

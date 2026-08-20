@@ -17,7 +17,7 @@ import java.util.List;
 import org.cmb.TeamCoordinatorApplication;
 import org.cmb.common.enums.EventVisibility;
 import org.cmb.infrastructure.persistent.MessageEventRepository;
-import org.cmb.teamcoordinator.coordinator.ProjectEventStreamHub;
+import org.cmb.infrastructure.worker.ProjectEventStreamHub;
 import org.cmb.common.enums.ProjectEventType;
 import org.cmb.application.domain.DispatchWork;
 import org.cmb.infrastructure.persistent.ExecutionRepository;

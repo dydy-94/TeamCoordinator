@@ -1,4 +1,4 @@
-package org.cmb.teamcoordinator.semantic;
+package org.cmb.infrastructure.remoteaccess;
 import org.cmb.application.domain.SemanticCheckClient;
 
 import java.util.function.Consumer;

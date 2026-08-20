@@ -1,4 +1,4 @@
-package org.cmb.teamcoordinator.planning;
+package org.cmb.application.service;
 
 import java.util.ArrayList;
 import java.util.Comparator;

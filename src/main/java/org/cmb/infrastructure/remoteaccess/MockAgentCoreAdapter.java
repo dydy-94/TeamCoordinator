@@ -1,4 +1,4 @@
-package org.cmb.teamcoordinator.agentcore;
+package org.cmb.infrastructure.remoteaccess;
 import org.cmb.application.domain.Skill;
 import org.cmb.application.domain.AgentCoreTools;
 import org.cmb.application.domain.AgentRunAttachment;
@@ -17,10 +17,10 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import org.cmb.application.domain.FileStore;
 import org.cmb.application.domain.MockFileDescriptor;
-import org.cmb.teamcoordinator.artifact.MockFileStore;
+import org.cmb.infrastructure.remoteaccess.MockFileStore;
 import org.cmb.common.config.DigitalTeamProperties;
 import org.cmb.application.domain.IntentAnalysisContext;
-import org.cmb.teamcoordinator.intent.MockIntentModelClient;
+import org.cmb.infrastructure.remoteaccess.MockIntentModelClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;

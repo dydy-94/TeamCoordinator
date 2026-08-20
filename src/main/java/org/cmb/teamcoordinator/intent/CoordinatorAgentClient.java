@@ -17,7 +17,7 @@ import org.cmb.application.domain.AgentRunRequest;
 import org.cmb.application.domain.AgentRunResponse;
 import org.cmb.infrastructure.persistent.ArtifactRepository;
 import org.cmb.teamcoordinator.artifact.ArtifactService;
-import org.cmb.teamcoordinator.common.OutputSchemaProvider;
+import org.cmb.application.service.OutputSchemaProvider;
 import org.cmb.common.config.DigitalTeamProperties;
 import org.cmb.teamcoordinator.prompt.PromptService;
 import org.cmb.application.dto.RenderedPrompt;

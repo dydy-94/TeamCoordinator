@@ -1,4 +1,4 @@
-package org.cmb.teamcoordinator.planning;
+package org.cmb.infrastructure.remoteaccess;
 import org.cmb.application.domain.PlanModelClient;
 import org.cmb.application.domain.PlannedTask;
 import org.cmb.application.domain.CoordinatorPlanSpec;

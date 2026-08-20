@@ -7,7 +7,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.UUID;
-import org.cmb.teamcoordinator.execution.SingleExpertWorker;
+import org.cmb.infrastructure.worker.SingleExpertWorker;
 import org.cmb.application.domain.DispatchWork;
 import org.cmb.infrastructure.persistent.ExecutionRepository;
 import org.cmb.application.domain.CoordinatorDecision;

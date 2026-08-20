@@ -1,4 +1,4 @@
-package org.cmb.teamcoordinator.artifact;
+package org.cmb.infrastructure.remoteaccess;
 import org.cmb.application.domain.FileStore;
 import org.cmb.application.domain.MockFileDescriptor;
 

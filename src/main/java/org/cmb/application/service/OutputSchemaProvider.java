@@ -1,4 +1,4 @@
-package org.cmb.teamcoordinator.common;
+package org.cmb.application.service;
 
 import java.io.IOException;
 import java.io.InputStream;

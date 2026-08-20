@@ -1,4 +1,4 @@
-package org.cmb.teamcoordinator.coordinator;
+package org.cmb.infrastructure.worker;
 import org.cmb.common.enums.ProjectEventType;
 import org.cmb.application.domain.ProjectEvent;
 
