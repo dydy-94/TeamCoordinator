@@ -25,6 +25,11 @@ public class ProjectEvent {
      * {@code agentEvent.type} and the data is the serialized AgentEvent.
      */
     private AgentEvent agentEvent;
+    /**
+     * Live-only 事件（agent 流直转，不持久化）：序列号来自 hub 内存计数器，
+     * 与数据库分配的持久化序列不在同一命名空间，转发时跳过序列去重。
+     */
+    private transient boolean liveOnly;
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -42,6 +47,8 @@ public class ProjectEvent {
     public void setPayload(JsonNode payload) { this.payload = payload; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+    public boolean isLiveOnly() { return liveOnly; }
+    public void setLiveOnly(boolean value) { this.liveOnly = value; }
     public AgentEvent getAgentEvent() { return agentEvent; }
     public void setAgentEvent(AgentEvent agentEvent) { this.agentEvent = agentEvent; }
 }

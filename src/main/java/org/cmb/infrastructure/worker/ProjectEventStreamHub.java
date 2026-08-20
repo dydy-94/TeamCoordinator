@@ -261,7 +261,7 @@ public class ProjectEventStreamHub {
     }
 
     private void send(Subscriber subscriber, ProjectEvent event) throws IOException {
-        if (event.getSequence() <= subscriber.lastSequence) {
+        if (shouldDeliver(subscriber, event) == false) {
             return;
         }
         SseEmitter.SseEventBuilder builder = SseEmitter.event()
@@ -275,6 +275,15 @@ public class ProjectEventStreamHub {
         }
         subscriber.emitter.send(builder);
         subscriber.lastSequence = event.getSequence();
+    }
+
+    /**
+     * 序列去重：持久化事件按单调序列过滤重放；live 事件（内存计数器命名
+     * 空间）一律投递。
+     */
+    protected boolean shouldDeliver(Subscriber subscriber, ProjectEvent event) {
+        return event.isLiveOnly()
+                || event.getSequence() > subscriber.lastSequence;
     }
 
     private void remove(
@@ -292,7 +301,7 @@ public class ProjectEventStreamHub {
         private long lastSequence;
         private volatile long lastActivityAt;
 
-        private Subscriber(SseEmitter emitter, long lastSequence) {
+        Subscriber(SseEmitter emitter, long lastSequence) {
             this.emitter = emitter;
             this.lastSequence = lastSequence;
             this.lastActivityAt = System.currentTimeMillis();

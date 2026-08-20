@@ -6,8 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.cmb.application.domain.ProjectEvent;
 import org.cmb.common.config.DigitalTeamProperties;
 import org.cmb.infrastructure.persistent.MessageEventRepository;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.cmb.infrastructure.remoteaccess.MockAgentCoreAdapter;
 import org.junit.jupiter.api.Test;
 
@@ -62,6 +64,24 @@ class ProjectEventStreamHubTest {
         assertEquals(1, hub.heartbeats.get(), "active connection must get a heartbeat");
         assertEquals(0, hub.inactive.get());
         assertEquals(1, hub.activeSubscriberCount(), "active connection must stay open");
+    }
+
+    @Test
+    void liveEventsBypassSequenceDedupWhilePersistedEventsDoNot() {
+        RecordingHub hub = new RecordingHub(properties(30));
+        ProjectEventStreamHub.Subscriber subscriber =
+                new ProjectEventStreamHub.Subscriber(new SseEmitter(0L), 10L);
+
+        ProjectEvent persisted = new ProjectEvent();
+        persisted.setSequence(5);
+        ProjectEvent live = new ProjectEvent();
+        live.setSequence(1);
+        live.setLiveOnly(true);
+
+        assertTrue(hub.shouldDeliver(subscriber, live),
+                "live agent events must never be deduped against DB sequences");
+        assertEquals(false, hub.shouldDeliver(subscriber, persisted),
+                "persisted events must respect the replay cursor");
     }
 
     @Test

@@ -759,6 +759,7 @@ public class SingleExpertWorker {
         projectEvent.setSequence(++liveEventCounter);
         projectEvent.setType(ProjectEventType.COORDINATOR_ANALYZING);
         projectEvent.setAgentEvent(event);
+        projectEvent.setLiveOnly(true);
         streamHub.publish(
                 work.getTenantId(), work.getProjectId(),
                 work.getConversationId(), projectEvent);
