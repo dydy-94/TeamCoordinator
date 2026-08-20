@@ -67,6 +67,13 @@ export class SseStream {
           while ((idx = buffer.indexOf("\n\n")) >= 0) {
             const block = buffer.slice(0, idx);
             buffer = buffer.slice(idx + 2);
+            // 断线游标一律取自 SSE 帧的 id 字段：后端已把 id 统一为
+            // 持久化事件水位（live 帧沿用当前水位），与 data 里的
+            // agent 会话序列不属于同一命名空间，绝不能混用。
+            const idLine = block.split("\n").find((l) => l.startsWith("id:"));
+            const frameId = idLine
+              ? Number(idLine.slice(3).trim())
+              : Number.NaN;
             const data = block
               .split("\n")
               .filter((l) => l.startsWith("data:"))
@@ -75,10 +82,9 @@ export class SseStream {
             if (data) {
               try {
                 const event: SseEvent = JSON.parse(data);
-                this.lastSequence = Math.max(
-                  this.lastSequence,
-                  event.sequence || 0
-                );
+                if (Number.isFinite(frameId)) {
+                  this.lastSequence = Math.max(this.lastSequence, frameId);
+                }
                 for (const cb of this.listeners) {
                   try {
                     cb(event);
