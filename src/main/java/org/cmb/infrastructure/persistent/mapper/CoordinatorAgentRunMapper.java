@@ -43,6 +43,9 @@ public interface CoordinatorAgentRunMapper {
             @Param("sequence") long sequence,
             @Param("status") String status);
 
+    java.lang.Long findMaxLastSequenceBySession(
+            @Param("sessionId") String sessionId);
+
     java.lang.Long findLastSequenceBySessionExcluding(
             @Param("sessionId") String sessionId,
             @Param("messageId") String messageId);

@@ -158,6 +158,9 @@ public interface ExecutionMapper {
 
     int markTaskWaitingHuman(@Param("taskId") String taskId);
 
+    java.lang.Long findMaxLastSequenceBySession(
+            @Param("sessionId") String sessionId);
+
     java.lang.Long findLastSequenceBySessionExcludingTask(
             @Param("sessionId") String sessionId,
             @Param("taskId") String taskId);

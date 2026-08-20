@@ -60,6 +60,12 @@ public class CoordinatorAgentRunRepository {
         mapper.complete(id, sequence, output);
     }
 
+    /** 同一 session 已消费到的最大事件序列（含所有消息）。 */
+    public long findMaxLastSequenceBySession(String sessionId) {
+        Long watermark = mapper.findMaxLastSequenceBySession(sessionId);
+        return watermark == null ? 0L : watermark;
+    }
+
     /** 同一 session 内、除当前消息外已消费到的最大事件序列（会话水位）。 */
     public long findLastSequenceBySessionExcluding(
             String sessionId, String messageId) {

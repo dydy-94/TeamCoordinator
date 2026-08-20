@@ -56,6 +56,7 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
     private final String coordinatorAgentId;
     private final ExecutionRepository executionRepository;
     private final CliSubmissionService cliSubmissions;
+    private final CoordinatorAgentRunRepository runRepository;
     private final Map<String, String> expertTaskBySession = new ConcurrentHashMap<>();
     /**
      * Deferred CLI actions, executed on the next streamEvents call — i.e.
@@ -70,13 +71,15 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
             DigitalTeamProperties properties, FileStore fileStore,
             ObjectMapper objectMapper, MockIntentModelClient coordinatorAgent,
             ExecutionRepository executionRepository,
-            CliSubmissionService cliSubmissions) {
+            CliSubmissionService cliSubmissions,
+            CoordinatorAgentRunRepository runRepository) {
         this.fileStore = fileStore;
         this.objectMapper = objectMapper;
         this.coordinatorAgent = coordinatorAgent;
         this.coordinatorAgentId = properties.getAgentCore().getCoordinatorAgentId();
         this.executionRepository = executionRepository;
         this.cliSubmissions = cliSubmissions;
+        this.runRepository = runRepository;
         this.persistEvents = properties.getAgentCore().isMockPersistEvents();
         this.eventsFile = new java.io.File(
                 properties.getAgentCore().getMockEventsFile());
@@ -91,6 +94,7 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
         this.coordinatorAgentId = properties.getAgentCore().getCoordinatorAgentId();
         this.executionRepository = null;
         this.cliSubmissions = null;
+        this.runRepository = null;
         this.persistEvents = false;
         this.eventsFile = null;
     }
@@ -104,6 +108,19 @@ public class MockAgentCoreAdapter implements AgentCoreAdapter {
         List<AgentEvent> events = new ArrayList<>();
         long seq = 0;
         long now = System.currentTimeMillis();
+        // 复用会话但本进程内存中没有该会话的事件（例如后端重启后 mock
+        // 失忆）：用数据库里的会话水位作序列起点，保持序列单调，避免
+        // 与旧 run/task 的消费游标冲突。
+        if (eventsBySessionId.get(sessionId) == null
+                && request.getConversationSessionId() != null) {
+            if (coordinatorAgentId.equals(targetAgentId)
+                    && runRepository != null) {
+                seq = runRepository.findMaxLastSequenceBySession(sessionId);
+            } else if (!coordinatorAgentId.equals(targetAgentId)
+                    && executionRepository != null) {
+                seq = executionRepository.findMaxLastSequenceBySession(sessionId);
+            }
+        }
 
         Object objective = request.getStructuredInput() == null
                 ? null : request.getStructuredInput().get("objective");

@@ -48,6 +48,11 @@
         WHERE business_id = #{id} AND last_sequence &lt; #{sequence}
     </update>
 
+    <select id="findMaxLastSequenceBySession" resultType="long">
+        SELECT COALESCE(MAX(last_sequence), 0)
+        FROM coordinator_agent_run WHERE session_id = #{sessionId}
+    </select>
+
     <select id="findLastSequenceBySessionExcluding" resultType="long">
         SELECT COALESCE(MAX(last_sequence), 0)
         FROM coordinator_agent_run

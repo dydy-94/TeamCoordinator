@@ -348,6 +348,11 @@
         WHERE business_id = #{taskId} AND status = 'RUNNING'
     </update>
 
+    <select id="findMaxLastSequenceBySession" resultType="long">
+        SELECT COALESCE(MAX(last_sequence), 0)
+        FROM coordinator_task WHERE session_id = #{sessionId}
+    </select>
+
     <select id="findLastSequenceBySessionExcludingTask" resultType="long">
         SELECT COALESCE(MAX(last_sequence), 0)
         FROM coordinator_task

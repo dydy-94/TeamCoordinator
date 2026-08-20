@@ -264,6 +264,12 @@ public class ExecutionRepository {
         mapper.advanceRunningTask(taskId, sequence);
     }
 
+    /** 同一专家 session 已消费到的最大事件序列（含所有任务）。 */
+    public long findMaxLastSequenceBySession(String sessionId) {
+        Long watermark = mapper.findMaxLastSequenceBySession(sessionId);
+        return watermark == null ? 0L : watermark;
+    }
+
     /** 同一专家 session 内、除当前任务外已消费到的最大事件序列。 */
     public long findLastSequenceBySessionExcludingTask(
             String sessionId, String taskId) {
