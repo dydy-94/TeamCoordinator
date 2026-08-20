@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.cmb.infrastructure.persistent.mapper.WorkspaceMapper">
+
+    <select id="findConversation">
+        SELECT business_id AS taskId, session_id AS sessionId, title, status,
+        created_at AS createdAt
+        FROM project_conversation WHERE tenant_id = #{tenantId}
+        AND project_id = #{projectId} AND business_id = #{taskId}
+    </select>
+
+    <select id="findMessages">
+        SELECT business_id AS id, user_id, message_text, attachment_refs, status, created_at
+        FROM project_message WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
+        AND conversation_id = #{taskId} ORDER BY created_at
+    </select>
+
+    <select id="findEvents">
+        SELECT sequence, event_type, payload, created_at FROM project_event
+        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
+        AND visibility = 'PUBLIC' AND conversation_id = #{taskId} ORDER BY sequence
+    </select>
+
+    <select id="findPlans">
+        SELECT business_id AS id, plan_version, status, created_at FROM coordinator_plan
+        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
+        AND conversation_id = #{taskId} ORDER BY plan_version
+    </select>
+
+    <select id="findTasks">
+        SELECT t.business_id AS id, t.plan_id, t.task_key, t.expert_id, t.status,
+        t.objective, t.dependencies,
+        t.created_at FROM coordinator_task t
+        JOIN coordinator_plan p ON p.business_id = t.plan_id
+        WHERE t.tenant_id = #{tenantId} AND t.project_id = #{projectId}
+        AND p.conversation_id = #{taskId} ORDER BY t.created_at, t.task_key
+    </select>
+
+    <select id="findHumanRequests">
+        SELECT h.business_id AS id, h.task_id, h.request_type, h.question, h.status,
+        h.decision, h.expires_at FROM human_request h
+        JOIN project_message m ON m.business_id = h.message_id
+        WHERE h.tenant_id = #{tenantId} AND h.project_id = #{projectId}
+        AND m.conversation_id = #{taskId} ORDER BY h.created_at
+    </select>
+
+    <select id="findArtifacts">
+        SELECT business_id AS id, task_id, version, file_name, media_type, size_bytes, sha256, status
+        FROM project_artifact WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
+        ORDER BY created_at
+    </select>
+
+</mapper>

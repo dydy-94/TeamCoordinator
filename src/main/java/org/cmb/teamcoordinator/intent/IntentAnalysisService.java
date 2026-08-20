@@ -10,10 +10,11 @@ import java.util.UUID;
 import java.util.function.Consumer;
 import javax.validation.ConstraintViolation;
 import javax.validation.Validator;
+import org.cmb.infrastructure.persistent.IntentAnalysisRepository;
 import org.cmb.teamcoordinator.agentcore.AgentEvent;
 import org.cmb.teamcoordinator.agentcore.ExpertDescriptor;
 import org.cmb.teamcoordinator.agentcore.ExpertRegistry;
-import org.cmb.teamcoordinator.artifact.ArtifactRepository;
+import org.cmb.infrastructure.persistent.ArtifactRepository;
 import org.cmb.teamcoordinator.artifact.FileStore;
 import org.cmb.teamcoordinator.artifact.MockFileDescriptor;
 import org.cmb.teamcoordinator.project.ProjectExpert;
@@ -178,7 +179,7 @@ public class IntentAnalysisService {
     private void injectPendingState(
             String tenantId, String projectId, String taskId,
             IntentAnalysisContext context) {
-        org.cmb.teamcoordinator.human.HumanRequestRepository.HumanRequestRecord pending =
+        org.cmb.infrastructure.persistent.HumanRequestRepository.HumanRequestRecord pending =
                 analysisRepository.findPendingHumanRequest(tenantId, projectId, taskId);
         if (pending != null) {
             boolean isExpert = pending.taskId != null;

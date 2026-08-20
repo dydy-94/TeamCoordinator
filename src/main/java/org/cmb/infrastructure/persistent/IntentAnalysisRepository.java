@@ -1,20 +1,24 @@
-package org.cmb.teamcoordinator.intent;
+package org.cmb.infrastructure.persistent;
 
-import java.util.UUID;
-import org.cmb.teamcoordinator.human.HumanRequestRepository;
+import org.cmb.infrastructure.persistent.mapper.IntentAnalysisMapper;
+import org.cmb.teamcoordinator.intent.CoordinatorDecision;
 import org.cmb.teamcoordinator.project.RequestIdentity;
-import org.cmb.teamcoordinator.persistence.MyBatisExecutor;
 import org.springframework.stereotype.Repository;
 
+/**
+ * Intent-analysis persistence facade. All SQL lives in
+ * {@link IntentAnalysisMapper}; human-request persistence is delegated to
+ * {@link HumanRequestRepository}.
+ */
 @Repository
 public class IntentAnalysisRepository {
 
-    private final MyBatisExecutor jdbc;
+    private final IntentAnalysisMapper mapper;
     private final HumanRequestRepository humanRequests;
 
     public IntentAnalysisRepository(
-            MyBatisExecutor jdbc, HumanRequestRepository humanRequests) {
-        this.jdbc = jdbc;
+            IntentAnalysisMapper mapper, HumanRequestRepository humanRequests) {
+        this.mapper = mapper;
         this.humanRequests = humanRequests;
     }
 
@@ -29,11 +33,7 @@ public class IntentAnalysisRepository {
             CoordinatorDecision decision,
             String decisionJson,
             boolean repaired) {
-        jdbc.update(
-                "INSERT INTO coordinator_analysis "
-                        + "(business_id, tenant_id, project_id, user_id, input_snapshot, model_name, "
-                        + "prompt_version, schema_version, decision_type, decision_json, repaired) "
-                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        mapper.insertAnalysis(
                 analysisId,
                 identity.getTenantId(),
                 projectId,
@@ -53,7 +53,7 @@ public class IntentAnalysisRepository {
                 analysisId, identity, projectId, question);
     }
 
-    public org.cmb.teamcoordinator.human.HumanRequestRepository.HumanRequestRecord
+    public HumanRequestRepository.HumanRequestRecord
             findPendingHumanRequest(String tenantId, String projectId, String taskId) {
         return humanRequests.findPendingForTask(tenantId, projectId, taskId);
     }

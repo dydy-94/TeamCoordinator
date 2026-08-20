@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.cmb.infrastructure.persistent.mapper.HumanRequestMapper">
+
+    <sql id="humanRequestColumns">
+        business_id, analysis_id, task_id, message_id, dispatch_id, tenant_id,
+        project_id, request_type, question, agent_question_id, allowed_roles,
+        input_schema, status, decision, response_json, response_idempotency_key,
+        expires_at
+    </sql>
+
+    <resultMap id="humanRequestRecord"
+               type="org.cmb.infrastructure.persistent.HumanRequestRepository$HumanRequestRecord">
+        <result column="business_id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="analysis_id" property="analysisId"/>
+        <result column="task_id" property="taskId"/>
+        <result column="message_id" property="messageId"/>
+        <result column="dispatch_id" property="dispatchId"/>
+        <result column="project_id" property="projectId"/>
+        <result column="request_type" property="type"/>
+        <result column="question" property="question"/>
+        <result column="agent_question_id" property="agentQuestionId"/>
+        <result column="allowed_roles" property="allowedRoles"/>
+        <result column="input_schema" property="inputSchema"/>
+        <result column="status" property="status"/>
+        <result column="decision" property="decision"/>
+        <result column="response_json" property="response"
+                typeHandler="org.cmb.infrastructure.persistent.typehandler.JsonNodeTypeHandler"/>
+        <result column="response_idempotency_key" property="responseIdempotencyKey"/>
+        <result column="expires_at" property="expiresAt"/>
+    </resultMap>
+
+    <insert id="insertCoordinatorClarification">
+        INSERT INTO human_request
+        (business_id, analysis_id, tenant_id, project_id, request_type, question,
+        allowed_roles, input_schema, status, expires_at)
+        VALUES (#{id}, #{analysisId}, #{tenantId}, #{projectId}, 'CLARIFICATION',
+        #{question}, 'OWNER,MEMBER', #{inputSchema}, 'PENDING', #{expiresAt})
+    </insert>
+
+    <insert id="insertExpertClarification">
+        INSERT INTO human_request
+        (business_id, task_id, tenant_id, project_id, request_type, question,
+        agent_question_id, allowed_roles, input_schema, status, expires_at)
+        VALUES (#{id}, #{taskId}, #{tenantId}, #{projectId}, 'CLARIFICATION',
+        #{question}, #{agentQuestionId}, 'OWNER,MEMBER', #{inputSchema},
+        'PENDING', #{expiresAt})
+    </insert>
+
+    <update id="markTaskWaitingHuman">
+        UPDATE coordinator_task SET status = 'WAITING_HUMAN',
+        updated_at = CURRENT_TIMESTAMP WHERE business_id = #{taskId}
+    </update>
+
+    <update id="resumeTask">
+        UPDATE coordinator_task SET status = 'RUNNING',
+        updated_at = CURRENT_TIMESTAMP WHERE tenant_id = #{tenantId}
+        AND business_id = #{taskId} AND status = 'WAITING_HUMAN'
+    </update>
+
+    <update id="failTask">
+        UPDATE coordinator_task SET status = #{status},
+        updated_at = CURRENT_TIMESTAMP WHERE tenant_id = #{tenantId}
+        AND business_id = #{taskId} AND status = 'WAITING_HUMAN'
+    </update>
+
+    <select id="findPlanIdForTask" resultType="string">
+        SELECT plan_id FROM coordinator_task
+        WHERE tenant_id = #{tenantId} AND business_id = #{taskId}
+    </select>
+
+    <update id="failPlan">
+        UPDATE coordinator_plan SET status = #{status},
+        updated_at = CURRENT_TIMESTAMP WHERE business_id = #{planId}
+    </update>
+
+    <update id="failDispatch">
+        UPDATE coordinator_dispatch SET status = #{status}, last_error = #{error},
+        lease_owner = NULL, lease_expires_at = NULL, updated_at = CURRENT_TIMESTAMP
+        WHERE tenant_id = #{tenantId} AND message_id =
+        (SELECT message_id FROM coordinator_plan WHERE business_id = #{planId})
+    </update>
+
+    <select id="findExpiredPending" resultMap="humanRequestRecord">
+        SELECT <include refid="humanRequestColumns"/> FROM human_request
+        WHERE status = 'PENDING' AND expires_at &lt;= CURRENT_TIMESTAMP
+    </select>
+
+    <select id="find" resultMap="humanRequestRecord">
+        SELECT <include refid="humanRequestColumns"/> FROM human_request
+        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
+        AND business_id = #{id}
+    </select>
+
+    <select id="findPendingForTask" resultMap="humanRequestRecord">
+        SELECT <include refid="humanRequestColumns"/> FROM human_request
+        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
+        AND task_id = #{taskId} AND status = 'PENDING'
+        AND (expires_at IS NULL OR expires_at &gt; CURRENT_TIMESTAMP)
+        ORDER BY created_at LIMIT 1
+    </select>
+
+    <update id="resolve">
+        UPDATE human_request SET status = 'RESOLVED', decision = #{decision},
+        response_json = #{responseJson},
+        response_idempotency_key = #{idempotencyKey}, responded_by = #{userId},
+        resolved_at = CURRENT_TIMESTAMP WHERE tenant_id = #{tenantId}
+        AND business_id = #{id} AND status = 'PENDING'
+        AND (expires_at IS NULL OR expires_at &gt; CURRENT_TIMESTAMP)
+    </update>
+
+    <update id="linkDispatch">
+        UPDATE human_request SET message_id = #{messageId},
+        dispatch_id = #{dispatchId} WHERE business_id = #{id}
+    </update>
+
+    <update id="expire">
+        UPDATE human_request SET status = 'EXPIRED',
+        resolved_at = CURRENT_TIMESTAMP WHERE tenant_id = #{tenantId}
+        AND business_id = #{id} AND status = 'PENDING'
+    </update>
+
+    <update id="appendMessageText">
+        UPDATE project_message SET message_text = CONCAT(message_text,
+        '\nHuman clarification: ', #{answer})
+        WHERE business_id = #{messageId} AND tenant_id = #{tenantId}
+    </update>
+
+    <update id="resetDispatchPending">
+        UPDATE coordinator_dispatch SET status = 'PENDING',
+        available_at = CURRENT_TIMESTAMP, lease_owner = NULL,
+        lease_expires_at = NULL WHERE business_id = #{dispatchId}
+        AND tenant_id = #{tenantId}
+    </update>
+
+</mapper>

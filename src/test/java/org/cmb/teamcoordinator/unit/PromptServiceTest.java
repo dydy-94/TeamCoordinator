@@ -8,7 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.cmb.teamcoordinator.config.DigitalTeamProperties;
-import org.cmb.teamcoordinator.prompt.PromptRepository;
+import org.cmb.infrastructure.persistent.PromptRepository;
 import org.cmb.teamcoordinator.prompt.PromptService;
 import org.cmb.teamcoordinator.prompt.PromptTemplateView;
 import org.cmb.teamcoordinator.prompt.RenderedPrompt;

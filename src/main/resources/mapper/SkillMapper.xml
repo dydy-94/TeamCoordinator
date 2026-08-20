@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.cmb.infrastructure.persistent.mapper.SkillMapper">
+
+    <sql id="skillColumns">
+        s.id AS database_id, s.business_id, s.name, s.description, s.prompt,
+        s.created_at, s.updated_at
+    </sql>
+
+    <resultMap id="skill" type="org.cmb.teamcoordinator.project.Skill">
+        <result column="database_id" property="databaseId"/>
+        <result column="business_id" property="businessId"/>
+        <result column="name" property="name"/>
+        <result column="description" property="description"/>
+        <result column="prompt" property="prompt"/>
+        <result column="enabled" property="enabled"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <select id="listAll" resultMap="skill">
+        SELECT id AS database_id, business_id, name, description, prompt,
+        created_at, updated_at
+        FROM skill ORDER BY name
+    </select>
+
+    <select id="findByBusinessId" resultMap="skill">
+        SELECT id AS database_id, business_id, name, description, prompt,
+        created_at, updated_at
+        FROM skill WHERE business_id = #{skillId}
+    </select>
+
+    <select id="findByProject" resultMap="skill">
+        SELECT <include refid="skillColumns"/>, ps.enabled
+        FROM skill s JOIN project_skill ps
+        ON ps.skill_id = s.business_id
+        WHERE ps.tenant_id = #{tenantId} AND ps.project_id = #{projectId}
+        ORDER BY s.name
+    </select>
+
+    <select id="countProjectSkill" resultType="int">
+        SELECT COUNT(*) FROM project_skill
+        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
+        AND skill_id = #{skillId}
+    </select>
+
+    <insert id="insertProjectSkill">
+        INSERT INTO project_skill (tenant_id, project_id, skill_id, enabled)
+        VALUES (#{tenantId}, #{projectId}, #{skillId}, #{enabled})
+    </insert>
+
+    <update id="updateProjectSkill">
+        UPDATE project_skill SET enabled = #{enabled},
+        updated_at = CURRENT_TIMESTAMP
+        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
+        AND skill_id = #{skillId}
+    </update>
+
+    <delete id="deleteProjectSkill">
+        DELETE FROM project_skill
+        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
+        AND skill_id = #{skillId}
+    </delete>
+
+</mapper>

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.cmb.infrastructure.persistent.mapper.CoordinatorAgentRunMapper">
+
+    <resultMap id="coordinatorAgentRun" type="org.cmb.teamcoordinator.intent.CoordinatorAgentRun">
+        <result column="database_id" property="databaseId"/>
+        <result column="business_id" property="businessId"/>
+        <result column="session_id" property="sessionId"/>
+        <result column="stage" property="stage"/>
+        <result column="status" property="status"/>
+        <result column="last_sequence" property="lastSequence"/>
+        <result column="context_json" property="contextJson"/>
+        <result column="invalid_output" property="invalidOutput"/>
+        <result column="output_json" property="outputJson"/>
+        <result column="business_session_id" property="businessSessionId"/>
+    </resultMap>
+
+    <insert id="insertRun">
+        INSERT INTO coordinator_agent_run
+        (business_id, tenant_id, project_id, message_id, run_key, context_json,
+        business_session_id) VALUES (#{id}, #{tenantId}, #{projectId}, #{messageId},
+        #{runKey}, #{contextJson}, #{businessSessionId})
+    </insert>
+
+    <select id="findByRunKey" resultMap="coordinatorAgentRun">
+        SELECT id AS database_id, business_id, session_id, stage, status, last_sequence,
+        context_json, business_session_id, invalid_output, output_json
+        FROM coordinator_agent_run
+        WHERE tenant_id = #{tenantId} AND run_key = #{runKey}
+    </select>
+
+    <update id="saveSession">
+        UPDATE coordinator_agent_run SET session_id = #{sessionId}, stage = #{stage},
+        status = 'RUNNING', last_sequence = 0, updated_at = CURRENT_TIMESTAMP
+        WHERE business_id = #{id} AND session_id IS NULL
+    </update>
+
+    <update id="saveSessionExisting">
+        UPDATE coordinator_agent_run SET stage = #{stage}, status = 'RUNNING',
+        updated_at = CURRENT_TIMESTAMP
+        WHERE business_id = #{id} AND session_id = #{sessionId}
+    </update>
+
+    <update id="advance">
+        UPDATE coordinator_agent_run SET last_sequence = #{sequence}, status = #{status},
+        updated_at = CURRENT_TIMESTAMP
+        WHERE business_id = #{id} AND last_sequence &lt; #{sequence}
+    </update>
+
+    <update id="complete">
+        UPDATE coordinator_agent_run SET last_sequence = #{sequence},
+        status = 'SUCCEEDED', output_json = #{output}, updated_at = CURRENT_TIMESTAMP
+        WHERE business_id = #{id}
+    </update>
+
+    <update id="prepareRepair">
+        UPDATE coordinator_agent_run SET stage = 'REPAIR',
+        status = 'PENDING', invalid_output = #{invalidOutput},
+        output_json = NULL, updated_at = CURRENT_TIMESTAMP WHERE business_id = #{id}
+    </update>
+
+    <update id="fail">
+        UPDATE coordinator_agent_run SET status = 'FAILED', output_json = #{output},
+        updated_at = CURRENT_TIMESTAMP WHERE business_id = #{id}
+    </update>
+
+</mapper>

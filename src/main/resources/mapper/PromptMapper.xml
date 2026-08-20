@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.cmb.infrastructure.persistent.mapper.PromptMapper">
+
+    <sql id="promptTemplateColumns">
+        business_id, prompt_key, agent_scope, scene, version, status,
+        template_content, variables_schema, created_at, published_at
+    </sql>
+
+    <resultMap id="promptTemplateView"
+               type="org.cmb.teamcoordinator.prompt.PromptTemplateView">
+        <result column="business_id" property="id"/>
+        <result column="prompt_key" property="promptKey"/>
+        <result column="agent_scope" property="agentScope"/>
+        <result column="scene" property="scene"/>
+        <result column="version" property="version"/>
+        <result column="status" property="status"/>
+        <result column="template_content" property="templateContent"/>
+        <result column="variables_schema" property="variablesSchema"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="published_at" property="publishedAt"/>
+    </resultMap>
+
+    <select id="findPublished" resultMap="promptTemplateView">
+        SELECT <include refid="promptTemplateColumns"/> FROM prompt_template
+        WHERE prompt_key = #{promptKey} AND status = 'PUBLISHED'
+        ORDER BY version DESC
+    </select>
+
+    <select id="list" resultMap="promptTemplateView">
+        SELECT <include refid="promptTemplateColumns"/> FROM prompt_template
+        <if test="promptKey != null and promptKey.trim() != ''">
+            WHERE prompt_key = #{promptKey}
+        </if>
+        ORDER BY prompt_key, version DESC
+    </select>
+
+    <select id="selectNextVersion" resultType="int">
+        SELECT COALESCE(MAX(version), 0) + 1 FROM prompt_template
+        WHERE prompt_key = #{promptKey}
+    </select>
+
+    <insert id="insertTemplate">
+        INSERT INTO prompt_template
+        (business_id, prompt_key, agent_scope, scene, version, status,
+        template_content, variables_schema, created_by)
+        VALUES (#{id}, #{promptKey}, #{agentScope}, #{scene}, #{version}, 'DRAFT',
+        #{templateContent}, #{variablesSchema}, #{createdBy})
+    </insert>
+
+    <update id="retirePublished">
+        UPDATE prompt_template SET status = 'RETIRED'
+        WHERE prompt_key = #{promptKey} AND status = 'PUBLISHED'
+    </update>
+
+    <update id="publish">
+        UPDATE prompt_template SET status = 'PUBLISHED',
+        published_at = CURRENT_TIMESTAMP WHERE business_id = #{id}
+    </update>
+
+    <select id="find" resultMap="promptTemplateView">
+        SELECT <include refid="promptTemplateColumns"/> FROM prompt_template
+        WHERE business_id = #{id}
+    </select>
+
+    <insert id="insertAudit">
+        INSERT INTO prompt_execution
+        (business_id, tenant_id, project_id, conversation_id, invocation_id,
+        agent_id, scene, prompt_template_id, prompt_version,
+        rendered_prompt, variables_snapshot)
+        VALUES (#{id}, #{tenantId}, #{projectId}, #{conversationId}, #{invocationId},
+        #{agentId}, #{scene}, #{templateId}, #{templateVersion}, #{renderedPrompt},
+        #{variablesSnapshot})
+    </insert>
+
+</mapper>

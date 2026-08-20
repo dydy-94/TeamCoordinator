@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.UUID;
 import org.cmb.teamcoordinator.execution.SingleExpertWorker;
 import org.cmb.teamcoordinator.execution.DispatchWork;
-import org.cmb.teamcoordinator.execution.ExecutionRepository;
+import org.cmb.infrastructure.persistent.ExecutionRepository;
 import org.cmb.teamcoordinator.intent.CoordinatorDecision;
 import org.cmb.teamcoordinator.intent.TaskIntent;
 import org.cmb.teamcoordinator.planning.PlanningResult;

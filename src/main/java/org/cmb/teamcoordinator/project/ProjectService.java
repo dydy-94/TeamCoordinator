@@ -2,6 +2,8 @@ package org.cmb.teamcoordinator.project;
 
 import java.util.List;
 import java.util.UUID;
+import org.cmb.infrastructure.persistent.ProjectRepository;
+import org.cmb.infrastructure.persistent.SkillRepository;
 import org.cmb.teamcoordinator.agentcore.ExpertDescriptor;
 import org.cmb.teamcoordinator.agentcore.ExpertRegistry;
 import org.cmb.teamcoordinator.common.ApiException;

@@ -8,6 +8,7 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Supplier;
+import org.cmb.infrastructure.persistent.MessageEventRepository;
 import org.cmb.teamcoordinator.agentcore.AgentCoreAdapter;
 import org.cmb.teamcoordinator.agentcore.AgentEvent;
 import org.slf4j.Logger;

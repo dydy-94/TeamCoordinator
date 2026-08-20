@@ -1,6 +1,7 @@
 package org.cmb.teamcoordinator.coordinator;
 
 import java.util.List;
+import org.cmb.infrastructure.persistent.ConversationTaskRepository;
 import org.cmb.teamcoordinator.common.ApiException;
 import org.cmb.teamcoordinator.project.ProjectService;
 import org.cmb.teamcoordinator.project.RequestIdentity;

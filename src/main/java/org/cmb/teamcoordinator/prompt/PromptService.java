@@ -3,6 +3,7 @@ package org.cmb.teamcoordinator.prompt;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
+import org.cmb.infrastructure.persistent.PromptRepository;
 import org.cmb.teamcoordinator.common.ApiException;
 import org.cmb.teamcoordinator.config.DigitalTeamProperties;
 import org.cmb.teamcoordinator.project.RequestIdentity;

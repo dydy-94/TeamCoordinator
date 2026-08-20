@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.List;
 import java.util.UUID;
+import org.cmb.infrastructure.persistent.MessageEventRepository;
 import org.cmb.teamcoordinator.agentcore.AgentEvent;
 import org.cmb.teamcoordinator.intent.CoordinatorAgentClient;
 import org.cmb.teamcoordinator.project.ProjectService;

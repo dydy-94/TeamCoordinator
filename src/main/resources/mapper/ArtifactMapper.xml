@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.cmb.infrastructure.persistent.mapper.ArtifactMapper">
+
+    <resultMap id="artifactRecord"
+               type="org.cmb.infrastructure.persistent.ArtifactRepository$ArtifactRecord">
+        <result column="business_id" property="id"/>
+        <result column="project_id" property="projectId"/>
+        <result column="task_id" property="taskId"/>
+        <result column="expert_run_id" property="expertRunId"/>
+        <result column="version" property="version"/>
+        <result column="storage_key" property="storageKey"/>
+        <result column="file_name" property="fileName"/>
+        <result column="media_type" property="mediaType"/>
+        <result column="size_bytes" property="size"/>
+        <result column="sha256" property="sha256"/>
+        <result column="status" property="status"/>
+    </resultMap>
+
+    <resultMap id="agentUploadContext"
+               type="org.cmb.teamcoordinator.artifact.AgentArtifactUploadContext">
+        <constructor>
+            <arg column="tenant_id" name="tenantId" javaType="String"/>
+            <arg column="coordinator_task_id" name="coordinatorTaskId" javaType="String"/>
+            <arg column="agent_id" name="agentId" javaType="String"/>
+            <arg column="agent_run_id" name="agentRunId" javaType="String"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectNextVersion" resultType="int">
+        SELECT COALESCE(MAX(version), 0) + 1 FROM project_artifact
+        WHERE project_id = #{projectId} AND file_name = #{fileName}
+    </select>
+
+    <insert id="insert">
+        INSERT INTO project_artifact
+        (business_id, tenant_id, project_id, task_id, expert_run_id, version,
+        storage_key, file_name, media_type, status, created_by)
+        VALUES (#{artifact.id}, #{tenantId}, #{artifact.projectId}, #{artifact.taskId},
+        #{artifact.expertRunId}, #{artifact.version}, #{artifact.storageKey},
+        #{artifact.fileName}, #{artifact.mediaType}, #{artifact.status}, #{createdBy})
+        ON DUPLICATE KEY UPDATE business_id = business_id
+    </insert>
+
+    <select id="find" resultMap="artifactRecord">
+        SELECT business_id, project_id, task_id, expert_run_id, version,
+        storage_key, file_name, media_type, size_bytes, sha256, status
+        FROM project_artifact WHERE tenant_id = #{tenantId}
+        AND project_id = #{projectId} AND business_id = #{id}
+    </select>
+
+    <select id="resolveStorageKey" resultType="string">
+        SELECT storage_key FROM project_artifact
+        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
+        AND business_id = #{reference} AND status = 'AVAILABLE'
+    </select>
+
+    <update id="complete">
+        UPDATE project_artifact SET size_bytes = #{size}, sha256 = #{sha256},
+        status = 'AVAILABLE', completed_at = CURRENT_TIMESTAMP
+        WHERE business_id = #{id} AND status = 'UPLOADING'
+    </update>
+
+    <select id="findAgentUploadContext" resultMap="agentUploadContext">
+        SELECT t.tenant_id, t.business_id AS coordinator_task_id,
+        #{agentId} AS agent_id, #{agentRunId} AS agent_run_id
+        FROM coordinator_task t
+        JOIN coordinator_plan p ON p.business_id = t.plan_id
+        JOIN project_conversation c ON c.business_id = p.conversation_id
+        WHERE t.project_id = #{projectId} AND p.conversation_id = #{conversationId}
+        AND c.session_id = #{businessSessionId} AND t.session_id = #{agentRunId}
+        AND t.expert_id = #{agentId}
+        AND t.status IN ('RUNNING', 'WAITING_HUMAN')
+    </select>
+
+    <select id="countAvailableAgentArtifact" resultType="int">
+        SELECT COUNT(*) FROM project_artifact WHERE tenant_id = #{tenantId}
+        AND project_id = #{projectId} AND task_id = #{coordinatorTaskId}
+        AND expert_run_id = #{agentRunId} AND business_id = #{artifactId}
+        AND status = 'AVAILABLE'
+    </select>
+
+    <select id="findAvailableStorageKeys" resultType="string">
+        SELECT a.storage_key FROM project_artifact a
+        JOIN coordinator_task t ON t.business_id = a.task_id
+        WHERE t.plan_id = #{planId} AND t.task_key IN
+        <foreach collection="dependencyKeys" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        AND a.status = 'AVAILABLE' ORDER BY a.business_id
+    </select>
+
+    <insert id="recordDependencyLineage">
+        INSERT INTO project_artifact_lineage (output_artifact_id, input_artifact_id)
+        SELECT #{outputArtifactId}, a.business_id FROM project_artifact a
+        JOIN coordinator_task t ON t.business_id = a.task_id
+        WHERE t.plan_id = #{planId} AND t.task_key IN
+        <foreach collection="dependencyKeys" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        AND a.status = 'AVAILABLE'
+    </insert>
+
+</mapper>

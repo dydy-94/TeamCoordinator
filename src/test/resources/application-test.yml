@@ -27,3 +27,8 @@ digital-team:
 logging:
   level:
     com.networknt.schema: WARN
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true

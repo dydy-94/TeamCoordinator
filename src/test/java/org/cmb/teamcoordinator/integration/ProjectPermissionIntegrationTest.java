@@ -11,7 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.UUID;
-import org.cmb.teamcoordinator.TeamCoordinatorApplication;
+import org.cmb.TeamCoordinatorApplication;
 import org.cmb.teamcoordinator.common.ApiException;
 import org.cmb.teamcoordinator.project.ProjectService;
 import org.cmb.teamcoordinator.project.RequestIdentity;

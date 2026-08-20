@@ -5,7 +5,7 @@ import java.util.Comparator;
 import java.util.List;
 import org.cmb.teamcoordinator.agentcore.ExpertDescriptor;
 import org.cmb.teamcoordinator.agentcore.ExpertRegistry;
-import org.cmb.teamcoordinator.execution.ExecutionRepository;
+import org.cmb.infrastructure.persistent.ExecutionRepository;
 import org.cmb.teamcoordinator.project.ProjectExpert;
 import org.cmb.teamcoordinator.project.ProjectView;
 import org.slf4j.Logger;

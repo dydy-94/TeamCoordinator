@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Map;
 import org.cmb.teamcoordinator.agentcore.ExpertDescriptor;
 import org.cmb.teamcoordinator.agentcore.ExpertRegistry;
-import org.cmb.teamcoordinator.execution.ExecutionRepository;
+import org.cmb.infrastructure.persistent.ExecutionRepository;
 import org.cmb.teamcoordinator.planning.ExpertSelector;
 import org.cmb.teamcoordinator.project.ProjectView;
 import org.junit.jupiter.api.Test;
