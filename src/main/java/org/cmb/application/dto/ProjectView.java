@@ -1,7 +1,7 @@
 package org.cmb.application.dto;
-import org.cmb.application.domain.Skill;
-import org.cmb.application.domain.ProjectExpert;
-import org.cmb.application.domain.ProjectMember;
+import org.cmb.application.domain.entity.SkillDO;
+import org.cmb.application.domain.entity.ProjectExpertDO;
+import org.cmb.application.domain.entity.ProjectMemberDO;
 import org.cmb.common.enums.ProjectStatus;
 
 import java.time.Instant;
@@ -17,9 +17,9 @@ public class ProjectView {
     private ProjectStatus status;
     private Instant createdAt;
     private Instant updatedAt;
-    private List<ProjectMember> members = new ArrayList<>();
-    private List<ProjectExpert> experts = new ArrayList<>();
-    private List<Skill> skills = new ArrayList<>();
+    private List<ProjectMemberDO> members = new ArrayList<>();
+    private List<ProjectExpertDO> experts = new ArrayList<>();
+    private List<SkillDO> skills = new ArrayList<>();
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -35,10 +35,10 @@ public class ProjectView {
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
-    public List<ProjectMember> getMembers() { return members; }
-    public void setMembers(List<ProjectMember> members) { this.members = members; }
-    public List<ProjectExpert> getExperts() { return experts; }
-    public void setExperts(List<ProjectExpert> experts) { this.experts = experts; }
-    public List<Skill> getSkills() { return skills; }
-    public void setSkills(List<Skill> skills) { this.skills = skills; }
+    public List<ProjectMemberDO> getMembers() { return members; }
+    public void setMembers(List<ProjectMemberDO> members) { this.members = members; }
+    public List<ProjectExpertDO> getExperts() { return experts; }
+    public void setExperts(List<ProjectExpertDO> experts) { this.experts = experts; }
+    public List<SkillDO> getSkills() { return skills; }
+    public void setSkills(List<SkillDO> skills) { this.skills = skills; }
 }

@@ -2,6 +2,7 @@ package org.cmb.infrastructure.persistent;
 
 import org.cmb.infrastructure.persistent.mapper.CoordinatorAnalysisMapper;
 import org.cmb.application.domain.CoordinatorDecision;
+import org.cmb.application.domain.entity.HumanRequestDO;
 import org.cmb.application.domain.RequestIdentity;
 import org.springframework.stereotype.Repository;
 
@@ -53,7 +54,7 @@ public class IntentAnalysisRepository {
                 analysisId, identity, projectId, question);
     }
 
-    public HumanRequestRepository.HumanRequestRecord
+    public HumanRequestDO
             findPendingHumanRequest(String tenantId, String projectId, String taskId) {
         return humanRequests.findPendingForTask(tenantId, projectId, taskId);
     }

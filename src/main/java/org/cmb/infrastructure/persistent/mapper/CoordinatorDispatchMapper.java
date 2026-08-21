@@ -4,7 +4,7 @@ import java.sql.Timestamp;
 import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import org.cmb.application.domain.DispatchWork;
+import org.cmb.application.domain.entity.DispatchWorkDO;
 
 /**
  * SQL access for the dispatch queue (digital_team_coordinator_dispatch).
@@ -27,7 +27,7 @@ public interface CoordinatorDispatchMapper {
             @Param("owner") String owner,
             @Param("leaseExpiresAt") Timestamp leaseExpiresAt);
 
-    List<DispatchWork> loadWork(@Param("dispatchId") String dispatchId);
+    List<DispatchWorkDO> loadWork(@Param("dispatchId") String dispatchId);
 
     List<String> findDispatchForConversation(@Param("conversationId") String conversationId);
 

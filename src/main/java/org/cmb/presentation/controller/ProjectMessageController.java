@@ -3,10 +3,10 @@ package org.cmb.presentation.controller;
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import org.cmb.application.service.CoordinatorMessageService;
-import org.cmb.application.dto.MessageAcceptedResponse;
+import org.cmb.application.domain.entity.MessageDO;
 import org.cmb.application.dto.MessageRequest;
 import org.cmb.infrastructure.worker.ProjectEventStreamHub;
-import org.cmb.application.domain.IdentityProvider;
+import org.cmb.application.service.IdentityProvider;
 import org.cmb.application.domain.RequestIdentity;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -45,12 +45,12 @@ public class ProjectMessageController {
      * @return
      */
     @PostMapping("/messages")
-    public ResponseEntity<MessageAcceptedResponse> submit(
+    public ResponseEntity<MessageDO> submit(
             HttpServletRequest servletRequest,
             @PathVariable String projectId,
             @PathVariable String taskId,
             @Valid @RequestBody MessageRequest request) {
-        MessageAcceptedResponse response =
+        MessageDO response =
                 messageService.accept(
                         identityProvider.currentIdentity(servletRequest),
                         projectId, taskId, request);

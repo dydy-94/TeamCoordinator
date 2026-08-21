@@ -4,7 +4,7 @@
 <mapper namespace="org.cmb.infrastructure.persistent.mapper.ProjectArtifactMapper">
 
     <resultMap id="artifactRecord"
-               type="org.cmb.infrastructure.persistent.ArtifactRepository$ArtifactRecord">
+               type="org.cmb.application.domain.entity.ArtifactDO">
         <result column="business_id" property="id"/>
         <result column="project_id" property="projectId"/>
         <result column="task_id" property="taskId"/>

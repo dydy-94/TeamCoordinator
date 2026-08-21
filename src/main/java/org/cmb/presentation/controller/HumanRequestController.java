@@ -5,7 +5,7 @@ import javax.validation.Valid;
 import org.cmb.application.service.HumanRequestService;
 import org.cmb.application.dto.HumanRequestView;
 import org.cmb.application.dto.HumanResponseRequest;
-import org.cmb.application.domain.IdentityProvider;
+import org.cmb.application.service.IdentityProvider;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

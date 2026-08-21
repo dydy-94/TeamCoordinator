@@ -3,10 +3,12 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="org.cmb.infrastructure.persistent.mapper.ProjectConversationMapper">
 
-    <resultMap id="conversationTaskView" type="org.cmb.application.dto.ConversationTaskView">
+    <resultMap id="conversationTaskView" type="org.cmb.application.domain.entity.ConversationDO">
         <result column="id" property="taskId"/>
         <result column="project_id" property="projectId"/>
         <result column="session_id" property="sessionId"/>
+        <result column="coordinator_session_id" property="coordinatorSessionId"/>
+        <result column="coordinator_agent_id" property="coordinatorAgentId"/>
         <result column="title" property="title"/>
         <result column="status" property="status"/>
         <result column="created_at" property="createdAt"/>
@@ -31,10 +33,126 @@
     </delete>
 
     <select id="get" resultMap="conversationTaskView">
-        SELECT business_id AS id, project_id, session_id, title, status, created_at
+        SELECT business_id AS id, project_id, session_id,
+        coordinator_session_id, coordinator_agent_id, title, status, created_at
         FROM digital_team_project_conversation WHERE tenant_id = #{tenantId}
         AND project_id = #{projectId} AND business_id = #{taskId}
     </select>
+
+    <select id="listExpertSessions" resultType="map">
+        SELECT expert_id AS expert_id, session_id AS session_id
+        FROM digital_team_project_conversation_expert_session
+        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
+        AND conversation_id = #{taskId}
+    </select>
+
+    <!--
+      会话级联删除：会话（taskId）是整个聚合的根，按外键依赖从子到父清理。
+      顺序：血缘 → 产物 → 人类请求 → 子任务 → 计划 → run/分析（无外键，仅
+      会话内引用）→ 执行票 → 事件 → 消息 → 序列 → 专家会话映射 → CLI 载荷
+      → 提示词执行审计 → 会话本身。
+    -->
+    <delete id="deleteArtifactLineageForConversation">
+        DELETE FROM digital_team_project_artifact_lineage
+        WHERE output_artifact_id IN (
+            SELECT a.business_id FROM digital_team_project_artifact a
+            JOIN digital_team_coordinator_task t ON t.business_id = a.task_id
+            JOIN digital_team_coordinator_plan p ON p.business_id = t.plan_id
+            WHERE p.conversation_id = #{taskId})
+        OR input_artifact_id IN (
+            SELECT a.business_id FROM digital_team_project_artifact a
+            JOIN digital_team_coordinator_task t ON t.business_id = a.task_id
+            JOIN digital_team_coordinator_plan p ON p.business_id = t.plan_id
+            WHERE p.conversation_id = #{taskId})
+    </delete>
+
+    <delete id="deleteArtifactsForConversation">
+        DELETE FROM digital_team_project_artifact
+        WHERE tenant_id = #{tenantId} AND task_id IN (
+            SELECT t.business_id FROM digital_team_coordinator_task t
+            JOIN digital_team_coordinator_plan p ON p.business_id = t.plan_id
+            WHERE p.conversation_id = #{taskId})
+    </delete>
+
+    <delete id="deleteHumanRequestsForConversation">
+        DELETE FROM digital_team_human_request
+        WHERE tenant_id = #{tenantId} AND (
+            task_id IN (
+                SELECT t.business_id FROM digital_team_coordinator_task t
+                JOIN digital_team_coordinator_plan p ON p.business_id = t.plan_id
+                WHERE p.conversation_id = #{taskId})
+            OR dispatch_id IN (
+                SELECT business_id FROM digital_team_coordinator_dispatch
+                WHERE conversation_id = #{taskId})
+            OR message_id IN (
+                SELECT business_id FROM digital_team_project_message
+                WHERE conversation_id = #{taskId})
+            OR analysis_id IN (
+                SELECT business_id FROM digital_team_coordinator_analysis
+                WHERE project_id = #{projectId}
+                AND input_snapshot LIKE CONCAT('%conversationTaskId":"', #{taskId}, '"%'))
+        )
+    </delete>
+
+    <delete id="deleteTasksForConversation">
+        DELETE FROM digital_team_coordinator_task
+        WHERE tenant_id = #{tenantId} AND plan_id IN (
+            SELECT business_id FROM digital_team_coordinator_plan
+            WHERE conversation_id = #{taskId})
+    </delete>
+
+    <delete id="deletePlansForConversation">
+        DELETE FROM digital_team_coordinator_plan
+        WHERE tenant_id = #{tenantId} AND conversation_id = #{taskId}
+    </delete>
+
+    <delete id="deleteAgentRunsForConversation">
+        DELETE FROM digital_team_coordinator_agent_run
+        WHERE tenant_id = #{tenantId} AND message_id IN (
+            SELECT business_id FROM digital_team_project_message
+            WHERE conversation_id = #{taskId})
+    </delete>
+
+    <delete id="deleteAnalysesForConversation">
+        DELETE FROM digital_team_coordinator_analysis
+        WHERE project_id = #{projectId}
+        AND input_snapshot LIKE CONCAT('%conversationTaskId":"', #{taskId}, '"%')
+    </delete>
+
+    <delete id="deleteDispatchesForConversation">
+        DELETE FROM digital_team_coordinator_dispatch
+        WHERE tenant_id = #{tenantId} AND conversation_id = #{taskId}
+    </delete>
+
+    <delete id="deleteEventsForConversation">
+        DELETE FROM digital_team_project_event
+        WHERE tenant_id = #{tenantId} AND conversation_id = #{taskId}
+    </delete>
+
+    <delete id="deleteMessagesForConversation">
+        DELETE FROM digital_team_project_message
+        WHERE tenant_id = #{tenantId} AND conversation_id = #{taskId}
+    </delete>
+
+    <delete id="deleteEventSequenceForConversation">
+        DELETE FROM digital_team_conversation_event_sequence
+        WHERE tenant_id = #{tenantId} AND conversation_id = #{taskId}
+    </delete>
+
+    <delete id="deleteExpertSessionsForConversation">
+        DELETE FROM digital_team_project_conversation_expert_session
+        WHERE tenant_id = #{tenantId} AND conversation_id = #{taskId}
+    </delete>
+
+    <delete id="deleteCliSubmissionsForConversation">
+        DELETE FROM digital_team_coordinator_cli_submission
+        WHERE task_id = #{taskId}
+    </delete>
+
+    <delete id="deletePromptExecutionsForConversation">
+        DELETE FROM digital_team_prompt_execution
+        WHERE tenant_id = #{tenantId} AND conversation_id = #{taskId}
+    </delete>
 
     <update id="saveCoordinatorSession">
         UPDATE digital_team_project_conversation SET coordinator_session_id = #{sessionId},

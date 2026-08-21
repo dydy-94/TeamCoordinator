@@ -15,11 +15,11 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.cmb.TeamCoordinatorApplication;
-import org.cmb.application.domain.AgentCoreAdapter;
+import org.cmb.application.service.AgentCoreAdapter;
 import org.cmb.application.domain.AgentEvent;
 import org.cmb.infrastructure.persistent.ExecutionRepository;
 import org.cmb.infrastructure.worker.SingleExpertWorker;
-import org.cmb.application.domain.TaskRecord;
+import org.cmb.application.domain.entity.TaskDO;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -47,7 +47,7 @@ class SingleExpertExecutionIntegrationTest {
         String projectId = createProject();
         submitMessage(projectId, "分析当前接口");
 
-        TaskRecord task = runUntilTaskExists(projectId);
+        TaskDO task = runUntilTaskExists(projectId);
         assertNotNull(task.getSessionId());
         assertEquals("RUNNING", task.getStatus());
 
@@ -112,7 +112,7 @@ class SingleExpertExecutionIntegrationTest {
 
         String cancelledProject = createProject();
         submitMessage(cancelledProject, "分析取消场景");
-        TaskRecord running = runUntilTaskExists(cancelledProject);
+        TaskDO running = runUntilTaskExists(cancelledProject);
         mockMvc.perform(delete("/api/v1/projects/" + cancelledProject
                         + "/expert-tasks/" + running.getId())
                         .headers(identity()))
@@ -125,7 +125,7 @@ class SingleExpertExecutionIntegrationTest {
     void failsPersistentlyWhenAgentCoreRunIsLost() throws Exception {
         String projectId = createProject();
         submitMessage(projectId, "分析丢失 Run 场景");
-        TaskRecord task = runUntilTaskExists(projectId);
+        TaskDO task = runUntilTaskExists(projectId);
         jdbc.update(
                 "UPDATE digital_team_coordinator_task SET session_id = 'missing-run', status = 'RUNNING' "
                         + "WHERE business_id = ?",
@@ -135,7 +135,7 @@ class SingleExpertExecutionIntegrationTest {
                         + "lease_expires_at = NULL WHERE project_id = ?",
                 projectId);
 
-        TaskRecord terminal = runUntilTerminal(projectId);
+        TaskDO terminal = runUntilTerminal(projectId);
         assertEquals("FAILED", terminal.getStatus());
         assertEquals("FAILED", dispatchStatus(dispatchId(projectId)));
     }
@@ -169,7 +169,7 @@ class SingleExpertExecutionIntegrationTest {
         return objectMapper.readTree(body).get("id").asText();
     }
 
-    private TaskRecord task(String projectId) {
+    private TaskDO task(String projectId) {
         String taskId = jdbc.queryForObject(
                 "SELECT business_id FROM digital_team_coordinator_task WHERE project_id = ?",
                 String.class,
@@ -177,7 +177,7 @@ class SingleExpertExecutionIntegrationTest {
         return executionRepository.findTask("tenant-execution", projectId, taskId);
     }
 
-    private TaskRecord runUntilTaskExists(String projectId) {
+    private TaskDO runUntilTaskExists(String projectId) {
         for (int attempt = 0; attempt < 30; attempt++) {
             Integer count = jdbc.queryForObject(
                     "SELECT COUNT(*) FROM digital_team_coordinator_task WHERE project_id = ?",
@@ -191,9 +191,9 @@ class SingleExpertExecutionIntegrationTest {
         throw new AssertionError("Task was not created for project " + projectId);
     }
 
-    private TaskRecord runUntilTerminal(String projectId) {
+    private TaskDO runUntilTerminal(String projectId) {
         for (int attempt = 0; attempt < 30; attempt++) {
-            TaskRecord current = runUntilTaskExists(projectId);
+            TaskDO current = runUntilTaskExists(projectId);
             if ("SUCCEEDED".equals(current.getStatus())
                     || "FAILED".equals(current.getStatus())
                     || "TIMED_OUT".equals(current.getStatus())

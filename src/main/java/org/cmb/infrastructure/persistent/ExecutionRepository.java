@@ -7,18 +7,15 @@ import java.util.List;
 import java.util.UUID;
 import org.cmb.infrastructure.persistent.mapper.CoordinatorDispatchMapper;
 import org.cmb.infrastructure.persistent.mapper.CoordinatorPlanMapper;
-import org.cmb.infrastructure.persistent.mapper.CoordinatorTaskEventMapper;
 import org.cmb.infrastructure.persistent.mapper.CoordinatorTaskMapper;
 import org.cmb.infrastructure.persistent.mapper.ProjectConversationExpertSessionMapper;
 import org.cmb.infrastructure.persistent.mapper.ProjectConversationMapper;
-import org.cmb.application.domain.AgentEvent;
-import org.cmb.application.domain.DispatchWork;
-import org.cmb.application.domain.TaskRecord;
+import org.cmb.application.domain.entity.DispatchWorkDO;
+import org.cmb.application.domain.entity.TaskDO;
 import org.cmb.application.domain.CoordinatorDecision;
 import org.cmb.application.domain.CoordinatorPlanSpec;
 import org.cmb.application.domain.PlannedTask;
 import org.cmb.application.domain.PlanningResult;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,8 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
  * Execution-engine persistence facade. Owns transaction boundaries and
  * JSON serialization; all SQL lives in the per-table mappers
  * ({@link CoordinatorDispatchMapper}, {@link CoordinatorPlanMapper},
- * {@link CoordinatorTaskMapper}, {@link CoordinatorTaskEventMapper},
- * {@link ProjectConversationMapper},
+ * {@link CoordinatorTaskMapper}, {@link ProjectConversationMapper},
  * {@link ProjectConversationExpertSessionMapper}).
  */
 @Repository
@@ -36,7 +32,6 @@ public class ExecutionRepository {
     private final CoordinatorDispatchMapper dispatchMapper;
     private final CoordinatorPlanMapper planMapper;
     private final CoordinatorTaskMapper taskMapper;
-    private final CoordinatorTaskEventMapper taskEventMapper;
     private final ProjectConversationMapper conversationMapper;
     private final ProjectConversationExpertSessionMapper expertSessionMapper;
     private final ObjectMapper objectMapper;
@@ -45,21 +40,19 @@ public class ExecutionRepository {
             CoordinatorDispatchMapper dispatchMapper,
             CoordinatorPlanMapper planMapper,
             CoordinatorTaskMapper taskMapper,
-            CoordinatorTaskEventMapper taskEventMapper,
             ProjectConversationMapper conversationMapper,
             ProjectConversationExpertSessionMapper expertSessionMapper,
             ObjectMapper objectMapper) {
         this.dispatchMapper = dispatchMapper;
         this.planMapper = planMapper;
         this.taskMapper = taskMapper;
-        this.taskEventMapper = taskEventMapper;
         this.conversationMapper = conversationMapper;
         this.expertSessionMapper = expertSessionMapper;
         this.objectMapper = objectMapper;
     }
 
     @Transactional
-    public DispatchWork claimNext(String owner, int leaseSeconds) {
+    public DispatchWorkDO claimNext(String owner, int leaseSeconds) {
         List<String> ids = dispatchMapper.selectClaimableDispatchId();
         if (ids.isEmpty()) {
             return null;
@@ -81,12 +74,12 @@ public class ExecutionRepository {
                 Timestamp.from(Instant.now().plusSeconds(leaseSeconds)));
     }
 
-    public DispatchWork loadWork(String dispatchId) {
-        List<DispatchWork> rows = dispatchMapper.loadWork(dispatchId);
+    public DispatchWorkDO loadWork(String dispatchId) {
+        List<DispatchWorkDO> rows = dispatchMapper.loadWork(dispatchId);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
-    public String createPlan(DispatchWork work, CoordinatorDecision decision) {
+    public String createPlan(DispatchWorkDO work, CoordinatorDecision decision) {
         List<String> existing = planMapper.findExistingPlanId(
                 work.getTenantId(), work.getProjectId(), work.getMessageId());
         if (!existing.isEmpty()) {
@@ -100,7 +93,7 @@ public class ExecutionRepository {
 
     @Transactional
     public String createPlan(
-            DispatchWork work,
+            DispatchWorkDO work,
             CoordinatorDecision decision,
             PlanningResult planning) {
         List<String> existing = planMapper.findLatestPlanId(
@@ -121,7 +114,7 @@ public class ExecutionRepository {
 
     @Transactional
     public String createReplan(
-            DispatchWork work,
+            DispatchWorkDO work,
             CoordinatorDecision decision,
             PlanningResult planning,
             String previousPlanId) {
@@ -131,7 +124,7 @@ public class ExecutionRepository {
                 write(decision.getTaskIntent()), planning.getRawJson(),
                 planning.getRepairCount(), previousPlanId);
         for (PlannedTask task : plan.getTasks()) {
-            TaskRecord reusable = findReusableTask(previousPlanId, task.getTaskKey());
+            TaskDO reusable = findReusableTask(previousPlanId, task.getTaskKey());
             if (reusable == null) {
                 insertTask(work, id, task);
             } else {
@@ -142,7 +135,7 @@ public class ExecutionRepository {
         return id;
     }
 
-    public List<TaskRecord> findTasksForMessage(DispatchWork work) {
+    public List<TaskDO> findTasksForMessage(DispatchWorkDO work) {
         return taskMapper.findTasksForMessage(work.getTenantId(), work.getMessageId());
     }
 
@@ -156,8 +149,8 @@ public class ExecutionRepository {
     }
 
     @Transactional
-    public TaskRecord createCorrection(
-            DispatchWork work, TaskRecord original, String reason) {
+    public TaskDO createCorrection(
+            DispatchWorkDO work, TaskDO original, String reason) {
         if (original.getCorrectionCount() >= 1) {
             return null;
         }
@@ -185,7 +178,7 @@ public class ExecutionRepository {
      * plus the failure reason, so the expert sees why the result was rejected
      * without the free-text reason leaking into the objective (task text).
      */
-    private String correctionCriteria(TaskRecord original, String reason) {
+    private String correctionCriteria(TaskDO original, String reason) {
         String criteria = original.getAcceptanceCriteria() == null
                 ? "" : original.getAcceptanceCriteria();
         if (reason != null && !reason.trim().isEmpty()) {
@@ -196,14 +189,14 @@ public class ExecutionRepository {
         return criteria;
     }
 
-    public void acceptCorrection(TaskRecord correction, String resultJson) {
+    public void acceptCorrection(TaskDO correction, String resultJson) {
         taskMapper.acceptCorrection(correction.getCorrectionOf(), resultJson);
     }
 
-    public TaskRecord createOrLoadTask(
-            DispatchWork work, String planId, String expertId, String objective) {
+    public TaskDO createOrLoadTask(
+            DispatchWorkDO work, String planId, String expertId, String objective) {
         String requestId = work.getMessageId() + ":single-expert";
-        List<TaskRecord> existing = taskMapper.findTaskByRequestId(
+        List<TaskDO> existing = taskMapper.findTaskByRequestId(
                 work.getTenantId(), requestId);
         if (!existing.isEmpty()) {
             return existing.get(0);
@@ -211,7 +204,7 @@ public class ExecutionRepository {
         String taskId = "task-" + UUID.randomUUID();
         taskMapper.insertSingleExpertTask(taskId, work, planId, requestId, expertId,
                 objective, write(work.getAttachmentRefs()));
-        TaskRecord task = new TaskRecord();
+        TaskDO task = new TaskDO();
         task.setId(taskId);
         task.setPlanId(planId);
         task.setRequestId(requestId);
@@ -220,8 +213,8 @@ public class ExecutionRepository {
         return task;
     }
 
-    public TaskRecord findTaskForMessage(DispatchWork work) {
-        List<TaskRecord> rows = taskMapper.findTaskForMessage(
+    public TaskDO findTaskForMessage(DispatchWorkDO work) {
+        List<TaskDO> rows = taskMapper.findTaskForMessage(
                 work.getTenantId(), work.getMessageId());
         return rows.isEmpty() ? null : rows.get(0);
     }
@@ -265,8 +258,8 @@ public class ExecutionRepository {
         return dispatchMapper.findDispatchForConversation(conversationId);
     }
 
-    public TaskRecord findTaskByBusinessId(String taskId) {
-        List<TaskRecord> rows = taskMapper.findTaskByBusinessId(taskId);
+    public TaskDO findTaskByBusinessId(String taskId) {
+        List<TaskDO> rows = taskMapper.findTaskByBusinessId(taskId);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
@@ -302,18 +295,6 @@ public class ExecutionRepository {
         Long watermark = taskMapper.findLastSequenceBySessionExcludingTask(
                 sessionId, taskId);
         return watermark == null ? 0L : watermark;
-    }
-
-    @Transactional
-    public boolean recordEvent(String tenantId, String taskId, AgentEvent event) {
-        try {
-            taskEventMapper.insertTaskEvent("task-event-" + UUID.randomUUID(),
-                    tenantId, taskId, event.getEventId(), event.getSequence(),
-                    event.getType(), write(event));
-        } catch (DuplicateKeyException ex) {
-            return false;
-        }
-        return true;
     }
 
     public boolean advanceTask(
@@ -378,17 +359,17 @@ public class ExecutionRepository {
         dispatchMapper.releaseDispatch(dispatchId);
     }
 
-    public TaskRecord findTask(String tenantId, String projectId, String taskId) {
-        List<TaskRecord> rows = taskMapper.findTask(tenantId, projectId, taskId);
+    public TaskDO findTask(String tenantId, String projectId, String taskId) {
+        List<TaskDO> rows = taskMapper.findTask(tenantId, projectId, taskId);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
-    public DispatchWork loadWorkForTask(String tenantId, String projectId, String taskId) {
+    public DispatchWorkDO loadWorkForTask(String tenantId, String projectId, String taskId) {
         List<String> dispatchIds = taskMapper.findDispatchIdForTask(tenantId, projectId, taskId);
         return dispatchIds.isEmpty() ? null : loadWork(dispatchIds.get(0));
     }
 
-    private void insertTask(DispatchWork work, String planId, PlannedTask task) {
+    private void insertTask(DispatchWorkDO work, String planId, PlannedTask task) {
         String taskId = "task-" + UUID.randomUUID();
         String requestId = work.getMessageId() + ":" + task.getTaskKey();
         taskMapper.insertTask(taskId, work, planId, task.getTaskKey(), requestId,
@@ -397,16 +378,16 @@ public class ExecutionRepository {
                 task.getExpectedOutput(), task.getAcceptanceCriteria());
     }
 
-    private TaskRecord findReusableTask(String planId, String taskKey) {
-        List<TaskRecord> rows = taskMapper.findReusableTask(planId, taskKey);
+    private TaskDO findReusableTask(String planId, String taskKey) {
+        List<TaskDO> rows = taskMapper.findReusableTask(planId, taskKey);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
     private void insertReusedTask(
-            DispatchWork work,
+            DispatchWorkDO work,
             String planId,
             PlannedTask task,
-            TaskRecord reusable) {
+            TaskDO reusable) {
         taskMapper.insertReusedTask("task-" + UUID.randomUUID(), work, planId,
                 task.getTaskKey(), work.getMessageId() + ":v2:" + task.getTaskKey(),
                 reusable.getExpertId(), reusable.getSessionId(), task.getObjective(),

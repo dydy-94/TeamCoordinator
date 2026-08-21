@@ -1,8 +1,9 @@
 # 数据库表详解
 
-> 本文档覆盖 TeamCoordinator 使用的全部 26 张 MySQL 表(均带 `digital_team_` 前缀),
+> 本文档覆盖 TeamCoordinator 使用的全部 22 张 MySQL 表(均带 `digital_team_` 前缀),
 > 逐一说明每个字段的**含义、用途与生成来源**。schema 的权威定义是
-> `db/init/01-schema.sql`(等价于 Flyway V1~V25 全量执行后的最终结构)。
+> `db/init/01-schema.sql`(等价于 Flyway V1~V26 全量执行后的最终结构;
+> V26 清除了 4 张不再使用的遗留表)。
 
 ## 全局约定
 
@@ -19,11 +20,11 @@
 
 | 分组 | 表 |
 |---|---|
-| 租户/项目与权限 | project、project_member、project_expert、project_skill、skill、permission_audit_log、schema_version_marker |
+| 租户/项目与权限 | project、project_member、project_expert、project_skill、skill、permission_audit_log |
 | 对话与消息 | project_conversation、project_message、project_conversation_expert_session |
-| 事件与 SSE | project_event、project_event_sequence(遗留)、conversation_event_sequence |
-| 调度与执行 | coordinator_dispatch、coordinator_analysis、coordinator_plan、coordinator_task、coordinator_task_event、coordinator_agent_run |
-| 人类请求 | human_request、coordinator_human_request(遗留) |
+| 事件与 SSE | project_event、conversation_event_sequence |
+| 调度与执行 | coordinator_dispatch、coordinator_analysis、coordinator_plan、coordinator_task、coordinator_agent_run |
+| 人类请求 | human_request |
 | 产物 | project_artifact、project_artifact_lineage |
 | 提示词 | prompt_template、prompt_execution |
 | CLI 通道 | coordinator_cli_submission |
@@ -34,7 +35,6 @@
 project ─┬─ project_member / project_expert / project_skill / permission_audit_log
          └─ project_conversation ─┬─ project_message ─┬─ coordinator_dispatch
                                   │                   ├─ coordinator_plan ─┬─ coordinator_task ─┬─ project_artifact
-                                  │                   │                    │                    └─ coordinator_task_event
                                   │                   │                    └─ human_request
                                   │                   ├─ coordinator_agent_run
                                   │                   ├─ coordinator_analysis ── human_request
@@ -47,20 +47,7 @@ prompt_template ── prompt_execution
 
 ---
 
-# 1. digital_team_schema_version_marker — schema 版本标记
-
-预留的版本标记表,当前**仅 DDL 存在,运行时代码不读写**(只在 Flyway 迁移 V1/V13 中出现)。
-
-| 字段 | 类型 | 含义/用途 | 生成来源 |
-|---|---|---|---|
-| id | BIGINT PK | 代理主键 | 数据库自增 |
-| business_id | VARCHAR(96) | 业务主键 | 预留,无运行时写入 |
-| marker | VARCHAR(64) | 版本标记串 | 预留 |
-| created_at | TIMESTAMP | 创建时间 | 数据库默认 |
-
----
-
-# 2. digital_team_permission_audit_log — 权限审计日志
+# 1. digital_team_permission_audit_log — 权限审计日志
 
 记录项目权限相关的关键操作,用于审计追溯。只增不改。
 
@@ -78,7 +65,7 @@ prompt_template ── prompt_execution
 
 ---
 
-# 3. digital_team_project — 项目
+# 2. digital_team_project — 项目
 
 租户下的项目,是整个系统多租户资源的根。状态机:`ACTIVE ⇄ ARCHIVED`。
 
@@ -96,7 +83,7 @@ prompt_template ── prompt_execution
 
 ---
 
-# 4. digital_team_project_member — 项目成员
+# 3. digital_team_project_member — 项目成员
 
 项目成员与角色。角色决定 API 权限(ProjectService.requireRole)。
 
@@ -111,7 +98,7 @@ prompt_template ── prompt_execution
 
 ---
 
-# 5. digital_team_project_expert — 项目专家挂载
+# 4. digital_team_project_expert — 项目专家挂载
 
 项目启用的专家及开关。专家本体来自代码内 ExpertRegistry(配置),此表只记录"项目是否启用某专家"。
 
@@ -126,7 +113,7 @@ prompt_template ── prompt_execution
 
 ---
 
-# 6. digital_team_project_conversation — 会话任务(前端所说的 task)
+# 5. digital_team_project_conversation — 会话任务(前端所说的 task)
 
 用户在项目下创建的对话任务。一次进入聊天室 = 一个 conversation;后续所有消息、事件都挂在其下。
 
@@ -140,12 +127,12 @@ prompt_template ── prompt_execution
 | coordinator_session_id | VARCHAR(128) | 协调器 AgentCore 会话号(跨消息复用) | 首次意图分析成功后 worker 写 `decision.getCoordinatorSessionId()`;同任务后续消息复用 |
 | coordinator_agent_id | VARCHAR(128) | 实际使用的协调器 agent | worker 与 coordinator_session_id 同批写入 |
 | title | VARCHAR(128) | 标题 | 创建请求体,可空 |
-| status | VARCHAR(32) | 状态 | 默认 `ACTIVE`;目前仅创建/删除,无其他流转 |
+| status | VARCHAR(32) | 状态 | 默认 `ACTIVE`;目前仅创建/删除,无其他流转。删除为**级联删除**:按外键依赖顺序清理本会话关联的全部记录(消息、事件、计划、子任务、产物、人类请求、序列、CLI 载荷、提示词审计等),并调用 AgentCore `deleteSession` 删除协调器与各专家的会话历史(见 ProjectConversationMapper 的级联语句) |
 | created_at | TIMESTAMP | 创建时间 | 数据库默认 |
 
 ---
 
-# 7. digital_team_project_message — 用户消息
+# 6. digital_team_project_message — 用户消息
 
 用户在对话里发的一条消息(只存用户侧文本;AI 回复在 project_event 里)。
 
@@ -165,20 +152,7 @@ prompt_template ── prompt_execution
 
 ---
 
-# 8. digital_team_project_event_sequence — 项目事件序列号(遗留)
-
-**遗留表**:V3 引入的项目级事件序列,V10 起被会话级 `conversation_event_sequence` 取代。
-当前仅 DDL 存在,**无运行时读写**,保留是为了与 Flyway 历史/升级脚本对齐。
-
-| 字段 | 类型 | 含义/用途 | 生成来源 |
-|---|---|---|---|
-| id | BIGINT PK | 代理主键 | 数据库自增 |
-| tenant_id / project_id | VARCHAR(64) | 归属 | (遗留) |
-| next_sequence | BIGINT | 下一个序列值 | (遗留) |
-
----
-
-# 9. digital_team_project_event — 面向前端的事件流(持久化)
+# 7. digital_team_project_event — 面向前端的事件流(持久化)
 
 SSE 事件的可重放事实源。客户端断线重连用 `Last-Event-ID`(= 本表 sequence)从这里补发。
 
@@ -203,7 +177,7 @@ SSE 事件的可重放事实源。客户端断线重连用 `Last-Event-ID`(= 本
 
 ---
 
-# 10. digital_team_conversation_event_sequence — 会话事件序列号
+# 8. digital_team_conversation_event_sequence — 会话事件序列号
 
 每个会话一个序列分配器,为 project_event.sequence 提供**原子递增**(CAS 循环,失败重试)。
 
@@ -216,7 +190,7 @@ SSE 事件的可重放事实源。客户端断线重连用 `Last-Event-ID`(= 本
 
 ---
 
-# 11. digital_team_coordinator_dispatch — 执行票(worker 调度单元)
+# 9. digital_team_coordinator_dispatch — 执行票(worker 调度单元)
 
 每条用户消息生成一张执行票,`SingleExpertWorker.runOnce()` 每 500ms 领取处理。
 一张票 = 一次意图分析 + 可能的计划与专家执行,直到终态。
@@ -238,7 +212,7 @@ SSE 事件的可重放事实源。客户端断线重连用 `Last-Event-ID`(= 本
 
 ---
 
-# 12. digital_team_coordinator_analysis — 意图分析记录
+# 10. digital_team_coordinator_analysis — 意图分析记录
 
 每次协调器意图分析的落档(输入快照、决策、模型与 schema 版本),审计与排查用。
 
@@ -259,23 +233,7 @@ SSE 事件的可重放事实源。客户端断线重连用 `Last-Event-ID`(= 本
 
 ---
 
-# 13. digital_team_coordinator_human_request — 协调者提问记录(遗留)
-
-**遗留表**(V4 引入,V7 起被通用 `human_request` 取代)。仅 DDL 存在,**无运行时读写**。
-
-| 字段 | 类型 | 含义/用途 | 生成来源 |
-|---|---|---|---|
-| id | BIGINT PK | 代理主键 | 数据库自增 |
-| business_id | VARCHAR(64) | 业务主键 | (遗留) |
-| analysis_id | VARCHAR(64) | 关联分析 | (遗留,FK → coordinator_analysis) |
-| tenant_id / project_id | VARCHAR(64) | 归属 | (遗留) |
-| question | TEXT | 问题 | (遗留) |
-| status | VARCHAR(16) | 状态 | (遗留) |
-| created_at / resolved_at | TIMESTAMP | 时间 | (遗留) |
-
----
-
-# 14. digital_team_coordinator_plan — 执行计划
+# 11. digital_team_coordinator_plan — 执行计划
 
 一次 CREATE_PLAN 决策生成一张执行计划,内含若干子任务。修复(repair)生成新版本计划并替代旧版。
 
@@ -297,7 +255,7 @@ SSE 事件的可重放事实源。客户端断线重连用 `Last-Event-ID`(= 本
 
 ---
 
-# 15. digital_team_coordinator_task — 协调子任务(专家执行单元)
+# 12. digital_team_coordinator_task — 协调子任务(专家执行单元)
 
 计划里的每个执行步骤。一个子任务 = 一次专家 AgentCore run。
 状态机:`PENDING → STARTING → RUNNING → SUCCEEDED / FAILED / CANCELLED / TIMED_OUT`;中途可
@@ -332,26 +290,7 @@ SSE 事件的可重放事实源。客户端断线重连用 `Last-Event-ID`(= 本
 
 ---
 
-# 16. digital_team_coordinator_task_event — 专家任务事件(基本闲置)
-
-设计上用于持久化专家 AgentCore 事件,但当前架构**事件事实源在 AgentCore**(回放时从
-AgentCore 重拉),本表仅 `ExecutionRepository.recordEvent` 一处写入,查询侧未使用。
-
-| 字段 | 类型 | 含义/用途 | 生成来源 |
-|---|---|---|---|
-| id | BIGINT PK | 代理主键 | 数据库自增 |
-| business_id | VARCHAR(96) | 业务主键 | `"task-event-" + UUID` |
-| tenant_id | VARCHAR(64) | 租户 | 写入上下文 |
-| task_id | VARCHAR(64) | 所属子任务 | (FK → coordinator_task) |
-| event_id | VARCHAR(128) | 事件去重键 | `sessionId:sequence`;(tenant, event_id) 唯一,重复插入忽略 |
-| sequence | BIGINT | AgentCore 事件序号 | 事件本身的 sequence |
-| event_type | VARCHAR(64) | 事件类型 | AgentEvent.type |
-| payload | TEXT | 事件 JSON | AgentEvent 序列化 |
-| created_at | TIMESTAMP | 时间 | 数据库默认 |
-
----
-
-# 17. digital_team_human_request — 人类请求(协调者提问/专家求助共用)
+# 13. digital_team_human_request — 人类请求(协调者提问/专家求助共用)
 
 HITL 的统一落点。协调器 ASK_HUMAN 与专家 confirm 都建行,前端答题后 resolve。
 
@@ -379,7 +318,7 @@ HITL 的统一落点。协调器 ASK_HUMAN 与专家 confirm 都建行,前端答
 
 ---
 
-# 18. digital_team_project_artifact — 产物
+# 14. digital_team_project_artifact — 产物
 
 文件产物(专家产出、用户上传)的元数据;实际字节在对象存储(MinIO)。状态机:`UPLOADING → AVAILABLE`。
 
@@ -406,7 +345,7 @@ HITL 的统一落点。协调器 ASK_HUMAN 与专家 confirm 都建行,前端答
 
 ---
 
-# 19. digital_team_project_artifact_lineage — 产物血缘
+# 15. digital_team_project_artifact_lineage — 产物血缘
 
 记录"某子任务的产物依赖了哪些上游任务的产物",构成计划内的产物依赖图。
 
@@ -422,7 +361,7 @@ HITL 的统一落点。协调器 ASK_HUMAN 与专家 confirm 都建行,前端答
 
 ---
 
-# 20. digital_team_coordinator_agent_run — 协调器 agent run 记录
+# 16. digital_team_coordinator_agent_run — 协调器 agent run 记录
 
 协调器每次意图分析的 AgentCore run 状态落档(幂等 create-or-load,run_key 唯一)。
 
@@ -445,7 +384,7 @@ HITL 的统一落点。协调器 ASK_HUMAN 与专家 confirm 都建行,前端答
 
 ---
 
-# 21. digital_team_prompt_template — 提示词模板(版本化)
+# 17. digital_team_prompt_template — 提示词模板(版本化)
 
 数据库管理的提示词模板。状态机:`DRAFT → PUBLISHED → RETIRED`。
 
@@ -468,7 +407,7 @@ HITL 的统一落点。协调器 ASK_HUMAN 与专家 confirm 都建行,前端答
 
 ---
 
-# 22. digital_team_prompt_execution — 提示词执行审计
+# 18. digital_team_prompt_execution — 提示词执行审计
 
 每次实际渲染提示词的快照(模板 id/版本、渲染结果、变量),可追溯与回放。
 
@@ -489,7 +428,7 @@ HITL 的统一落点。协调器 ASK_HUMAN 与专家 confirm 都建行,前端答
 
 ---
 
-# 23. digital_team_project_conversation_expert_session — 会话-专家 session 复用映射
+# 19. digital_team_project_conversation_expert_session — 会话-专家 session 复用映射
 
 记录"该对话中某专家最近一次使用的 AgentCore 会话",供下一条消息的同类任务**复用会话保持上下文连续**。
 
@@ -505,7 +444,7 @@ HITL 的统一落点。协调器 ASK_HUMAN 与专家 confirm 都建行,前端答
 
 ---
 
-# 24. digital_team_skill — 技能目录
+# 20. digital_team_skill — 技能目录
 
 平台级技能定义(名称、描述、提示词)。项目通过 project_skill 挂载启用。
 
@@ -520,7 +459,7 @@ HITL 的统一落点。协调器 ASK_HUMAN 与专家 confirm 都建行,前端答
 
 ---
 
-# 25. digital_team_project_skill — 项目技能挂载
+# 21. digital_team_project_skill — 项目技能挂载
 
 项目对技能的启用/禁用关系(与 project_expert 同构)。
 
@@ -534,7 +473,7 @@ HITL 的统一落点。协调器 ASK_HUMAN 与专家 confirm 都建行,前端答
 
 ---
 
-# 26. digital_team_coordinator_cli_submission — CLI 提交载荷(单次消费)
+# 22. digital_team_coordinator_cli_submission — CLI 提交载荷(单次消费)
 
 tc CLI 与 AgentCore 侧向 Coordinator 提交结构化结果的**暂存通道**:
 决策/计划/评审意见先落到这里,worker 按 `(task_id, kind)` 取出后**即删**——保证单次消费,不会串到下一轮消息。

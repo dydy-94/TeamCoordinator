@@ -3,9 +3,9 @@ package org.cmb.presentation.controller;
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import org.cmb.application.service.ConversationTaskService;
-import org.cmb.application.dto.ConversationTaskView;
+import org.cmb.application.domain.entity.ConversationDO;
 import org.cmb.application.dto.CreateConversationTaskRequest;
-import org.cmb.application.domain.IdentityProvider;
+import org.cmb.application.service.IdentityProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -33,7 +33,7 @@ public class ConversationTaskController {
      * 列出项目下所有任务
      */
     @GetMapping
-    public java.util.List<ConversationTaskView> list(
+    public java.util.List<ConversationDO> list(
             HttpServletRequest servletRequest,
             @PathVariable String projectId) {
         return tasks.list(identities.currentIdentity(servletRequest), projectId);
@@ -47,7 +47,7 @@ public class ConversationTaskController {
      * @return
      */
     @PostMapping
-    public ResponseEntity<ConversationTaskView> create(
+    public ResponseEntity<ConversationDO> create(
             HttpServletRequest servletRequest,
             @PathVariable String projectId,
             @Valid @RequestBody CreateConversationTaskRequest request) {
@@ -75,7 +75,7 @@ public class ConversationTaskController {
      * @return
      */
     @GetMapping("/{taskId}")
-    public ConversationTaskView get(
+    public ConversationDO get(
             HttpServletRequest servletRequest,
             @PathVariable String projectId,
             @PathVariable String taskId) {

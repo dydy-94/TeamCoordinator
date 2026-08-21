@@ -86,19 +86,11 @@ CALL tc_rename_table_if_exists('coordinator_cli_submission', 'digital_team_coord
 
 DROP PROCEDURE IF EXISTS tc_rename_table_if_exists;
 
--- ── 表 schema_version_marker ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS digital_team_schema_version_marker (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    business_id VARCHAR(96) NOT NULL,
-    marker VARCHAR(64) NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT uk_schema_version_marker_business_id UNIQUE (business_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CALL tc_add_column_if_missing('digital_team_schema_version_marker', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
-CALL tc_add_column_if_missing('digital_team_schema_version_marker', 'business_id', 'business_id VARCHAR(96) NOT NULL');
-CALL tc_add_column_if_missing('digital_team_schema_version_marker', 'marker', 'marker VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('digital_team_schema_version_marker', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+-- ── 遗留表清理（V26 后不再使用，幂等 DROP）──────────────────────────────────
+DROP TABLE IF EXISTS digital_team_coordinator_task_event;
+DROP TABLE IF EXISTS digital_team_coordinator_human_request;
+DROP TABLE IF EXISTS digital_team_project_event_sequence;
+DROP TABLE IF EXISTS digital_team_schema_version_marker;
 
 -- ── 表 permission_audit_log ────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS digital_team_permission_audit_log (
@@ -262,22 +254,6 @@ CALL tc_add_column_if_missing('digital_team_project_message', 'attachment_refs',
 CALL tc_add_column_if_missing('digital_team_project_message', 'status', 'status VARCHAR(32) NOT NULL');
 CALL tc_add_column_if_missing('digital_team_project_message', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
 
--- ── 表 project_event_sequence ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS digital_team_project_event_sequence (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    tenant_id VARCHAR(64) NOT NULL,
-    project_id VARCHAR(64) NOT NULL,
-    next_sequence BIGINT NOT NULL,
-    CONSTRAINT uk_project_event_sequence_business UNIQUE (tenant_id, project_id),
-    CONSTRAINT fk_event_sequence_project FOREIGN KEY (project_id)
-        REFERENCES digital_team_project (business_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CALL tc_add_column_if_missing('digital_team_project_event_sequence', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
-CALL tc_add_column_if_missing('digital_team_project_event_sequence', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('digital_team_project_event_sequence', 'project_id', 'project_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('digital_team_project_event_sequence', 'next_sequence', 'next_sequence BIGINT NOT NULL');
-
 -- ── 表 project_event ────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS digital_team_project_event (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -402,35 +378,6 @@ CALL tc_add_column_if_missing('digital_team_coordinator_analysis', 'decision_jso
 CALL tc_add_column_if_missing('digital_team_coordinator_analysis', 'repaired', 'repaired BOOLEAN NOT NULL DEFAULT FALSE');
 CALL tc_add_column_if_missing('digital_team_coordinator_analysis', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
 
--- ── 表 coordinator_human_request ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS digital_team_coordinator_human_request (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    business_id VARCHAR(64) NOT NULL,
-    analysis_id VARCHAR(64),
-    tenant_id VARCHAR(64) NOT NULL,
-    project_id VARCHAR(64) NOT NULL,
-    question TEXT NOT NULL,
-    status VARCHAR(16) NOT NULL DEFAULT 'PENDING',
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    resolved_at TIMESTAMP NULL,
-    CONSTRAINT uk_coordinator_human_request_business_id UNIQUE (business_id),
-    CONSTRAINT fk_human_request_analysis FOREIGN KEY (analysis_id)
-        REFERENCES digital_team_coordinator_analysis (business_id),
-    CONSTRAINT fk_human_request_project FOREIGN KEY (project_id)
-        REFERENCES digital_team_project (business_id),
-    INDEX idx_human_request_pending (tenant_id, project_id, status, created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CALL tc_add_column_if_missing('digital_team_coordinator_human_request', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
-CALL tc_add_column_if_missing('digital_team_coordinator_human_request', 'business_id', 'business_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('digital_team_coordinator_human_request', 'analysis_id', 'analysis_id VARCHAR(64)');
-CALL tc_add_column_if_missing('digital_team_coordinator_human_request', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('digital_team_coordinator_human_request', 'project_id', 'project_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('digital_team_coordinator_human_request', 'question', 'question TEXT NOT NULL');
-CALL tc_add_column_if_missing('digital_team_coordinator_human_request', 'status', 'status VARCHAR(16) NOT NULL DEFAULT ''PENDING''');
-CALL tc_add_column_if_missing('digital_team_coordinator_human_request', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
-CALL tc_add_column_if_missing('digital_team_coordinator_human_request', 'resolved_at', 'resolved_at TIMESTAMP NULL');
-
 -- ── 表 coordinator_plan ────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS digital_team_coordinator_plan (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -539,34 +486,6 @@ CALL tc_add_column_if_missing('digital_team_coordinator_task', 'reused_from_task
 CALL tc_add_column_if_missing('digital_team_coordinator_task', 'consecutive_failures', 'consecutive_failures INT NOT NULL DEFAULT 0');
 CALL tc_add_column_if_missing('digital_team_coordinator_task', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
 CALL tc_add_column_if_missing('digital_team_coordinator_task', 'updated_at', 'updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
-
--- ── 表 coordinator_task_event ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS digital_team_coordinator_task_event (
-    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    business_id VARCHAR(96) NOT NULL,
-    tenant_id VARCHAR(64) NOT NULL,
-    task_id VARCHAR(64) NOT NULL,
-    event_id VARCHAR(128) NOT NULL,
-    sequence BIGINT NOT NULL,
-    event_type VARCHAR(64) NOT NULL,
-    payload TEXT,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT uk_task_event_id UNIQUE (tenant_id, event_id),
-    CONSTRAINT uk_coordinator_task_event_business_id UNIQUE (business_id),
-    CONSTRAINT fk_task_event_task FOREIGN KEY (task_id)
-        REFERENCES digital_team_coordinator_task (business_id),
-    INDEX idx_task_event_task_id (task_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CALL tc_add_column_if_missing('digital_team_coordinator_task_event', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
-CALL tc_add_column_if_missing('digital_team_coordinator_task_event', 'business_id', 'business_id VARCHAR(96) NOT NULL');
-CALL tc_add_column_if_missing('digital_team_coordinator_task_event', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('digital_team_coordinator_task_event', 'task_id', 'task_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('digital_team_coordinator_task_event', 'event_id', 'event_id VARCHAR(128) NOT NULL');
-CALL tc_add_column_if_missing('digital_team_coordinator_task_event', 'sequence', 'sequence BIGINT NOT NULL');
-CALL tc_add_column_if_missing('digital_team_coordinator_task_event', 'event_type', 'event_type VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('digital_team_coordinator_task_event', 'payload', 'payload TEXT');
-CALL tc_add_column_if_missing('digital_team_coordinator_task_event', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
 
 -- ── 表 human_request ────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS digital_team_human_request (

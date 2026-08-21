@@ -231,8 +231,8 @@ export function respondHumanRequest(
 export interface ExpertInfo {
   id: string;
   name: string;
-  description: string;
-  prompt: string;
+  description?: string;
+  capabilities: string[];
 }
 
 export function listAvailableExperts(): Promise<ExpertInfo[]> {

@@ -3,10 +3,10 @@ package org.cmb.presentation.controller;
 import java.util.List;
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
-import org.cmb.application.domain.IdentityProvider;
+import org.cmb.application.service.IdentityProvider;
 import org.cmb.application.dto.CreatePromptTemplateRequest;
 import org.cmb.application.service.PromptService;
-import org.cmb.application.dto.PromptTemplateView;
+import org.cmb.application.domain.entity.PromptTemplateDO;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -36,7 +36,7 @@ public class PromptAdminController {
      * @return
      */
     @GetMapping
-    public List<PromptTemplateView> list(
+    public List<PromptTemplateDO> list(
             HttpServletRequest request,
             @RequestParam(required = false) String promptKey) {
         return prompts.list(identities.currentIdentity(request), promptKey);
@@ -50,7 +50,7 @@ public class PromptAdminController {
      */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public PromptTemplateView create(
+    public PromptTemplateDO create(
             HttpServletRequest servletRequest,
             @Valid @RequestBody CreatePromptTemplateRequest request) {
         return prompts.create(identities.currentIdentity(servletRequest), request);
@@ -63,7 +63,7 @@ public class PromptAdminController {
      * @return
      */
     @PostMapping("/{promptId}/publish")
-    public PromptTemplateView publish(
+    public PromptTemplateDO publish(
             HttpServletRequest request, @PathVariable String promptId) {
         return prompts.publish(identities.currentIdentity(request), promptId);
     }

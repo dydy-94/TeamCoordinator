@@ -10,10 +10,10 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import org.cmb.application.service.DecisionSchemaValidator;
+import org.cmb.application.component.DecisionSchemaValidator;
 import org.cmb.common.enums.DecisionType;
 import org.cmb.application.domain.IntentAnalysisContext;
-import org.cmb.infrastructure.remoteaccess.MockIntentModelClient;
+import org.cmb.application.service.impl.MockIntentModelClient;
 import org.junit.jupiter.api.Test;
 
 class IntentEvaluationTest {

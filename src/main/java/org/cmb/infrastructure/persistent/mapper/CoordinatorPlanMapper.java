@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Map;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import org.cmb.application.domain.DispatchWork;
+import org.cmb.application.domain.entity.DispatchWorkDO;
 
 /**
  * SQL access for execution plans (digital_team_coordinator_plan).
@@ -26,13 +26,13 @@ public interface CoordinatorPlanMapper {
 
     int insertPlanSimple(
             @Param("id") String id,
-            @Param("work") DispatchWork work,
+            @Param("work") DispatchWorkDO work,
             @Param("analysisId") String analysisId,
             @Param("intentJson") String intentJson);
 
     int insertPlanFull(
             @Param("id") String id,
-            @Param("work") DispatchWork work,
+            @Param("work") DispatchWorkDO work,
             @Param("analysisId") String analysisId,
             @Param("planVersion") int planVersion,
             @Param("intentJson") String intentJson,
@@ -41,7 +41,7 @@ public interface CoordinatorPlanMapper {
 
     int insertReplan(
             @Param("id") String id,
-            @Param("work") DispatchWork work,
+            @Param("work") DispatchWorkDO work,
             @Param("analysisId") String analysisId,
             @Param("planVersion") int planVersion,
             @Param("intentJson") String intentJson,

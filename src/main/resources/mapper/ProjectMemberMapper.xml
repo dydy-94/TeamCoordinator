@@ -3,7 +3,7 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="org.cmb.infrastructure.persistent.mapper.ProjectMemberMapper">
 
-    <resultMap id="projectMember" type="org.cmb.application.domain.ProjectMember">
+    <resultMap id="projectMember" type="org.cmb.application.domain.entity.ProjectMemberDO">
         <result column="user_id" property="userId"/>
         <result column="role" property="role"/>
     </resultMap>

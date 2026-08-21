@@ -759,3 +759,20 @@ button.danger:hover {
 .panel.error button {
   margin-top: 12px;
 }
+
+/* ── Expert capability tags ───────────────────────────────── */
+.expert-caps {
+  margin-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.cap-tag {
+  display: inline-block;
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--primary-soft, #eff6ff);
+  color: var(--primary, #2563eb);
+}

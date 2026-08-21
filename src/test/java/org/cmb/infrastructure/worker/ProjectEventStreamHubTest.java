@@ -10,12 +10,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.cmb.application.domain.AgentEvent;
 import org.cmb.application.domain.AgentRunRequest;
 import org.cmb.application.domain.AgentRunResponse;
-import org.cmb.application.domain.ProjectEvent;
+import org.cmb.application.domain.entity.ProjectEventDO;
 import org.cmb.common.config.DigitalTeamProperties;
 import org.cmb.common.enums.ProjectEventType;
 import org.cmb.infrastructure.persistent.MessageEventRepository;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-import org.cmb.infrastructure.remoteaccess.MockAgentCoreAdapter;
+import org.cmb.application.service.impl.MockAgentCoreAdapter;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -78,9 +78,9 @@ class ProjectEventStreamHubTest {
         }
     }
 
-    private static ProjectEvent marker(String sessionId, String expertId,
+    private static ProjectEventDO marker(String sessionId, String expertId,
             long markerSequence, long startSequence) {
-        ProjectEvent marker = new ProjectEvent();
+        ProjectEventDO marker = new ProjectEventDO();
         marker.setSequence(markerSequence);
         marker.setType(ProjectEventType.AGENT_RUN_MARKER);
         ObjectNode payload = new ObjectMapper().createObjectNode();
@@ -137,9 +137,9 @@ class ProjectEventStreamHubTest {
         ProjectEventStreamHub.Subscriber subscriber =
                 new ProjectEventStreamHub.Subscriber(new SseEmitter(0L), 10L);
 
-        ProjectEvent persisted = new ProjectEvent();
+        ProjectEventDO persisted = new ProjectEventDO();
         persisted.setSequence(5);
-        ProjectEvent live = new ProjectEvent();
+        ProjectEventDO live = new ProjectEventDO();
         live.setSequence(1);
         live.setLiveOnly(true);
 
@@ -155,7 +155,7 @@ class ProjectEventStreamHubTest {
         ProjectEventStreamHub.Subscriber subscriber =
                 new ProjectEventStreamHub.Subscriber(new SseEmitter(0L), 10L);
 
-        ProjectEvent live = new ProjectEvent();
+        ProjectEventDO live = new ProjectEventDO();
         live.setSequence(99L); // live 事件的持久化命名空间序列与去重无关
         live.setLiveOnly(true);
         AgentEvent seen = AgentEvent.of("liveStatus");
@@ -167,31 +167,31 @@ class ProjectEventStreamHubTest {
         hub.recordDelivered(subscriber, live);
 
         // 同会话更小序列（MARKER 回放先到、live 后到）被去重
-        ProjectEvent dup = new ProjectEvent();
+        ProjectEventDO dup = new ProjectEventDO();
         dup.setLiveOnly(true);
         dup.setAgentEvent(agentWithSession("session-a", 4L));
         assertEquals(false, hub.shouldDeliver(subscriber, dup));
 
         // 同会话更大序列正常投递
-        ProjectEvent next = new ProjectEvent();
+        ProjectEventDO next = new ProjectEventDO();
         next.setLiveOnly(true);
         next.setAgentEvent(agentWithSession("session-a", 6L));
         assertTrue(hub.shouldDeliver(subscriber, next));
 
         // 不同会话互不影响
-        ProjectEvent other = new ProjectEvent();
+        ProjectEventDO other = new ProjectEventDO();
         other.setLiveOnly(true);
         other.setAgentEvent(agentWithSession("session-b", 1L));
         assertTrue(hub.shouldDeliver(subscriber, other));
 
         // 无会话信息的 live 事件（合成通知）一律投递
-        ProjectEvent bare = new ProjectEvent();
+        ProjectEventDO bare = new ProjectEventDO();
         bare.setLiveOnly(true);
         bare.setAgentEvent(AgentEvent.of("liveStatus"));
         assertTrue(hub.shouldDeliver(subscriber, bare));
 
         // live 投递不推进持久化游标：序列 11 的持久化事件仍可投递
-        ProjectEvent persisted = new ProjectEvent();
+        ProjectEventDO persisted = new ProjectEventDO();
         persisted.setSequence(11L);
         assertTrue(hub.shouldDeliver(subscriber, persisted));
         hub.recordDelivered(subscriber, persisted);

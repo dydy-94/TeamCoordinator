@@ -1,54 +1,23 @@
 package org.cmb.application.service;
-import org.cmb.application.dto.CreateConversationTaskRequest;
-import org.cmb.application.dto.ConversationTaskView;
 
 import java.util.List;
-import org.cmb.infrastructure.persistent.ConversationTaskRepository;
-import org.cmb.common.exception.ApiException;
-import org.cmb.application.service.ProjectService;
 import org.cmb.application.domain.RequestIdentity;
-import org.springframework.stereotype.Service;
+import org.cmb.application.domain.entity.ConversationDO;
+import org.cmb.application.dto.CreateConversationTaskRequest;
 
-@Service
-public class ConversationTaskService {
+/**
+ * Conversation-task lifecycle: create, list, require and full cascade
+ * deletion (including AgentCore-side sessions).
+ */
+public interface ConversationTaskService {
 
-    private final ProjectService projects;
-    private final ConversationTaskRepository tasks;
-
-    public ConversationTaskService(
-            ProjectService projects, ConversationTaskRepository tasks) {
-        this.projects = projects;
-        this.tasks = tasks;
-    }
-
-    public ConversationTaskView create(
+    ConversationDO create(
             RequestIdentity identity, String projectId,
-            CreateConversationTaskRequest request) {
-        projects.requireTaskInitiator(identity, projectId);
-        return tasks.create(identity, projectId, request.getTitle());
-    }
+            CreateConversationTaskRequest request);
 
-    public List<ConversationTaskView> list(
-            RequestIdentity identity, String projectId) {
-        projects.get(identity, projectId); // allow VIEWER to list
-        return tasks.listByProject(identity.getTenantId(), projectId);
-    }
+    List<ConversationDO> list(RequestIdentity identity, String projectId);
 
-    public void delete(
-            RequestIdentity identity, String projectId, String taskId) {
-        projects.requireTaskInitiator(identity, projectId);
-        if (!tasks.delete(identity.getTenantId(), projectId, taskId)) {
-            throw ApiException.notFound("TASK_NOT_FOUND", "Conversation task was not found.");
-        }
-    }
+    void delete(RequestIdentity identity, String projectId, String taskId);
 
-    public ConversationTaskView require(
-            RequestIdentity identity, String projectId, String taskId) {
-        projects.get(identity, projectId);
-        ConversationTaskView task = tasks.get(identity.getTenantId(), projectId, taskId);
-        if (task == null) {
-            throw ApiException.notFound("TASK_NOT_FOUND", "Conversation task was not found.");
-        }
-        return task;
-    }
+    ConversationDO require(RequestIdentity identity, String projectId, String taskId);
 }

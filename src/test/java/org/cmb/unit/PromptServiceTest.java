@@ -10,7 +10,8 @@ import java.util.Map;
 import org.cmb.common.config.DigitalTeamProperties;
 import org.cmb.infrastructure.persistent.PromptRepository;
 import org.cmb.application.service.PromptService;
-import org.cmb.application.dto.PromptTemplateView;
+import org.cmb.application.service.impl.PromptServiceImpl;
+import org.cmb.application.domain.entity.PromptTemplateDO;
 import org.cmb.application.dto.RenderedPrompt;
 import org.junit.jupiter.api.Test;
 
@@ -18,7 +19,7 @@ class PromptServiceTest {
 
     @Test
     void replacesExtraVariablesAndContextJson() {
-        PromptTemplateView template = template(
+        PromptTemplateDO template = template(
                 "<schema>{{output_schema}}</schema>\n<context>{{context_json}}</context>");
         PromptService service = service(template);
         Map<String, String> variables = new LinkedHashMap<>();
@@ -36,7 +37,7 @@ class PromptServiceTest {
 
     @Test
     void ignoresExtraVariablesNotPresentInTemplate() {
-        PromptTemplateView template = template("plain {{context_json}}");
+        PromptTemplateDO template = template("plain {{context_json}}");
         PromptService service = service(template);
         Map<String, String> variables = new LinkedHashMap<>();
         variables.put("output_schema", "{\"type\":\"object\"}");
@@ -50,7 +51,7 @@ class PromptServiceTest {
 
     @Test
     void throwsWhenTemplateHasUnresolvedVariables() {
-        PromptTemplateView template = template("{{context_json}} {{unknown}}");
+        PromptTemplateDO template = template("{{context_json}} {{unknown}}");
         PromptService service = service(template);
 
         assertThrows(IllegalStateException.class, () -> service.render(
@@ -58,8 +59,8 @@ class PromptServiceTest {
                 "tenant", "project", "conversation", "invocation", "coordinator"));
     }
 
-    private PromptService service(PromptTemplateView template) {
-        return new PromptService(
+    private PromptService service(PromptTemplateDO template) {
+        return new PromptServiceImpl(
                 new StubPromptRepository(template),
                 new ObjectMapper(),
                 new DigitalTeamProperties());
@@ -71,8 +72,8 @@ class PromptServiceTest {
         return context;
     }
 
-    private PromptTemplateView template(String content) {
-        PromptTemplateView view = new PromptTemplateView();
+    private PromptTemplateDO template(String content) {
+        PromptTemplateDO view = new PromptTemplateDO();
         view.setId("prompt-test");
         view.setPromptKey("coordinator.execution");
         view.setScene("COORDINATOR_EXECUTION");
@@ -83,22 +84,22 @@ class PromptServiceTest {
 
     private static class StubPromptRepository extends PromptRepository {
 
-        private final PromptTemplateView template;
+        private final PromptTemplateDO template;
 
-        StubPromptRepository(PromptTemplateView template) {
+        StubPromptRepository(PromptTemplateDO template) {
             super(null, null);
             this.template = template;
         }
 
         @Override
-        public PromptTemplateView findPublished(String promptKey) {
+        public PromptTemplateDO findPublished(String promptKey) {
             return template;
         }
 
         @Override
         public void audit(
                 String tenantId, String projectId, String conversationId,
-                String invocationId, String agentId, PromptTemplateView template,
+                String invocationId, String agentId, PromptTemplateDO template,
                 String renderedPrompt, String variablesSnapshot) {
             // no-op
         }

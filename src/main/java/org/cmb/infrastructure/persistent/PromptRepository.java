@@ -5,7 +5,7 @@ import java.util.UUID;
 import org.cmb.infrastructure.persistent.mapper.PromptExecutionMapper;
 import org.cmb.infrastructure.persistent.mapper.PromptTemplateMapper;
 import org.cmb.application.dto.CreatePromptTemplateRequest;
-import org.cmb.application.dto.PromptTemplateView;
+import org.cmb.application.domain.entity.PromptTemplateDO;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,16 +25,16 @@ public class PromptRepository {
         this.executionMapper = executionMapper;
     }
 
-    public PromptTemplateView findPublished(String promptKey) {
-        List<PromptTemplateView> rows = mapper.findPublished(promptKey);
+    public PromptTemplateDO findPublished(String promptKey) {
+        List<PromptTemplateDO> rows = mapper.findPublished(promptKey);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
-    public List<PromptTemplateView> list(String promptKey) {
+    public List<PromptTemplateDO> list(String promptKey) {
         return mapper.list(promptKey);
     }
 
-    public PromptTemplateView create(
+    public PromptTemplateDO create(
             CreatePromptTemplateRequest request, String createdBy) {
         Integer next = mapper.selectNextVersion(request.getPromptKey());
         String id = "prompt-" + UUID.randomUUID();
@@ -49,8 +49,8 @@ public class PromptRepository {
     }
 
     @Transactional
-    public PromptTemplateView publish(String id) {
-        PromptTemplateView target = find(id);
+    public PromptTemplateDO publish(String id) {
+        PromptTemplateDO target = find(id);
         if (target == null) {
             return null;
         }
@@ -59,14 +59,14 @@ public class PromptRepository {
         return find(id);
     }
 
-    public PromptTemplateView find(String id) {
-        List<PromptTemplateView> rows = mapper.find(id);
+    public PromptTemplateDO find(String id) {
+        List<PromptTemplateDO> rows = mapper.find(id);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
     public void audit(
             String tenantId, String projectId, String conversationId,
-            String invocationId, String agentId, PromptTemplateView template,
+            String invocationId, String agentId, PromptTemplateDO template,
             String renderedPrompt, String variablesSnapshot) {
         try {
             executionMapper.insertAudit("prompt-exec-" + UUID.randomUUID(), tenantId, projectId,

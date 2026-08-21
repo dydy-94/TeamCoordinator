@@ -19,7 +19,7 @@ import org.cmb.common.enums.EventVisibility;
 import org.cmb.infrastructure.persistent.MessageEventRepository;
 import org.cmb.infrastructure.worker.ProjectEventStreamHub;
 import org.cmb.common.enums.ProjectEventType;
-import org.cmb.application.domain.DispatchWork;
+import org.cmb.application.domain.entity.DispatchWorkDO;
 import org.cmb.infrastructure.persistent.ExecutionRepository;
 import org.cmb.application.domain.RequestIdentity;
 import org.junit.jupiter.api.Test;
@@ -150,18 +150,18 @@ class ProjectMessageEventIntegrationTest {
         submit(projectId, taskId, "serial-client-1", "first");
         submit(projectId, taskId, "serial-client-2", "second");
 
-        DispatchWork first = executionRepository.claimNext("instance-a", 30);
+        DispatchWorkDO first = executionRepository.claimNext("instance-a", 30);
         assertEquals(projectId, first.getProjectId());
         executionRepository.releaseDispatch(first.getDispatchId());
 
-        DispatchWork retriedFirst = executionRepository.claimNext("instance-b", 30);
+        DispatchWorkDO retriedFirst = executionRepository.claimNext("instance-b", 30);
         assertEquals(first.getDispatchId(), retriedFirst.getDispatchId());
         jdbc.update(
                 "UPDATE digital_team_coordinator_dispatch SET status = 'COMPLETED', "
                         + "lease_owner = NULL, lease_expires_at = NULL WHERE business_id = ?",
                 first.getDispatchId());
 
-        DispatchWork second = executionRepository.claimNext("instance-b", 30);
+        DispatchWorkDO second = executionRepository.claimNext("instance-b", 30);
         assertEquals(projectId, second.getProjectId());
         assertTrue(!first.getDispatchId().equals(second.getDispatchId()));
     }

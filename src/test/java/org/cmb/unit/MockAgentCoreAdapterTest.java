@@ -8,7 +8,7 @@ import java.util.List;
 import org.cmb.application.domain.AgentEvent;
 import org.cmb.application.domain.AgentRunRequest;
 import org.cmb.application.domain.AgentRunResponse;
-import org.cmb.infrastructure.remoteaccess.MockAgentCoreAdapter;
+import org.cmb.application.service.impl.MockAgentCoreAdapter;
 import org.cmb.common.config.DigitalTeamProperties;
 import org.junit.jupiter.api.Test;
 

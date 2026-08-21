@@ -7,8 +7,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 // Mapper interfaces are discovered via their @Mapper annotation; the
-// starter's auto-scan follows scanBasePackages, which covers both the
-// legacy and the DDD-layered mapper packages.
+// starter's auto-scan follows scanBasePackages ("org.cmb").
 @SpringBootApplication(scanBasePackages = "org.cmb")
 @EnableConfigurationProperties(DigitalTeamProperties.class)
 @EnableScheduling

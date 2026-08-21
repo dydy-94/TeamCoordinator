@@ -7,6 +7,7 @@ public class ExpertDescriptor {
 
     private String expertId;
     private String displayName;
+    private String description;
     private boolean enabled;
     private boolean available;
     private int concurrencyLimit;
@@ -16,9 +17,15 @@ public class ExpertDescriptor {
     }
 
     public ExpertDescriptor(String expertId, String displayName, List<String> capabilities) {
+        this(expertId, displayName, capabilities, null);
+    }
+
+    public ExpertDescriptor(String expertId, String displayName,
+                            List<String> capabilities, String description) {
         this.expertId = expertId;
         this.displayName = displayName;
         this.capabilities = capabilities;
+        this.description = description;
         this.enabled = true;
         this.available = true;
         this.concurrencyLimit = 2;
@@ -38,6 +45,14 @@ public class ExpertDescriptor {
 
     public void setDisplayName(String displayName) {
         this.displayName = displayName;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
     }
 
     public boolean isEnabled() {

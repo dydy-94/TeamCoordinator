@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.UUID;
 import org.cmb.infrastructure.persistent.mapper.CoordinatorAgentRunMapper;
 import org.cmb.application.domain.AgentEvent;
-import org.cmb.application.domain.CoordinatorAgentRun;
+import org.cmb.application.domain.entity.CoordinatorAgentRunDO;
 import org.cmb.application.domain.RequestIdentity;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Repository;
@@ -23,7 +23,7 @@ public class CoordinatorAgentRunRepository {
         this.mapper = mapper;
     }
 
-    public CoordinatorAgentRun createOrLoad(
+    public CoordinatorAgentRunDO createOrLoad(
             RequestIdentity identity, String projectId, String messageId,
             String runKey, String contextJson, String businessSessionId) {
         try {
@@ -36,8 +36,8 @@ public class CoordinatorAgentRunRepository {
         return find(identity.getTenantId(), runKey);
     }
 
-    public CoordinatorAgentRun find(String tenantId, String runKey) {
-        List<CoordinatorAgentRun> rows = mapper.findByRunKey(tenantId, runKey);
+    public CoordinatorAgentRunDO find(String tenantId, String runKey) {
+        List<CoordinatorAgentRunDO> rows = mapper.findByRunKey(tenantId, runKey);
         return rows.isEmpty() ? null : rows.get(0);
     }
 

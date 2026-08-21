@@ -6,9 +6,9 @@ import org.cmb.infrastructure.persistent.mapper.PermissionAuditLogMapper;
 import org.cmb.infrastructure.persistent.mapper.ProjectExpertMapper;
 import org.cmb.infrastructure.persistent.mapper.ProjectMapper;
 import org.cmb.infrastructure.persistent.mapper.ProjectMemberMapper;
-import org.cmb.application.domain.ProjectExpert;
-import org.cmb.application.domain.ProjectMember;
-import org.cmb.application.domain.ProjectRecord;
+import org.cmb.application.domain.entity.ProjectExpertDO;
+import org.cmb.application.domain.entity.ProjectMemberDO;
+import org.cmb.application.domain.entity.ProjectDO;
 import org.cmb.common.enums.ProjectRole;
 import org.cmb.common.enums.ProjectStatus;
 import org.cmb.application.domain.RequestIdentity;
@@ -39,18 +39,18 @@ public class ProjectRepository {
         this.auditMapper = auditMapper;
     }
 
-    public void insertProject(ProjectRecord project) {
+    public void insertProject(ProjectDO project) {
         mapper.insertProject(project.getId(), project.getTenantId(), project.getName(),
                 project.getDescription(), project.getCoordinatorAgentId(),
                 project.getStatus().name(), project.getCreatedBy());
     }
 
-    public List<ProjectRecord> findByTenant(String tenantId, String userId) {
+    public List<ProjectDO> findByTenant(String tenantId, String userId) {
         return mapper.findByTenant(tenantId, userId);
     }
 
-    public ProjectRecord findVisible(String tenantId, String projectId, String userId) {
-        List<ProjectRecord> rows = mapper.findVisible(tenantId, projectId, userId);
+    public ProjectDO findVisible(String tenantId, String projectId, String userId) {
+        List<ProjectDO> rows = mapper.findVisible(tenantId, projectId, userId);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
@@ -59,11 +59,11 @@ public class ProjectRepository {
         return roles.isEmpty() ? null : ProjectRole.valueOf(roles.get(0));
     }
 
-    public List<ProjectMember> findMembers(String tenantId, String projectId) {
+    public List<ProjectMemberDO> findMembers(String tenantId, String projectId) {
         return memberMapper.findMembers(tenantId, projectId);
     }
 
-    public List<ProjectExpert> findExperts(String tenantId, String projectId) {
+    public List<ProjectExpertDO> findExperts(String tenantId, String projectId) {
         return expertMapper.findExperts(tenantId, projectId);
     }
 

@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Map;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import org.cmb.infrastructure.persistent.HumanRequestRepository.HumanRequestRecord;
+import org.cmb.application.domain.entity.HumanRequestDO;
 
 /**
  * SQL access for human-in-the-loop requests (digital_team_human_request).
@@ -35,14 +35,14 @@ public interface HumanRequestMapper {
             @Param("inputSchema") String inputSchema,
             @Param("expiresAt") Timestamp expiresAt);
 
-    List<HumanRequestRecord> findExpiredPending();
+    List<HumanRequestDO> findExpiredPending();
 
-    List<HumanRequestRecord> find(
+    List<HumanRequestDO> find(
             @Param("tenantId") String tenantId,
             @Param("projectId") String projectId,
             @Param("id") String id);
 
-    List<HumanRequestRecord> findPendingForTask(
+    List<HumanRequestDO> findPendingForTask(
             @Param("tenantId") String tenantId,
             @Param("projectId") String projectId,
             @Param("taskId") String taskId);

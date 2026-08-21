@@ -5,7 +5,8 @@ import java.util.List;
 import org.cmb.infrastructure.persistent.mapper.CoordinatorTaskMapper;
 import org.cmb.infrastructure.persistent.mapper.ProjectArtifactLineageMapper;
 import org.cmb.infrastructure.persistent.mapper.ProjectArtifactMapper;
-import org.cmb.application.domain.AgentArtifactUploadContext;
+import org.cmb.application.domain.entity.AgentArtifactUploadContextDO;
+import org.cmb.application.domain.entity.ArtifactDO;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -35,18 +36,18 @@ public class ArtifactRepository {
     }
 
     public void insert(
-            ArtifactRecord artifact, String tenantId, String createdBy) {
+            ArtifactDO artifact, String tenantId, String createdBy) {
         mapper.insert(artifact, tenantId, createdBy);
     }
 
-    public ArtifactRecord find(String tenantId, String projectId, String id) {
-        List<ArtifactRecord> rows = mapper.find(tenantId, projectId, id);
+    public ArtifactDO find(String tenantId, String projectId, String id) {
+        List<ArtifactDO> rows = mapper.find(tenantId, projectId, id);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
-    public ArtifactRecord findByStorageKey(
+    public ArtifactDO findByStorageKey(
             String tenantId, String projectId, String storageKey) {
-        List<ArtifactRecord> rows =
+        List<ArtifactDO> rows =
                 mapper.findByStorageKey(tenantId, projectId, storageKey);
         return rows.isEmpty() ? null : rows.get(0);
     }
@@ -61,8 +62,8 @@ public class ArtifactRepository {
         mapper.complete(id, size, sha256);
     }
 
-    public AgentArtifactUploadContext findUploadContextByTaskId(String taskId) {
-        java.util.List<AgentArtifactUploadContext> rows =
+    public AgentArtifactUploadContextDO findUploadContextByTaskId(String taskId) {
+        java.util.List<AgentArtifactUploadContextDO> rows =
                 taskMapper.findUploadContextByTaskId(taskId);
         return rows.isEmpty() ? null : rows.get(0);
     }
@@ -71,10 +72,10 @@ public class ArtifactRepository {
         return taskMapper.findProjectIdByTaskId(taskId);
     }
 
-    public AgentArtifactUploadContext findAgentUploadContext(
+    public AgentArtifactUploadContextDO findAgentUploadContext(
             String projectId, String conversationId, String businessSessionId,
             String agentRunId, String agentId) {
-        List<AgentArtifactUploadContext> rows = taskMapper.findAgentUploadContext(
+        List<AgentArtifactUploadContextDO> rows = taskMapper.findAgentUploadContext(
                 projectId, conversationId, businessSessionId, agentRunId, agentId);
         return rows.isEmpty() ? null : rows.get(0);
     }
@@ -103,18 +104,4 @@ public class ArtifactRepository {
         lineageMapper.recordDependencyLineage(outputArtifactId, planId, dependencyKeys);
     }
 
-    public static final class ArtifactRecord {
-        public String id;
-        public String projectId;
-        public String taskId;
-        public String expertRunId;
-        public int version;
-        public String storageKey;
-        public String fileName;
-        public String mediaType;
-        public Long size;
-        public String sha256;
-        public String status;
-        public String uploadUrl;
-    }
 }

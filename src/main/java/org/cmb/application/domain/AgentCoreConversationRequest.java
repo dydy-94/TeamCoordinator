@@ -37,6 +37,13 @@ public class AgentCoreConversationRequest {
         return request;
     }
 
+    public static AgentCoreConversationRequest deleteSession(String sessionId) {
+        AgentCoreConversationRequest request = new AgentCoreConversationRequest();
+        request.type = "deleteSession";
+        request.sessionId = sessionId;
+        return request;
+    }
+
     public static AgentCoreConversationRequest answerQuestion(
             String sessionId, String questionId, Map<String, String> answers) {
         AgentCoreConversationRequest request = new AgentCoreConversationRequest();

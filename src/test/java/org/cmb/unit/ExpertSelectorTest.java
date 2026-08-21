@@ -10,9 +10,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.cmb.application.domain.ExpertDescriptor;
-import org.cmb.application.domain.ExpertRegistry;
+import org.cmb.application.service.ExpertRegistry;
 import org.cmb.infrastructure.persistent.ExecutionRepository;
-import org.cmb.application.service.ExpertSelector;
+import org.cmb.application.component.ExpertSelector;
 import org.cmb.application.dto.ProjectView;
 import org.junit.jupiter.api.Test;
 
@@ -24,7 +24,7 @@ class ExpertSelectorTest {
             "expert-writing", "Writing Expert", Arrays.asList("writing"));
 
     private static ExecutionRepository loadRepository(Map<String, Integer> loads) {
-        return new ExecutionRepository(null, null, null, null, null, null, new ObjectMapper()) {
+        return new ExecutionRepository(null, null, null, null, null, new ObjectMapper()) {
             @Override
             public int activeTaskCount(String expertId) {
                 return loads.getOrDefault(expertId, 0);

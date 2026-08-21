@@ -14,10 +14,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import org.cmb.TeamCoordinatorApplication;
-import org.cmb.application.domain.DispatchWork;
+import org.cmb.application.domain.entity.DispatchWorkDO;
 import org.cmb.infrastructure.persistent.ExecutionRepository;
 import org.cmb.infrastructure.worker.SingleExpertWorker;
-import org.cmb.application.domain.TaskRecord;
+import org.cmb.application.domain.entity.TaskDO;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -60,7 +60,7 @@ class ExecutionFaultToleranceIntegrationTest {
         submitMessage(projectId, "续租测试");
         // claimNext may hand back an older leftover dispatch; the renewal
         // semantics hold for whichever dispatch we actually own.
-        DispatchWork claimed = executionRepository.claimNext("instance-a", 30);
+        DispatchWorkDO claimed = executionRepository.claimNext("instance-a", 30);
         assertNotNull(claimed);
         String claimedId = claimed.getDispatchId();
 
@@ -90,7 +90,7 @@ class ExecutionFaultToleranceIntegrationTest {
     void toleratesTransientAgentCoreFailuresUpToThreshold() throws Exception {
         String projectId = createProject();
         submitMessage(projectId, "瞬时故障容忍");
-        TaskRecord task = runUntilTaskExists(projectId);
+        TaskDO task = runUntilTaskExists(projectId);
         makeDispatchClaimable(projectId);
         jdbc.update(
                 "UPDATE digital_team_coordinator_task SET session_id = 'missing-run', status = 'RUNNING' "
@@ -100,7 +100,7 @@ class ExecutionFaultToleranceIntegrationTest {
         // Drive ticks until the task fails; it must survive while the
         // consecutive-failure count stays below the threshold of 3.
         boolean failedEarly = false;
-        TaskRecord current = null;
+        TaskDO current = null;
         for (int i = 0; i < 30; i++) {
             worker.runOnce();
             current = task(projectId);
@@ -123,7 +123,7 @@ class ExecutionFaultToleranceIntegrationTest {
     void recoversStrandedStartingTasks() throws Exception {
         String projectId = createProject();
         submitMessage(projectId, "恢复 STARTING 卡死");
-        TaskRecord task = runUntilTaskExists(projectId);
+        TaskDO task = runUntilTaskExists(projectId);
         // Simulate a crash between submitRun and saveSession: STARTING with
         // no session and an old updated_at, plus a claimable dispatch.
         String planId = jdbc.queryForObject(
@@ -156,7 +156,7 @@ class ExecutionFaultToleranceIntegrationTest {
     void expertCapacityExhaustionIsRetryableNotFatal() throws Exception {
         String loadProject = createProject();
         submitMessage(loadProject, "负载项目");
-        TaskRecord loadTask = runUntilTaskExists(loadProject);
+        TaskDO loadTask = runUntilTaskExists(loadProject);
         // Fake RUNNING tasks push every mock expert (concurrency limit 2) to
         // its limit, so no candidate is available for new dispatches.
         List<String> expertIds = Arrays.asList(
@@ -212,7 +212,7 @@ class ExecutionFaultToleranceIntegrationTest {
     void failTasksForMessageAlsoFailsPlan() throws Exception {
         String projectId = createProject();
         submitMessage(projectId, "失败一致性");
-        TaskRecord task = runUntilTaskExists(projectId);
+        TaskDO task = runUntilTaskExists(projectId);
         jdbc.update(
                 "UPDATE digital_team_coordinator_task SET status = 'RUNNING' WHERE business_id = ?",
                 task.getId());
@@ -239,7 +239,7 @@ class ExecutionFaultToleranceIntegrationTest {
     void cancelTransitionIgnoresSequenceGuard() throws Exception {
         String projectId = createProject();
         submitMessage(projectId, "取消防守卫");
-        TaskRecord task = runUntilTaskExists(projectId);
+        TaskDO task = runUntilTaskExists(projectId);
         // A stale last_sequence far above the synthetic cancel sequence: the
         // sequence-guarded advanceTask would reject it, cancelTask must not.
         jdbc.update(
@@ -306,7 +306,7 @@ class ExecutionFaultToleranceIntegrationTest {
         return objectMapper.readTree(body).get("id").asText();
     }
 
-    private TaskRecord task(String projectId) {
+    private TaskDO task(String projectId) {
         String taskId = jdbc.queryForObject(
                 "SELECT business_id FROM digital_team_coordinator_task WHERE project_id = ? "
                         + "AND request_id NOT LIKE 'fake-request-%' ORDER BY created_at LIMIT 1",
@@ -315,7 +315,7 @@ class ExecutionFaultToleranceIntegrationTest {
         return executionRepository.findTask(TENANT, projectId, taskId);
     }
 
-    private TaskRecord runUntilTaskExists(String projectId) {
+    private TaskDO runUntilTaskExists(String projectId) {
         for (int attempt = 0; attempt < 30; attempt++) {
             Integer count = jdbc.queryForObject(
                     "SELECT COUNT(*) FROM digital_team_coordinator_task WHERE project_id = ?",
@@ -329,9 +329,9 @@ class ExecutionFaultToleranceIntegrationTest {
         throw new AssertionError("Task was not created for project " + projectId);
     }
 
-    private TaskRecord runUntilTerminal(String projectId) {
+    private TaskDO runUntilTerminal(String projectId) {
         for (int attempt = 0; attempt < 60; attempt++) {
-            TaskRecord current = task(projectId);
+            TaskDO current = task(projectId);
             if ("SUCCEEDED".equals(current.getStatus())
                     || "FAILED".equals(current.getStatus())
                     || "TIMED_OUT".equals(current.getStatus())

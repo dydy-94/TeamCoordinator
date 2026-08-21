@@ -5,7 +5,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 
-import org.cmb.application.domain.CoordinatorAgentRun;
+import org.cmb.application.domain.entity.CoordinatorAgentRunDO;
 
 /**
  * SQL access for coordinator agent runs (coordinator_agent_run). Queries
@@ -24,7 +24,7 @@ public interface CoordinatorAgentRunMapper {
             @Param("contextJson") String contextJson,
             @Param("businessSessionId") String businessSessionId);
 
-    List<CoordinatorAgentRun> findByRunKey(
+    List<CoordinatorAgentRunDO> findByRunKey(
             @Param("tenantId") String tenantId,
             @Param("runKey") String runKey);
 

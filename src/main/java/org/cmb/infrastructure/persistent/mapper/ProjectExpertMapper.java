@@ -3,7 +3,7 @@ package org.cmb.infrastructure.persistent.mapper;
 import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import org.cmb.application.domain.ProjectExpert;
+import org.cmb.application.domain.entity.ProjectExpertDO;
 
 /**
  * SQL access for project experts (digital_team_project_expert). Queries
@@ -13,7 +13,7 @@ import org.cmb.application.domain.ProjectExpert;
 @Mapper
 public interface ProjectExpertMapper {
 
-    List<ProjectExpert> findExperts(
+    List<ProjectExpertDO> findExperts(
             @Param("tenantId") String tenantId,
             @Param("projectId") String projectId);
 

@@ -12,8 +12,8 @@ import org.cmb.infrastructure.persistent.mapper.CoordinatorTaskMapper;
 import org.cmb.infrastructure.persistent.mapper.HumanRequestMapper;
 import org.cmb.infrastructure.persistent.mapper.ProjectMessageMapper;
 import org.cmb.common.enums.HumanDecision;
-import org.cmb.common.enums.HumanRequestType;
 import org.cmb.application.domain.RequestIdentity;
+import org.cmb.application.domain.entity.HumanRequestDO;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -93,18 +93,18 @@ public class HumanRequestRepository {
         dispatchMapper.failDispatch(status, error, tenantId, planIds.get(0));
     }
 
-    public List<HumanRequestRecord> findExpiredPending() {
+    public List<HumanRequestDO> findExpiredPending() {
         return mapper.findExpiredPending();
     }
 
-    public HumanRequestRecord find(String tenantId, String projectId, String id) {
-        List<HumanRequestRecord> rows = mapper.find(tenantId, projectId, id);
+    public HumanRequestDO find(String tenantId, String projectId, String id) {
+        List<HumanRequestDO> rows = mapper.find(tenantId, projectId, id);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
-    public HumanRequestRecord findPendingForTask(
+    public HumanRequestDO findPendingForTask(
             String tenantId, String projectId, String taskId) {
-        List<HumanRequestRecord> rows = mapper.findPendingForTask(
+        List<HumanRequestDO> rows = mapper.findPendingForTask(
                 tenantId, projectId, taskId);
         return rows.isEmpty() ? null : rows.get(0);
     }
@@ -142,23 +142,4 @@ public class HumanRequestRepository {
         }
     }
 
-    public static final class HumanRequestRecord {
-        public String id;
-        public String tenantId;
-        public String analysisId;
-        public String taskId;
-        public String messageId;
-        public String dispatchId;
-        public String projectId;
-        public HumanRequestType type;
-        public String question;
-        public String agentQuestionId;
-        public String allowedRoles;
-        public String inputSchema;
-        public String status;
-        public HumanDecision decision;
-        public JsonNode response;
-        public String responseIdempotencyKey;
-        public Instant expiresAt;
-    }
 }

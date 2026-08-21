@@ -625,7 +625,9 @@ async function renderSettings(proj: Project) {
           <div class="expert-card" style="cursor:pointer" data-add-expert="${esc(e.id)}">
             <div class="expert-name">${esc(e.name)}</div>
             <div class="expert-id">${esc(e.id)}</div>
-            <div class="expert-desc">${esc(e.description)}</div>
+            <div class="expert-desc">${esc(e.description || "")}</div>
+            <div class="expert-caps">${(e.capabilities || []).map(
+              c => `<span class="cap-tag">${esc(c)}</span>`).join(" ")}</div>
           </div>
         `).join("")}
         </div>

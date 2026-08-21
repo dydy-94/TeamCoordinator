@@ -5,9 +5,9 @@ import java.util.List;
 import java.util.Map;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import org.cmb.application.domain.AgentArtifactUploadContext;
-import org.cmb.application.domain.DispatchWork;
-import org.cmb.application.domain.TaskRecord;
+import org.cmb.application.domain.entity.AgentArtifactUploadContextDO;
+import org.cmb.application.domain.entity.DispatchWorkDO;
+import org.cmb.application.domain.entity.TaskDO;
 
 /**
  * SQL access for expert tasks (digital_team_coordinator_task). Join
@@ -18,7 +18,7 @@ import org.cmb.application.domain.TaskRecord;
 @Mapper
 public interface CoordinatorTaskMapper {
 
-    List<TaskRecord> findTasksForMessage(
+    List<TaskDO> findTasksForMessage(
             @Param("tenantId") String tenantId,
             @Param("messageId") String messageId);
 
@@ -32,7 +32,7 @@ public interface CoordinatorTaskMapper {
 
     int insertCorrectionTask(
             @Param("id") String id,
-            @Param("work") DispatchWork work,
+            @Param("work") DispatchWorkDO work,
             @Param("planId") String planId,
             @Param("taskKey") String taskKey,
             @Param("requestId") String requestId,
@@ -48,20 +48,20 @@ public interface CoordinatorTaskMapper {
             @Param("correctionOf") String correctionOf,
             @Param("resultJson") String resultJson);
 
-    List<TaskRecord> findTaskByRequestId(
+    List<TaskDO> findTaskByRequestId(
             @Param("tenantId") String tenantId,
             @Param("requestId") String requestId);
 
     int insertSingleExpertTask(
             @Param("id") String id,
-            @Param("work") DispatchWork work,
+            @Param("work") DispatchWorkDO work,
             @Param("planId") String planId,
             @Param("requestId") String requestId,
             @Param("expertId") String expertId,
             @Param("objective") String objective,
             @Param("attachmentRefs") String attachmentRefs);
 
-    List<TaskRecord> findTaskForMessage(
+    List<TaskDO> findTaskForMessage(
             @Param("tenantId") String tenantId,
             @Param("messageId") String messageId);
 
@@ -73,7 +73,7 @@ public interface CoordinatorTaskMapper {
             @Param("taskId") String taskId,
             @Param("sessionId") String sessionId);
 
-    List<TaskRecord> findTaskByBusinessId(@Param("taskId") String taskId);
+    List<TaskDO> findTaskByBusinessId(@Param("taskId") String taskId);
 
     List<Map<String, Object>> findTaskDetail(@Param("taskId") String taskId);
 
@@ -138,7 +138,7 @@ public interface CoordinatorTaskMapper {
 
     int resetConsecutiveFailures(@Param("taskId") String taskId);
 
-    List<TaskRecord> findTask(
+    List<TaskDO> findTask(
             @Param("tenantId") String tenantId,
             @Param("projectId") String projectId,
             @Param("taskId") String taskId);
@@ -150,7 +150,7 @@ public interface CoordinatorTaskMapper {
 
     int insertTask(
             @Param("id") String id,
-            @Param("work") DispatchWork work,
+            @Param("work") DispatchWorkDO work,
             @Param("planId") String planId,
             @Param("taskKey") String taskKey,
             @Param("requestId") String requestId,
@@ -161,13 +161,13 @@ public interface CoordinatorTaskMapper {
             @Param("expectedOutput") String expectedOutput,
             @Param("acceptanceCriteria") String acceptanceCriteria);
 
-    List<TaskRecord> findReusableTask(
+    List<TaskDO> findReusableTask(
             @Param("planId") String planId,
             @Param("taskKey") String taskKey);
 
     int insertReusedTask(
             @Param("id") String id,
-            @Param("work") DispatchWork work,
+            @Param("work") DispatchWorkDO work,
             @Param("planId") String planId,
             @Param("taskKey") String taskKey,
             @Param("requestId") String requestId,
@@ -183,11 +183,11 @@ public interface CoordinatorTaskMapper {
             @Param("acceptanceCriteria") String acceptanceCriteria,
             @Param("reusedFromTaskId") String reusedFromTaskId);
 
-    List<AgentArtifactUploadContext> findUploadContextByTaskId(@Param("taskId") String taskId);
+    List<AgentArtifactUploadContextDO> findUploadContextByTaskId(@Param("taskId") String taskId);
 
     String findProjectIdByTaskId(@Param("taskId") String taskId);
 
-    List<AgentArtifactUploadContext> findAgentUploadContext(
+    List<AgentArtifactUploadContextDO> findAgentUploadContext(
             @Param("projectId") String projectId,
             @Param("conversationId") String conversationId,
             @Param("businessSessionId") String businessSessionId,

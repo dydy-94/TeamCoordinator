@@ -10,7 +10,7 @@
         t.correction_count, t.dependencies, t.required_capabilities, t.last_sequence
     </sql>
 
-    <resultMap id="taskRecord" type="org.cmb.application.domain.TaskRecord">
+    <resultMap id="taskRecord" type="org.cmb.application.domain.entity.TaskDO">
         <result column="database_id" property="databaseId"/>
         <result column="business_id" property="businessId"/>
         <result column="plan_id" property="planId"/>
@@ -33,7 +33,7 @@
     </resultMap>
 
     <resultMap id="agentUploadContext"
-               type="org.cmb.application.domain.AgentArtifactUploadContext">
+               type="org.cmb.application.domain.entity.AgentArtifactUploadContextDO">
         <constructor>
             <arg column="tenant_id" name="tenantId" javaType="String"/>
             <arg column="coordinator_task_id" name="coordinatorTaskId" javaType="String"/>

@@ -3,11 +3,16 @@
 ## Persistence
 
 Application database access uses MyBatis. Controllers and services depend on
-domain repositories; repositories execute parameterized SQL through
-`DatabaseMapper` and `MyBatisExecutor`.
+domain repositories; repositories execute parameterized SQL through one
+mapper interface per table (`@Mapper` in
+`org.cmb.infrastructure.persistent.mapper`) with XML statements in
+`src/main/resources/mapper/`.
 
 - Runtime values are bound with MyBatis `#{}` parameters.
-- Repository result rows are mapped to domain records through `MyBatisRow`.
+- Rows are mapped through resultMaps to DO row types
+  (`org.cmb.application.domain.entity.XxxDO`, one per table).
+- Workspace/CLI snapshot queries return `Map<String,Object>` whose column
+  aliases are the front-end JSON contract.
 - Database `id` maps to `databaseId`; `business_id` maps to `businessId`.
 - API identifiers expose business IDs only.
 - `JdbcTemplate` is limited to integration-test assertions and is not used by

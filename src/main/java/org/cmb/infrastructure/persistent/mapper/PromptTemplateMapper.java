@@ -3,7 +3,7 @@ package org.cmb.infrastructure.persistent.mapper;
 import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import org.cmb.application.dto.PromptTemplateView;
+import org.cmb.application.domain.entity.PromptTemplateDO;
 
 /**
  * SQL access for prompt templates (digital_team_prompt_template).
@@ -13,9 +13,9 @@ import org.cmb.application.dto.PromptTemplateView;
 @Mapper
 public interface PromptTemplateMapper {
 
-    List<PromptTemplateView> findPublished(@Param("promptKey") String promptKey);
+    List<PromptTemplateDO> findPublished(@Param("promptKey") String promptKey);
 
-    List<PromptTemplateView> list(@Param("promptKey") String promptKey);
+    List<PromptTemplateDO> list(@Param("promptKey") String promptKey);
 
     Integer selectNextVersion(@Param("promptKey") String promptKey);
 
@@ -33,5 +33,5 @@ public interface PromptTemplateMapper {
 
     int publish(@Param("id") String id);
 
-    List<PromptTemplateView> find(@Param("id") String id);
+    List<PromptTemplateDO> find(@Param("id") String id);
 }

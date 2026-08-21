@@ -2,7 +2,7 @@ package org.cmb.presentation.controller;
 
 import java.util.Map;
 import org.cmb.application.domain.MockFileDescriptor;
-import org.cmb.application.domain.FileStore;
+import org.cmb.application.service.FileStore;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;

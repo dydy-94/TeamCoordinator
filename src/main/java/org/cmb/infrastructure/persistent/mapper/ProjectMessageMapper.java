@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Map;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import org.cmb.application.dto.MessageAcceptedResponse;
+import org.cmb.application.domain.entity.MessageDO;
 
 /**
  * SQL access for project messages (digital_team_project_message).
@@ -15,7 +15,7 @@ import org.cmb.application.dto.MessageAcceptedResponse;
 @Mapper
 public interface ProjectMessageMapper {
 
-    List<MessageAcceptedResponse> findDuplicate(
+    List<MessageDO> findDuplicate(
             @Param("tenantId") String tenantId,
             @Param("projectId") String projectId,
             @Param("conversationId") String conversationId,

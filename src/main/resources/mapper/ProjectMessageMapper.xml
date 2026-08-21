@@ -3,7 +3,7 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="org.cmb.infrastructure.persistent.mapper.ProjectMessageMapper">
 
-    <resultMap id="messageAcceptedResponse" type="org.cmb.application.dto.MessageAcceptedResponse">
+    <resultMap id="messageAcceptedResponse" type="org.cmb.application.domain.entity.MessageDO">
         <result column="id" property="messageId"/>
         <result column="conversation_id" property="taskId"/>
         <result column="session_id" property="sessionId"/>

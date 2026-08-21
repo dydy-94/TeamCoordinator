@@ -3,7 +3,7 @@ package org.cmb.infrastructure.persistent.mapper;
 import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import org.cmb.application.domain.Skill;
+import org.cmb.application.domain.entity.SkillDO;
 
 /**
  * SQL access for skills (digital_team_skill). Join queries use this table
@@ -14,11 +14,11 @@ import org.cmb.application.domain.Skill;
 @Mapper
 public interface SkillMapper {
 
-    List<Skill> listAll();
+    List<SkillDO> listAll();
 
-    List<Skill> findByBusinessId(@Param("skillId") String skillId);
+    List<SkillDO> findByBusinessId(@Param("skillId") String skillId);
 
-    List<Skill> findByProject(
+    List<SkillDO> findByProject(
             @Param("tenantId") String tenantId,
             @Param("projectId") String projectId);
 }

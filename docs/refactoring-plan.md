@@ -91,3 +91,21 @@
 - 每阶段结束：`mvn verify`（59 测试 + checkstyle + JaCoCo）全绿 → git commit（直接落 main）
 - 阶段 1 试点：ExecutionMapper 完成后先跑 `mvn test -Dtest=SingleExpertExecutionIntegrationTest,ExecutionFaultToleranceIntegrationTest,MultiExpertExecutionIntegrationTest` 验证映射与事务正确
 - 阶段 5 收尾：`grep -rn "teamcoordinator" src/` 零残留
+
+## 阶段 6：DO 层 + 接口/实现拆分（2026-08-21）
+
+背景：用户指出三处不符合 Java 规范 —— (1) application/domain 混装接口与类；(2) 没有 DO 定义；(3) 接口与实现类不在同一父目录。
+
+### 决策
+
+- **DO 层**：新建 `application/domain/entity/`，每张表一个 `XxxDO`（22 张表全量）。原 domain 行类改名迁入（ProjectRecord→ProjectDO、TaskRecord→TaskDO 等）；3 个兼任行类型的 DTO 迁入（ConversationTaskView→ConversationDO、PromptTemplateView→PromptTemplateDO、MessageAcceptedResponse→MessageDO）；2 个 Repository 嵌套 Record 提取为 HumanRequestDO/ArtifactDO；9 张只写/标量读取表建 definition-only DO（record 类，作为行形状的权威定义，mapper 标量参数签名不变）。包名最初用 `do` 被否决——`do` 是 Java 保留关键字、包名段非法（类名 `XxxDO` 不受影响），最终定为 `entity`。
+- **Service 接口化**：9 个业务 @Service 拆成 `application/service` 接口 + `application/service/impl/XxxServiceImpl` 实现；@Service/@Transactional 全部落在 impl，接口零注解。PromptService 的 6 个模板 key 常量上移到接口（3 处 `PromptService.X` 调用点零改动）。
+- **端口归位**：5 个端口接口（AgentCoreAdapter/FileStore/ExpertRegistry/IdentityProvider/IntentModelClient）移入 `application/service`，7 个实现移入 `application/service/impl`，`infrastructure/remoteaccess` 包删除。
+- **辅助组件**：6 个具体类组件（CoordinatorAgentClient、PlanValidator/PlanSchemaValidator/DecisionSchemaValidator、ExpertSelector、OutputSchemaProvider）移入 `application/component`——无抽象边界，既非端口也非业务服务。
+- **契约查询保持 Map**：findPlans/findTasks/findTaskDetail/findArtifacts/findConversation/listExpertSessions/findEvents/findMessages/findHumanRequests 与 WorkspaceService 不动——列别名即前端/CliSubmission 契约，转 DO 需 re-key 层，契约双写有漂移风险。
+
+### 完成标准
+
+- `mvn test` 60 测试全绿（surefire 含 *IntegrationTest 类）；`mvn verify` 在 Docker 可用时含 Testcontainers *IT 全绿
+- `grep -rn "remoteaccess|MyBatisExecutor|MyBatisRow|HumanRequestRecord|ArtifactRecord" src/` 零残留
+- dev 环境 workspace / CLI task-detail JSON 与重构前逐字节一致（/tmp/tc-baseline-*.json diff）

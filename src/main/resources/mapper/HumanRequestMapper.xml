@@ -11,7 +11,7 @@
     </sql>
 
     <resultMap id="humanRequestRecord"
-               type="org.cmb.infrastructure.persistent.HumanRequestRepository$HumanRequestRecord">
+               type="org.cmb.application.domain.entity.HumanRequestDO">
         <result column="business_id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="analysis_id" property="analysisId"/>

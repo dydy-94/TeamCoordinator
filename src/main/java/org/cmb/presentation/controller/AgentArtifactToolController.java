@@ -2,7 +2,7 @@ package org.cmb.presentation.controller;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import org.cmb.application.domain.AgentArtifactUploadContext;
+import org.cmb.application.domain.entity.AgentArtifactUploadContextDO;
 import org.cmb.infrastructure.persistent.ArtifactRepository;
 import org.cmb.application.service.ArtifactService;
 import org.cmb.application.dto.ArtifactView;
@@ -52,7 +52,7 @@ public class AgentArtifactToolController {
             @RequestHeader(AGENT_ID_HEADER) String agentId,
             @RequestPart("file") MultipartFile file) throws Exception {
         authenticate(toolToken);
-        AgentArtifactUploadContext context = repository.findAgentUploadContext(
+        AgentArtifactUploadContextDO context = repository.findAgentUploadContext(
                 projectId, taskId, businessSessionId, agentRunId, agentId);
         if (context == null) {
             throw ApiException.forbidden(

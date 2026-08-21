@@ -1,7 +1,7 @@
 package org.cmb.presentation.controller;
 
 import java.util.List;
-import org.cmb.application.domain.Skill;
+import org.cmb.application.domain.entity.SkillDO;
 import org.cmb.infrastructure.persistent.SkillRepository;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -26,7 +26,7 @@ public class SkillController {
      * List all skills in the platform catalog.
      */
     @GetMapping
-    public List<Skill> list() {
+    public List<SkillDO> list() {
         return skillRepository.listAll();
     }
 }

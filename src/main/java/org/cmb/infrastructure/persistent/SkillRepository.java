@@ -3,7 +3,7 @@ package org.cmb.infrastructure.persistent;
 import java.util.List;
 import org.cmb.infrastructure.persistent.mapper.ProjectSkillMapper;
 import org.cmb.infrastructure.persistent.mapper.SkillMapper;
-import org.cmb.application.domain.Skill;
+import org.cmb.application.domain.entity.SkillDO;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -23,18 +23,18 @@ public class SkillRepository {
 
     // ── Global skill pool ─────────────────────────────────────────────────
 
-    public List<Skill> listAll() {
+    public List<SkillDO> listAll() {
         return mapper.listAll();
     }
 
-    public Skill findByBusinessId(String skillId) {
-        List<Skill> rows = mapper.findByBusinessId(skillId);
+    public SkillDO findByBusinessId(String skillId) {
+        List<SkillDO> rows = mapper.findByBusinessId(skillId);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
     // ── Project-skill associations ────────────────────────────────────────
 
-    public List<Skill> findByProject(String tenantId, String projectId) {
+    public List<SkillDO> findByProject(String tenantId, String projectId) {
         return mapper.findByProject(tenantId, projectId);
     }
 

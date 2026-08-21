@@ -1,6 +1,6 @@
 package org.cmb.infrastructure.worker;
 import org.cmb.common.enums.ProjectEventType;
-import org.cmb.application.domain.ProjectEvent;
+import org.cmb.application.domain.entity.ProjectEventDO;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -14,7 +14,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Supplier;
 import org.cmb.common.config.DigitalTeamProperties;
 import org.cmb.infrastructure.persistent.MessageEventRepository;
-import org.cmb.application.domain.AgentCoreAdapter;
+import org.cmb.application.service.AgentCoreAdapter;
 import org.cmb.application.domain.AgentEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,7 +47,7 @@ public class ProjectEventStreamHub {
             String projectId,
             String taskId,
             long afterSequence,
-            Supplier<List<ProjectEvent>> replaySupplier) {
+            Supplier<List<ProjectEventDO>> replaySupplier) {
         TaskKey key = new TaskKey(tenantId, projectId, taskId);
         // 无固定超时：连接生命周期由心跳扫描的不活跃判定接管。
         SseEmitter emitter = new SseEmitter(0L);
@@ -59,10 +59,10 @@ public class ProjectEventStreamHub {
         emitter.onTimeout(() -> remove(key, projectSubscribers, subscriber));
         emitter.onError(error -> remove(key, projectSubscribers, subscriber));
         try {
-            List<ProjectEvent> replayEvents = replaySupplier.get();
+            List<ProjectEventDO> replayEvents = replaySupplier.get();
             Map<String, List<long[]>> nextStarts = markerStartBounds(replayEvents);
             synchronized (subscriber) {
-                for (ProjectEvent event : replayEvents) {
+                for (ProjectEventDO event : replayEvents) {
                     if (event.getType() == ProjectEventType.AGENT_RUN_MARKER
                             && event.getPayload() != null
                             && event.getPayload().has("sessionId")) {
@@ -89,7 +89,7 @@ public class ProjectEventStreamHub {
     }
 
     public void publish(
-            String tenantId, String projectId, String taskId, ProjectEvent event) {
+            String tenantId, String projectId, String taskId, ProjectEventDO event) {
         CopyOnWriteArrayList<Subscriber> projectSubscribers =
                 subscribers.get(new TaskKey(tenantId, projectId, taskId));
         if (projectSubscribers == null) {
@@ -185,7 +185,7 @@ public class ProjectEventStreamHub {
             }
             try {
                 long afterSequence = minimumSequence(projectSubscribers);
-                List<ProjectEvent> events = repository.findPublicEvents(
+                List<ProjectEventDO> events = repository.findPublicEvents(
                         entry.getKey().tenantId,
                         entry.getKey().projectId,
                         entry.getKey().taskId,
@@ -198,7 +198,7 @@ public class ProjectEventStreamHub {
                         subscriber.lastActivityAt = now;
                     }
                 }
-                for (ProjectEvent event : events) {
+                for (ProjectEventDO event : events) {
                         if (event.getType() == ProjectEventType.AGENT_RUN_MARKER
                                 && event.getPayload() != null
                                 && event.getPayload().has("sessionId")) {
@@ -334,9 +334,9 @@ public class ProjectEventStreamHub {
      * 列表，供窗口上界计算。旧 MARKER 无 start 时记 null。
      */
     private Map<String, List<long[]>> markerStartBounds(
-            List<ProjectEvent> replayEvents) {
+            List<ProjectEventDO> replayEvents) {
         Map<String, List<long[]>> bounds = new LinkedHashMap<>();
-        for (ProjectEvent event : replayEvents) {
+        for (ProjectEventDO event : replayEvents) {
             if (event.getType() != ProjectEventType.AGENT_RUN_MARKER
                     || event.getPayload() == null
                     || !event.getPayload().has("sessionId")) {
@@ -404,7 +404,7 @@ public class ProjectEventStreamHub {
                 ? payload.get(field).asText() : "";
     }
 
-    private void send(Subscriber subscriber, ProjectEvent event) throws IOException {
+    private void send(Subscriber subscriber, ProjectEventDO event) throws IOException {
         if (shouldDeliver(subscriber, event) == false) {
             return;
         }
@@ -434,7 +434,7 @@ public class ProjectEventStreamHub {
      * 空间，混用会把持久化游标污染成 live 计数器值，导致后续
      * userMessage 等持久化事件被去重逻辑误丢弃。
      */
-    protected void recordDelivered(Subscriber subscriber, ProjectEvent event) {
+    protected void recordDelivered(Subscriber subscriber, ProjectEventDO event) {
         if (event.isLiveOnly()) {
             AgentEvent agentEvent = event.getAgentEvent();
             if (agentEvent != null && agentEvent.getSessionId() != null
@@ -454,7 +454,7 @@ public class ProjectEventStreamHub {
      * 两条路径到达订阅者时只投递一次。无会话信息的 live 事件（合成
      * 通知）一律投递。
      */
-    protected boolean shouldDeliver(Subscriber subscriber, ProjectEvent event) {
+    protected boolean shouldDeliver(Subscriber subscriber, ProjectEventDO event) {
         if (event.isLiveOnly()) {
             AgentEvent agentEvent = event.getAgentEvent();
             if (agentEvent == null || agentEvent.getSessionId() == null

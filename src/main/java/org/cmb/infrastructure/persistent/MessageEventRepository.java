@@ -11,9 +11,9 @@ import org.cmb.infrastructure.persistent.mapper.ProjectEventMapper;
 import org.cmb.infrastructure.persistent.mapper.ProjectMessageMapper;
 import org.cmb.application.domain.AgentEvent;
 import org.cmb.common.enums.EventVisibility;
-import org.cmb.application.dto.MessageAcceptedResponse;
+import org.cmb.application.domain.entity.MessageDO;
 import org.cmb.application.dto.MessageRequest;
-import org.cmb.application.domain.ProjectEvent;
+import org.cmb.application.domain.entity.ProjectEventDO;
 import org.cmb.common.enums.ProjectEventType;
 import org.cmb.application.domain.RequestIdentity;
 import org.springframework.dao.DuplicateKeyException;
@@ -47,10 +47,10 @@ public class MessageEventRepository {
         this.objectMapper = objectMapper;
     }
 
-    public MessageAcceptedResponse findDuplicate(
+    public MessageDO findDuplicate(
             RequestIdentity identity, String projectId, String taskId,
             MessageRequest request) {
-        List<MessageAcceptedResponse> rows = messageMapper.findDuplicate(
+        List<MessageDO> rows = messageMapper.findDuplicate(
                 identity.getTenantId(), projectId, taskId,
                 request.getClientMessageId());
         return rows.isEmpty() ? null : rows.get(0);
@@ -90,7 +90,7 @@ public class MessageEventRepository {
         }
     }
 
-    public ProjectEvent insertEvent(
+    public ProjectEventDO insertEvent(
             RequestIdentity identity,
             String projectId,
             String conversationId,
@@ -99,7 +99,7 @@ public class MessageEventRepository {
             EventVisibility visibility,
             JsonNode payload) {
         long sequence = allocateSequence(identity.getTenantId(), conversationId);
-        ProjectEvent event = new ProjectEvent();
+        ProjectEventDO event = new ProjectEventDO();
         event.setId("event-" + UUID.randomUUID());
         event.setProjectId(projectId);
         event.setConversationId(conversationId);
@@ -143,17 +143,17 @@ public class MessageEventRepository {
         return rows.isEmpty() ? null : rows.get(0);
     }
 
-    public List<ProjectEvent> findPublicEvents(
+    public List<ProjectEventDO> findPublicEvents(
             String tenantId, String projectId, String taskId, long afterSequence) {
         return findPublicEvents(tenantId, projectId, taskId, afterSequence, 1000);
     }
 
-    public List<ProjectEvent> findPublicEvents(
+    public List<ProjectEventDO> findPublicEvents(
             String tenantId, String projectId, String taskId,
             long afterSequence, int limit) {
-        List<ProjectEvent> events = eventMapper.findPublicEvents(
+        List<ProjectEventDO> events = eventMapper.findPublicEvents(
                 tenantId, projectId, taskId, afterSequence, limit);
-        for (ProjectEvent event : events) {
+        for (ProjectEventDO event : events) {
             JsonNode payload = event.getPayload();
             // Reconstruct AgentEvent for consistent SSE emission on replay
             if (payload != null && payload.has("type") && payload.has("agentId")) {

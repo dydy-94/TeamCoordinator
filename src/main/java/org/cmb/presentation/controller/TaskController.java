@@ -2,8 +2,8 @@ package org.cmb.presentation.controller;
 
 import javax.servlet.http.HttpServletRequest;
 import org.cmb.infrastructure.worker.SingleExpertWorker;
-import org.cmb.application.domain.TaskRecord;
-import org.cmb.application.domain.IdentityProvider;
+import org.cmb.application.domain.entity.TaskDO;
+import org.cmb.application.service.IdentityProvider;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -29,7 +29,7 @@ public class TaskController {
      * @return
      */
     @DeleteMapping("/{taskId}")
-    public TaskRecord cancel(
+    public TaskDO cancel(
             HttpServletRequest servletRequest,
             @PathVariable String projectId,
             @PathVariable String taskId) {

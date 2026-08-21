@@ -3,7 +3,7 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="org.cmb.infrastructure.persistent.mapper.ProjectExpertMapper">
 
-    <resultMap id="projectExpert" type="org.cmb.application.domain.ProjectExpert">
+    <resultMap id="projectExpert" type="org.cmb.application.domain.entity.ProjectExpertDO">
         <result column="expert_id" property="expertId"/>
         <result column="enabled" property="enabled"/>
     </resultMap>

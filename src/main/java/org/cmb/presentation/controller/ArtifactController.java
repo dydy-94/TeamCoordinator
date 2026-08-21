@@ -5,7 +5,7 @@ import javax.validation.Valid;
 import org.cmb.application.service.ArtifactService;
 import org.cmb.application.dto.ArtifactUploadRequest;
 import org.cmb.application.dto.ArtifactView;
-import org.cmb.application.domain.IdentityProvider;
+import org.cmb.application.service.IdentityProvider;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;

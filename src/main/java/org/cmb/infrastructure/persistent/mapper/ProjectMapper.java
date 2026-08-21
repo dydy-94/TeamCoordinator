@@ -3,7 +3,7 @@ package org.cmb.infrastructure.persistent.mapper;
 import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import org.cmb.application.domain.ProjectRecord;
+import org.cmb.application.domain.entity.ProjectDO;
 
 /**
  * SQL access for projects (digital_team_project). Join queries use this
@@ -23,11 +23,11 @@ public interface ProjectMapper {
             @Param("status") String status,
             @Param("createdBy") String createdBy);
 
-    List<ProjectRecord> findByTenant(
+    List<ProjectDO> findByTenant(
             @Param("tenantId") String tenantId,
             @Param("userId") String userId);
 
-    List<ProjectRecord> findVisible(
+    List<ProjectDO> findVisible(
             @Param("tenantId") String tenantId,
             @Param("projectId") String projectId,
             @Param("userId") String userId);

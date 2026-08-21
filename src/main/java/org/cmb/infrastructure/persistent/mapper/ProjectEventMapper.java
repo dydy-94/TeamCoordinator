@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Map;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import org.cmb.application.domain.ProjectEvent;
+import org.cmb.application.domain.entity.ProjectEventDO;
 
 /**
  * SQL access for task event streams (digital_team_project_event).
@@ -29,7 +29,7 @@ public interface ProjectEventMapper {
             @Param("sessionId") String sessionId,
             @Param("afterSequence") long afterSequence);
 
-    List<ProjectEvent> findPublicEvents(
+    List<ProjectEventDO> findPublicEvents(
             @Param("tenantId") String tenantId,
             @Param("projectId") String projectId,
             @Param("conversationId") String conversationId,

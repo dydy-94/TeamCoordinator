@@ -8,7 +8,7 @@
         p.status, p.coordinator_agent_id, p.created_by, p.created_at, p.updated_at
     </sql>
 
-    <resultMap id="projectRecord" type="org.cmb.application.domain.ProjectRecord">
+    <resultMap id="projectRecord" type="org.cmb.application.domain.entity.ProjectDO">
         <result column="database_id" property="databaseId"/>
         <result column="business_id" property="businessId"/>
         <result column="tenant_id" property="tenantId"/>

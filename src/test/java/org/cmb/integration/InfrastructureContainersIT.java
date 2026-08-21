@@ -39,9 +39,10 @@ class InfrastructureContainersIT {
                 Statement statement = connection.createStatement();
                 ResultSet result =
                         statement.executeQuery(
-                                "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1")) {
+                                "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 0")) {
             assertTrue(result.next());
-            assertEquals(1, result.getInt(1));
+            assertEquals(0, result.getInt(1),
+                    "all Flyway migrations must succeed");
         }
 
         try (Jedis jedis = new Jedis(REDIS.getHost(), REDIS.getMappedPort(6379))) {

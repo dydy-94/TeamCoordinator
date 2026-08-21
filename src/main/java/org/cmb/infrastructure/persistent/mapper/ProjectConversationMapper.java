@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Map;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import org.cmb.application.dto.ConversationTaskView;
+import org.cmb.application.domain.entity.ConversationDO;
 
 /**
  * SQL access for conversation tasks (digital_team_project_conversation).
@@ -21,7 +21,7 @@ public interface ProjectConversationMapper {
             @Param("sessionId") String sessionId,
             @Param("title") String title);
 
-    List<ConversationTaskView> listByProject(
+    List<ConversationDO> listByProject(
             @Param("tenantId") String tenantId,
             @Param("projectId") String projectId);
 
@@ -30,7 +30,7 @@ public interface ProjectConversationMapper {
             @Param("projectId") String projectId,
             @Param("taskId") String taskId);
 
-    List<ConversationTaskView> get(
+    List<ConversationDO> get(
             @Param("tenantId") String tenantId,
             @Param("projectId") String projectId,
             @Param("taskId") String taskId);
@@ -46,4 +46,53 @@ public interface ProjectConversationMapper {
             @Param("tenantId") String tenantId,
             @Param("projectId") String projectId,
             @Param("taskId") String taskId);
+
+    List<Map<String, Object>> listExpertSessions(
+            @Param("tenantId") String tenantId,
+            @Param("projectId") String projectId,
+            @Param("taskId") String taskId);
+
+    // ── 会话级联删除（顺序与外键依赖一致，见 XML 注释）──────────────────────
+
+    int deleteArtifactLineageForConversation(@Param("taskId") String taskId);
+
+    int deleteArtifactsForConversation(
+            @Param("tenantId") String tenantId, @Param("taskId") String taskId);
+
+    int deleteHumanRequestsForConversation(
+            @Param("tenantId") String tenantId,
+            @Param("projectId") String projectId,
+            @Param("taskId") String taskId);
+
+    int deleteTasksForConversation(
+            @Param("tenantId") String tenantId, @Param("taskId") String taskId);
+
+    int deletePlansForConversation(
+            @Param("tenantId") String tenantId, @Param("taskId") String taskId);
+
+    int deleteAgentRunsForConversation(
+            @Param("tenantId") String tenantId, @Param("taskId") String taskId);
+
+    int deleteAnalysesForConversation(
+            @Param("projectId") String projectId, @Param("taskId") String taskId);
+
+    int deleteDispatchesForConversation(
+            @Param("tenantId") String tenantId, @Param("taskId") String taskId);
+
+    int deleteEventsForConversation(
+            @Param("tenantId") String tenantId, @Param("taskId") String taskId);
+
+    int deleteMessagesForConversation(
+            @Param("tenantId") String tenantId, @Param("taskId") String taskId);
+
+    int deleteEventSequenceForConversation(
+            @Param("tenantId") String tenantId, @Param("taskId") String taskId);
+
+    int deleteExpertSessionsForConversation(
+            @Param("tenantId") String tenantId, @Param("taskId") String taskId);
+
+    int deleteCliSubmissionsForConversation(@Param("taskId") String taskId);
+
+    int deletePromptExecutionsForConversation(
+            @Param("tenantId") String tenantId, @Param("taskId") String taskId);
 }

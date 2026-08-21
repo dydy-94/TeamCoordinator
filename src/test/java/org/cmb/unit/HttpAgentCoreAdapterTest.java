@@ -16,7 +16,7 @@ import java.util.List;
 import org.cmb.application.domain.AgentEvent;
 import org.cmb.application.domain.AgentRunRequest;
 import org.cmb.application.domain.AgentRunResponse;
-import org.cmb.infrastructure.remoteaccess.HttpAgentCoreAdapter;
+import org.cmb.application.service.impl.HttpAgentCoreAdapter;
 import org.cmb.common.config.DigitalTeamProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;

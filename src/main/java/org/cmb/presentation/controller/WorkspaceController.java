@@ -4,7 +4,7 @@ import java.util.Map;
 import javax.servlet.http.HttpServletRequest;
 import org.cmb.application.service.WorkspaceService;
 import org.cmb.application.service.ConversationTaskService;
-import org.cmb.application.domain.IdentityProvider;
+import org.cmb.application.service.IdentityProvider;
 import org.cmb.application.service.ProjectService;
 import org.cmb.application.domain.RequestIdentity;
 import org.springframework.web.bind.annotation.GetMapping;

@@ -3,7 +3,7 @@ package org.cmb.infrastructure.persistent.mapper;
 import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import org.cmb.application.domain.ProjectMember;
+import org.cmb.application.domain.entity.ProjectMemberDO;
 
 /**
  * SQL access for project members (digital_team_project_member). Queries
@@ -18,7 +18,7 @@ public interface ProjectMemberMapper {
             @Param("projectId") String projectId,
             @Param("userId") String userId);
 
-    List<ProjectMember> findMembers(
+    List<ProjectMemberDO> findMembers(
             @Param("tenantId") String tenantId,
             @Param("projectId") String projectId);
 

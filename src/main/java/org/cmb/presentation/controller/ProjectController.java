@@ -3,7 +3,7 @@ import org.cmb.application.dto.ProjectRequests;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
-import org.cmb.application.domain.IdentityProvider;
+import org.cmb.application.service.IdentityProvider;
 import java.util.List;
 import org.cmb.application.dto.ProjectRequests.CreateProject;
 import org.cmb.application.dto.ProjectRequests.UpdateProject;
@@ -13,7 +13,7 @@ import org.cmb.application.dto.ProjectRequests.UpsertSkill;
 import org.cmb.application.service.ProjectService;
 import org.cmb.application.dto.ProjectView;
 import org.cmb.application.domain.RequestIdentity;
-import org.cmb.application.domain.Skill;
+import org.cmb.application.domain.entity.SkillDO;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -153,7 +153,7 @@ public class ProjectController {
      * @return
      */
     @GetMapping("/{projectId}/skills")
-    public List<Skill> listSkills(
+    public List<SkillDO> listSkills(
             HttpServletRequest request, @PathVariable String projectId) {
         return projectService.listProjectSkills(identity(request), projectId);
     }
