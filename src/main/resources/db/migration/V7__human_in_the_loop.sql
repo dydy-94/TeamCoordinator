@@ -1,4 +1,4 @@
-CREATE TABLE human_request (
+CREATE TABLE digital_team_human_request (
     id VARCHAR(64) NOT NULL PRIMARY KEY,
     analysis_id VARCHAR(64),
     task_id VARCHAR(64),
@@ -20,11 +20,11 @@ CREATE TABLE human_request (
     resolved_at TIMESTAMP NULL,
     CONSTRAINT uk_human_response_idempotency
         UNIQUE (tenant_id, response_idempotency_key),
-    CONSTRAINT fk_human_project FOREIGN KEY (project_id) REFERENCES project (id),
+    CONSTRAINT fk_human_project FOREIGN KEY (project_id) REFERENCES digital_team_project (id),
     CONSTRAINT fk_human_analysis FOREIGN KEY (analysis_id)
-        REFERENCES coordinator_analysis (id),
-    CONSTRAINT fk_human_task FOREIGN KEY (task_id) REFERENCES coordinator_task (id)
+        REFERENCES digital_team_coordinator_analysis (id),
+    CONSTRAINT fk_human_task FOREIGN KEY (task_id) REFERENCES digital_team_coordinator_task (id)
 );
 
 CREATE INDEX idx_human_pending
-    ON human_request (tenant_id, project_id, status, expires_at);
+    ON digital_team_human_request (tenant_id, project_id, status, expires_at);

@@ -10,7 +10,7 @@ import org.apache.ibatis.annotations.Param;
  * from the Coordinator.
  */
 @Mapper
-public interface CliSubmissionMapper {
+public interface CoordinatorCliSubmissionMapper {
 
     int insert(
             @Param("businessId") String businessId,

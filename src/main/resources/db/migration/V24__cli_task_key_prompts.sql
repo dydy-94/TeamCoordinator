@@ -4,7 +4,7 @@
 -- with only their task id (the agent pulls the contract via tc get-task).
 -- Earlier tool/CLI versions remain available for other deployments.
 
-INSERT INTO prompt_template
+INSERT INTO digital_team_prompt_template
     (business_id, prompt_key, agent_scope, scene, version, status,
      template_content, variables_schema, created_by, published_at)
 VALUES

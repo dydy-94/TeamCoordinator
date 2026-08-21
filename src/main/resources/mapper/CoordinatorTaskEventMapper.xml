@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.cmb.infrastructure.persistent.mapper.CoordinatorTaskEventMapper">
+
+    <insert id="insertTaskEvent">
+        INSERT INTO digital_team_coordinator_task_event
+        (business_id, tenant_id, task_id, event_id, sequence, event_type, payload)
+        VALUES (#{id}, #{tenantId}, #{taskId}, #{eventId}, #{sequence}, #{eventType},
+        #{payload})
+    </insert>
+
+</mapper>

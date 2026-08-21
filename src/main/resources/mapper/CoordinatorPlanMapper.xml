@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.cmb.infrastructure.persistent.mapper.CoordinatorPlanMapper">
+
+    <select id="findExistingPlanId" resultType="string">
+        SELECT business_id AS id FROM digital_team_coordinator_plan WHERE tenant_id = #{tenantId}
+        AND project_id = #{projectId} AND message_id = #{messageId}
+    </select>
+
+    <select id="findLatestPlanId" resultType="string">
+        SELECT business_id AS id FROM digital_team_coordinator_plan WHERE tenant_id = #{tenantId}
+        AND project_id = #{projectId} AND message_id = #{messageId}
+        ORDER BY plan_version DESC
+    </select>
+
+    <insert id="insertPlanSimple">
+        INSERT INTO digital_team_coordinator_plan
+        (business_id, tenant_id, project_id, conversation_id, message_id, analysis_id,
+        status, intent_json) VALUES (#{id}, #{work.tenantId}, #{work.projectId},
+        #{work.conversationId}, #{work.messageId}, #{analysisId}, 'RUNNING', #{intentJson})
+    </insert>
+
+    <insert id="insertPlanFull">
+        INSERT INTO digital_team_coordinator_plan
+        (business_id, tenant_id, project_id, conversation_id, message_id, analysis_id,
+        plan_version, status, intent_json, plan_json, repair_count)
+        VALUES (#{id}, #{work.tenantId}, #{work.projectId}, #{work.conversationId},
+        #{work.messageId}, #{analysisId}, #{planVersion}, 'RUNNING', #{intentJson},
+        #{planJson}, #{repairCount})
+    </insert>
+
+    <insert id="insertReplan">
+        INSERT INTO digital_team_coordinator_plan
+        (business_id, tenant_id, project_id, conversation_id, message_id, analysis_id,
+        plan_version, status, intent_json, plan_json, repair_count,
+        supersedes_plan_id) VALUES (#{id}, #{work.tenantId}, #{work.projectId},
+        #{work.conversationId}, #{work.messageId}, #{analysisId}, #{planVersion},
+        'RUNNING', #{intentJson}, #{planJson}, #{repairCount}, #{supersedesPlanId})
+    </insert>
+
+    <update id="supersedePlan">
+        UPDATE digital_team_coordinator_plan SET status = 'SUPERSEDED',
+        updated_at = CURRENT_TIMESTAMP WHERE business_id = #{planId}
+    </update>
+
+    <update id="updatePlanStatus">
+        UPDATE digital_team_coordinator_plan SET status = #{status},
+        updated_at = CURRENT_TIMESTAMP WHERE business_id = #{planId}
+    </update>
+
+    <update id="failPlansForMessage">
+        UPDATE digital_team_coordinator_plan SET status = 'FAILED',
+        updated_at = CURRENT_TIMESTAMP
+        WHERE tenant_id = #{tenantId} AND message_id = #{messageId} AND status = 'RUNNING'
+    </update>
+
+    <update id="failPlan">
+        UPDATE digital_team_coordinator_plan SET status = #{status},
+        updated_at = CURRENT_TIMESTAMP WHERE business_id = #{planId}
+    </update>
+
+    <select id="findPlans">
+        SELECT business_id AS id, plan_version, status, created_at FROM digital_team_coordinator_plan
+        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
+        AND conversation_id = #{taskId} ORDER BY plan_version
+    </select>
+
+</mapper>

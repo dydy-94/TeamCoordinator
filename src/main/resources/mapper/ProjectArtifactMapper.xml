@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="org.cmb.infrastructure.persistent.mapper.ArtifactMapper">
+<mapper namespace="org.cmb.infrastructure.persistent.mapper.ProjectArtifactMapper">
 
     <resultMap id="artifactRecord"
                type="org.cmb.infrastructure.persistent.ArtifactRepository$ArtifactRecord">
@@ -18,23 +18,13 @@
         <result column="status" property="status"/>
     </resultMap>
 
-    <resultMap id="agentUploadContext"
-               type="org.cmb.application.domain.AgentArtifactUploadContext">
-        <constructor>
-            <arg column="tenant_id" name="tenantId" javaType="String"/>
-            <arg column="coordinator_task_id" name="coordinatorTaskId" javaType="String"/>
-            <arg column="agent_id" name="agentId" javaType="String"/>
-            <arg column="agent_run_id" name="agentRunId" javaType="String"/>
-        </constructor>
-    </resultMap>
-
     <select id="selectNextVersion" resultType="int">
-        SELECT COALESCE(MAX(version), 0) + 1 FROM project_artifact
+        SELECT COALESCE(MAX(version), 0) + 1 FROM digital_team_project_artifact
         WHERE project_id = #{projectId} AND file_name = #{fileName}
     </select>
 
     <insert id="insert">
-        INSERT INTO project_artifact
+        INSERT INTO digital_team_project_artifact
         (business_id, tenant_id, project_id, task_id, expert_run_id, version,
         storage_key, file_name, media_type, status, created_by)
         VALUES (#{artifact.id}, #{tenantId}, #{artifact.projectId}, #{artifact.taskId},
@@ -46,56 +36,32 @@
     <select id="find" resultMap="artifactRecord">
         SELECT business_id, project_id, task_id, expert_run_id, version,
         storage_key, file_name, media_type, size_bytes, sha256, status
-        FROM project_artifact WHERE tenant_id = #{tenantId}
+        FROM digital_team_project_artifact WHERE tenant_id = #{tenantId}
         AND project_id = #{projectId} AND business_id = #{id}
     </select>
 
     <select id="resolveStorageKey" resultType="string">
-        SELECT storage_key FROM project_artifact
+        SELECT storage_key FROM digital_team_project_artifact
         WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
         AND business_id = #{reference} AND status = 'AVAILABLE'
     </select>
 
     <update id="complete">
-        UPDATE project_artifact SET size_bytes = #{size}, sha256 = #{sha256},
+        UPDATE digital_team_project_artifact SET size_bytes = #{size}, sha256 = #{sha256},
         status = 'AVAILABLE', completed_at = CURRENT_TIMESTAMP
         WHERE business_id = #{id} AND status = 'UPLOADING'
     </update>
 
-    <select id="findUploadContextByTaskId" resultMap="agentUploadContext">
-        SELECT t.tenant_id, t.business_id AS coordinator_task_id,
-        t.expert_id AS agent_id, t.session_id AS agent_run_id
-        FROM coordinator_task t
-        WHERE t.business_id = #{taskId}
-        AND t.status IN ('RUNNING', 'WAITING_HUMAN')
-    </select>
-
-    <select id="findProjectIdByTaskId" resultType="string">
-        SELECT project_id FROM coordinator_task WHERE business_id = #{taskId}
-    </select>
-
-    <select id="findAgentUploadContext" resultMap="agentUploadContext">
-        SELECT t.tenant_id, t.business_id AS coordinator_task_id,
-        #{agentId} AS agent_id, #{agentRunId} AS agent_run_id
-        FROM coordinator_task t
-        JOIN coordinator_plan p ON p.business_id = t.plan_id
-        JOIN project_conversation c ON c.business_id = p.conversation_id
-        WHERE t.project_id = #{projectId} AND p.conversation_id = #{conversationId}
-        AND c.session_id = #{businessSessionId} AND t.session_id = #{agentRunId}
-        AND t.expert_id = #{agentId}
-        AND t.status IN ('RUNNING', 'WAITING_HUMAN')
-    </select>
-
     <select id="countAvailableAgentArtifact" resultType="int">
-        SELECT COUNT(*) FROM project_artifact WHERE tenant_id = #{tenantId}
+        SELECT COUNT(*) FROM digital_team_project_artifact WHERE tenant_id = #{tenantId}
         AND project_id = #{projectId} AND task_id = #{coordinatorTaskId}
         AND expert_run_id = #{agentRunId} AND business_id = #{artifactId}
         AND status = 'AVAILABLE'
     </select>
 
     <select id="findAvailableStorageKeys" resultType="string">
-        SELECT a.storage_key FROM project_artifact a
-        JOIN coordinator_task t ON t.business_id = a.task_id
+        SELECT a.storage_key FROM digital_team_project_artifact a
+        JOIN digital_team_coordinator_task t ON t.business_id = a.task_id
         WHERE t.plan_id = #{planId} AND t.task_key IN
         <foreach collection="dependencyKeys" item="item" open="(" separator="," close=")">
             #{item}
@@ -103,15 +69,10 @@
         AND a.status = 'AVAILABLE' ORDER BY a.business_id
     </select>
 
-    <insert id="recordDependencyLineage">
-        INSERT INTO project_artifact_lineage (output_artifact_id, input_artifact_id)
-        SELECT #{outputArtifactId}, a.business_id FROM project_artifact a
-        JOIN coordinator_task t ON t.business_id = a.task_id
-        WHERE t.plan_id = #{planId} AND t.task_key IN
-        <foreach collection="dependencyKeys" item="item" open="(" separator="," close=")">
-            #{item}
-        </foreach>
-        AND a.status = 'AVAILABLE'
-    </insert>
+    <select id="findArtifacts">
+        SELECT business_id AS id, task_id, version, file_name, media_type, size_bytes, sha256, status
+        FROM digital_team_project_artifact WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
+        ORDER BY created_at
+    </select>
 
 </mapper>

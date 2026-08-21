@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.cmb.infrastructure.persistent.mapper.ConversationEventSequenceMapper">
+
+    <insert id="insertSequence">
+        INSERT INTO digital_team_conversation_event_sequence
+        (tenant_id, conversation_id, next_sequence)
+        VALUES (#{tenantId}, #{conversationId}, 2)
+    </insert>
+
+    <select id="selectSequence" resultType="long">
+        SELECT next_sequence FROM digital_team_conversation_event_sequence
+        WHERE tenant_id = #{tenantId} AND conversation_id = #{conversationId}
+    </select>
+
+    <update id="updateSequence">
+        UPDATE digital_team_conversation_event_sequence SET next_sequence = #{newNext}
+        WHERE tenant_id = #{tenantId} AND conversation_id = #{conversationId}
+        AND next_sequence = #{next}
+    </update>
+
+</mapper>

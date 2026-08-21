@@ -37,7 +37,7 @@ class HumanRequestIntegrationTest {
         submit(projectId, "处理一下");
         runUntilWaiting(projectId);
         String requestId = jdbc.queryForObject(
-                "SELECT business_id FROM human_request WHERE project_id = ?",
+                "SELECT business_id FROM digital_team_human_request WHERE project_id = ?",
                 String.class, projectId);
 
         respond(projectId, requestId,
@@ -59,7 +59,7 @@ class HumanRequestIntegrationTest {
 
         assertEquals("RESOLVED", requestStatus(requestId));
         assertEquals("PENDING", jdbc.queryForObject(
-                "SELECT status FROM coordinator_dispatch WHERE project_id = ?",
+                "SELECT status FROM digital_team_coordinator_dispatch WHERE project_id = ?",
                 String.class, projectId));
     }
 
@@ -69,10 +69,10 @@ class HumanRequestIntegrationTest {
         submit(projectId, "分析 need-human");
         runUntilTaskStatus(projectId, "WAITING_HUMAN");
         String requestId = jdbc.queryForObject(
-                "SELECT business_id FROM human_request WHERE project_id = ? AND task_id IS NOT NULL",
+                "SELECT business_id FROM digital_team_human_request WHERE project_id = ? AND task_id IS NOT NULL",
                 String.class, projectId);
         String sessionId = jdbc.queryForObject(
-                "SELECT session_id FROM coordinator_task WHERE project_id = ?",
+                "SELECT session_id FROM digital_team_coordinator_task WHERE project_id = ?",
                 String.class, projectId);
 
         respond(projectId, requestId,
@@ -81,10 +81,10 @@ class HumanRequestIntegrationTest {
         runUntilTaskStatus(projectId, "SUCCEEDED");
 
         assertEquals(sessionId, jdbc.queryForObject(
-                "SELECT session_id FROM coordinator_task WHERE project_id = ?",
+                "SELECT session_id FROM digital_team_coordinator_task WHERE project_id = ?",
                 String.class, projectId));
         assertEquals("COMPLETED", jdbc.queryForObject(
-                "SELECT status FROM coordinator_dispatch WHERE project_id = ?",
+                "SELECT status FROM digital_team_coordinator_dispatch WHERE project_id = ?",
                 String.class, projectId));
     }
 
@@ -92,12 +92,12 @@ class HumanRequestIntegrationTest {
     void onlyOwnerCanApproveAndFinalDecisionCannotChange() throws Exception {
         String projectId = createProject();
         jdbc.update(
-                "INSERT INTO project_member (tenant_id, project_id, user_id, role) "
+                "INSERT INTO digital_team_project_member (tenant_id, project_id, user_id, role) "
                         + "VALUES ('tenant-human', ?, 'ordinary-member', 'MEMBER')",
                 projectId);
         String requestId = "human-" + UUID.randomUUID();
         jdbc.update(
-                "INSERT INTO human_request "
+                "INSERT INTO digital_team_human_request "
                         + "(business_id, tenant_id, project_id, request_type, question, allowed_roles, "
                         + "input_schema, status) VALUES (?, 'tenant-human', ?, 'APPROVAL', "
                         + "'Approve release?', 'OWNER', '{\"type\":\"object\"}', 'PENDING')",
@@ -116,7 +116,7 @@ class HumanRequestIntegrationTest {
                 "{\"decision\":\"REJECT\",\"response\":{},"
                         + "\"idempotencyKey\":\"approval-2\"}", 409);
         assertEquals("APPROVE", jdbc.queryForObject(
-                "SELECT decision FROM human_request WHERE business_id = ?",
+                "SELECT decision FROM digital_team_human_request WHERE business_id = ?",
                 String.class, requestId));
     }
 
@@ -126,17 +126,17 @@ class HumanRequestIntegrationTest {
         submit(projectId, "分析 need-human");
         runUntilTaskStatus(projectId, "WAITING_HUMAN");
         jdbc.update(
-                "UPDATE human_request SET expires_at = DATEADD('SECOND', -1, "
+                "UPDATE digital_team_human_request SET expires_at = DATEADD('SECOND', -1, "
                         + "CURRENT_TIMESTAMP) WHERE project_id = ? AND task_id IS NOT NULL",
                 projectId);
 
         humanRequestService.expireDueRequests();
 
         assertEquals("EXPIRED", jdbc.queryForObject(
-                "SELECT status FROM human_request WHERE project_id = ?",
+                "SELECT status FROM digital_team_human_request WHERE project_id = ?",
                 String.class, projectId));
         assertEquals("TIMED_OUT", jdbc.queryForObject(
-                "SELECT status FROM coordinator_task WHERE project_id = ?",
+                "SELECT status FROM digital_team_coordinator_task WHERE project_id = ?",
                 String.class, projectId));
     }
 
@@ -153,7 +153,7 @@ class HumanRequestIntegrationTest {
     private void runUntilWaiting(String projectId) {
         for (int attempt = 0; attempt < 50; attempt++) {
             Integer count = jdbc.queryForObject(
-                    "SELECT COUNT(*) FROM human_request WHERE project_id = ?",
+                    "SELECT COUNT(*) FROM digital_team_human_request WHERE project_id = ?",
                     Integer.class, projectId);
             if (count != null && count > 0) {
                 return;
@@ -166,7 +166,7 @@ class HumanRequestIntegrationTest {
     private void runUntilTaskStatus(String projectId, String expected) {
         for (int attempt = 0; attempt < 50; attempt++) {
             java.util.List<String> statuses = jdbc.queryForList(
-                    "SELECT status FROM coordinator_task WHERE project_id = ?",
+                    "SELECT status FROM digital_team_coordinator_task WHERE project_id = ?",
                     String.class, projectId);
             if (!statuses.isEmpty() && expected.equals(statuses.get(0))) {
                 return;
@@ -178,7 +178,7 @@ class HumanRequestIntegrationTest {
 
     private String requestStatus(String requestId) {
         return jdbc.queryForObject(
-                "SELECT status FROM human_request WHERE business_id = ?",
+                "SELECT status FROM digital_team_human_request WHERE business_id = ?",
                 String.class, requestId);
     }
 

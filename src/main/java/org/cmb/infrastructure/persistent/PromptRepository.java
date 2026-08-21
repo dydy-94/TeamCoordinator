@@ -2,7 +2,8 @@ package org.cmb.infrastructure.persistent;
 
 import java.util.List;
 import java.util.UUID;
-import org.cmb.infrastructure.persistent.mapper.PromptMapper;
+import org.cmb.infrastructure.persistent.mapper.PromptExecutionMapper;
+import org.cmb.infrastructure.persistent.mapper.PromptTemplateMapper;
 import org.cmb.application.dto.CreatePromptTemplateRequest;
 import org.cmb.application.dto.PromptTemplateView;
 import org.springframework.dao.DuplicateKeyException;
@@ -10,15 +11,18 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Prompt-template persistence facade. All SQL lives in {@link PromptMapper}.
+ * Prompt-template persistence facade. All SQL lives in
+ * {@link PromptTemplateMapper} and {@link PromptExecutionMapper}.
  */
 @Repository
 public class PromptRepository {
 
-    private final PromptMapper mapper;
+    private final PromptTemplateMapper mapper;
+    private final PromptExecutionMapper executionMapper;
 
-    public PromptRepository(PromptMapper mapper) {
+    public PromptRepository(PromptTemplateMapper mapper, PromptExecutionMapper executionMapper) {
         this.mapper = mapper;
+        this.executionMapper = executionMapper;
     }
 
     public PromptTemplateView findPublished(String promptKey) {
@@ -65,7 +69,7 @@ public class PromptRepository {
             String invocationId, String agentId, PromptTemplateView template,
             String renderedPrompt, String variablesSnapshot) {
         try {
-            mapper.insertAudit("prompt-exec-" + UUID.randomUUID(), tenantId, projectId,
+            executionMapper.insertAudit("prompt-exec-" + UUID.randomUUID(), tenantId, projectId,
                     conversationId, invocationId, agentId, template.getScene(),
                     template.getId(), template.getVersion(), renderedPrompt,
                     variablesSnapshot);

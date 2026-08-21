@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.cmb.infrastructure.persistent.mapper.ProjectMessageMapper">
+
+    <resultMap id="messageAcceptedResponse" type="org.cmb.application.dto.MessageAcceptedResponse">
+        <result column="id" property="messageId"/>
+        <result column="conversation_id" property="taskId"/>
+        <result column="session_id" property="sessionId"/>
+        <result column="status" property="status"/>
+    </resultMap>
+
+    <select id="findDuplicate" resultMap="messageAcceptedResponse">
+        SELECT m.business_id AS id, m.conversation_id, c.session_id, m.status
+        FROM digital_team_project_message m JOIN digital_team_project_conversation c
+        ON c.business_id = m.conversation_id
+        WHERE m.tenant_id = #{tenantId} AND m.project_id = #{projectId}
+        AND m.conversation_id = #{conversationId}
+        AND m.client_message_id = #{clientMessageId} LIMIT 1
+    </select>
+
+    <insert id="insertMessage">
+        INSERT INTO digital_team_project_message
+        (business_id, tenant_id, project_id, conversation_id, user_id, client_message_id,
+        message_text, attachment_refs, status)
+        VALUES (#{id}, #{tenantId}, #{projectId}, #{conversationId}, #{userId},
+        #{clientMessageId}, #{text}, #{attachmentRefs}, 'ACCEPTED')
+    </insert>
+
+    <select id="findRecentMessageTexts" resultType="string">
+        SELECT message_text FROM digital_team_project_message
+        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
+        AND conversation_id = #{conversationId}
+        ORDER BY created_at DESC LIMIT #{limit}
+    </select>
+
+    <update id="appendMessageText">
+        UPDATE digital_team_project_message SET message_text = CONCAT(message_text,
+        '\nHuman clarification: ', #{answer})
+        WHERE business_id = #{messageId} AND tenant_id = #{tenantId}
+    </update>
+
+    <select id="findMessages">
+        SELECT business_id AS id, user_id, message_text, attachment_refs, status, created_at
+        FROM digital_team_project_message WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
+        AND conversation_id = #{taskId} ORDER BY created_at
+    </select>
+
+</mapper>

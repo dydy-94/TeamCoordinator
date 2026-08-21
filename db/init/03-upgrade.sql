@@ -36,8 +36,58 @@ END$$
 
 DELIMITER ;
 
+-- ── 表名前缀迁移（digital_team_）：旧表存在且新表不存在时才 RENAME ──────────
+-- 双向守卫保证幂等：新装库（01-schema 直接建新表名）与旧库重复执行均无副作用。
+-- InnoDB RENAME TABLE 自动更新外键定义；索引/约束名保持不变。
+
+DELIMITER $$
+
+DROP PROCEDURE IF EXISTS tc_rename_table_if_exists$$
+CREATE PROCEDURE tc_rename_table_if_exists(
+    IN old_name VARCHAR(64), IN new_name VARCHAR(64))
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables
+               WHERE table_schema = DATABASE() AND table_name = old_name)
+       AND NOT EXISTS (SELECT 1 FROM information_schema.tables
+                       WHERE table_schema = DATABASE() AND table_name = new_name) THEN
+        SET @s = CONCAT('RENAME TABLE `', old_name, '` TO `', new_name, '`');
+        PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+    END IF;
+END$$
+
+DELIMITER ;
+
+CALL tc_rename_table_if_exists('schema_version_marker', 'digital_team_schema_version_marker');
+CALL tc_rename_table_if_exists('permission_audit_log', 'digital_team_permission_audit_log');
+CALL tc_rename_table_if_exists('project', 'digital_team_project');
+CALL tc_rename_table_if_exists('project_member', 'digital_team_project_member');
+CALL tc_rename_table_if_exists('project_expert', 'digital_team_project_expert');
+CALL tc_rename_table_if_exists('project_conversation', 'digital_team_project_conversation');
+CALL tc_rename_table_if_exists('project_message', 'digital_team_project_message');
+CALL tc_rename_table_if_exists('project_event_sequence', 'digital_team_project_event_sequence');
+CALL tc_rename_table_if_exists('project_event', 'digital_team_project_event');
+CALL tc_rename_table_if_exists('conversation_event_sequence', 'digital_team_conversation_event_sequence');
+CALL tc_rename_table_if_exists('coordinator_dispatch', 'digital_team_coordinator_dispatch');
+CALL tc_rename_table_if_exists('coordinator_analysis', 'digital_team_coordinator_analysis');
+CALL tc_rename_table_if_exists('coordinator_human_request', 'digital_team_coordinator_human_request');
+CALL tc_rename_table_if_exists('coordinator_plan', 'digital_team_coordinator_plan');
+CALL tc_rename_table_if_exists('coordinator_task', 'digital_team_coordinator_task');
+CALL tc_rename_table_if_exists('coordinator_task_event', 'digital_team_coordinator_task_event');
+CALL tc_rename_table_if_exists('human_request', 'digital_team_human_request');
+CALL tc_rename_table_if_exists('project_artifact', 'digital_team_project_artifact');
+CALL tc_rename_table_if_exists('project_artifact_lineage', 'digital_team_project_artifact_lineage');
+CALL tc_rename_table_if_exists('coordinator_agent_run', 'digital_team_coordinator_agent_run');
+CALL tc_rename_table_if_exists('prompt_template', 'digital_team_prompt_template');
+CALL tc_rename_table_if_exists('prompt_execution', 'digital_team_prompt_execution');
+CALL tc_rename_table_if_exists('project_conversation_expert_session', 'digital_team_project_conversation_expert_session');
+CALL tc_rename_table_if_exists('skill', 'digital_team_skill');
+CALL tc_rename_table_if_exists('project_skill', 'digital_team_project_skill');
+CALL tc_rename_table_if_exists('coordinator_cli_submission', 'digital_team_coordinator_cli_submission');
+
+DROP PROCEDURE IF EXISTS tc_rename_table_if_exists;
+
 -- ── 表 schema_version_marker ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS schema_version_marker (
+CREATE TABLE IF NOT EXISTS digital_team_schema_version_marker (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(96) NOT NULL,
     marker VARCHAR(64) NOT NULL,
@@ -45,13 +95,13 @@ CREATE TABLE IF NOT EXISTS schema_version_marker (
     CONSTRAINT uk_schema_version_marker_business_id UNIQUE (business_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CALL tc_add_column_if_missing('schema_version_marker', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
-CALL tc_add_column_if_missing('schema_version_marker', 'business_id', 'business_id VARCHAR(96) NOT NULL');
-CALL tc_add_column_if_missing('schema_version_marker', 'marker', 'marker VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('schema_version_marker', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_schema_version_marker', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
+CALL tc_add_column_if_missing('digital_team_schema_version_marker', 'business_id', 'business_id VARCHAR(96) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_schema_version_marker', 'marker', 'marker VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_schema_version_marker', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
 
 -- ── 表 permission_audit_log ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS permission_audit_log (
+CREATE TABLE IF NOT EXISTS digital_team_permission_audit_log (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(96) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -65,18 +115,18 @@ CREATE TABLE IF NOT EXISTS permission_audit_log (
     INDEX idx_permission_audit_project (tenant_id, project_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CALL tc_add_column_if_missing('permission_audit_log', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
-CALL tc_add_column_if_missing('permission_audit_log', 'business_id', 'business_id VARCHAR(96) NOT NULL');
-CALL tc_add_column_if_missing('permission_audit_log', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('permission_audit_log', 'project_id', 'project_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('permission_audit_log', 'actor_user_id', 'actor_user_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('permission_audit_log', 'action', 'action VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('permission_audit_log', 'target_id', 'target_id VARCHAR(128)');
-CALL tc_add_column_if_missing('permission_audit_log', 'detail', 'detail VARCHAR(512)');
-CALL tc_add_column_if_missing('permission_audit_log', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_permission_audit_log', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
+CALL tc_add_column_if_missing('digital_team_permission_audit_log', 'business_id', 'business_id VARCHAR(96) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_permission_audit_log', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_permission_audit_log', 'project_id', 'project_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_permission_audit_log', 'actor_user_id', 'actor_user_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_permission_audit_log', 'action', 'action VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_permission_audit_log', 'target_id', 'target_id VARCHAR(128)');
+CALL tc_add_column_if_missing('digital_team_permission_audit_log', 'detail', 'detail VARCHAR(512)');
+CALL tc_add_column_if_missing('digital_team_permission_audit_log', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
 
 -- ── 表 project ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS project (
+CREATE TABLE IF NOT EXISTS digital_team_project (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -92,19 +142,19 @@ CREATE TABLE IF NOT EXISTS project (
     INDEX idx_project_tenant (tenant_id, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CALL tc_add_column_if_missing('project', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
-CALL tc_add_column_if_missing('project', 'business_id', 'business_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project', 'name', 'name VARCHAR(128) NOT NULL');
-CALL tc_add_column_if_missing('project', 'description', 'description VARCHAR(1024)');
-CALL tc_add_column_if_missing('project', 'coordinator_agent_id', 'coordinator_agent_id VARCHAR(128)');
-CALL tc_add_column_if_missing('project', 'status', 'status VARCHAR(16) NOT NULL DEFAULT ''ACTIVE''');
-CALL tc_add_column_if_missing('project', 'created_by', 'created_by VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
-CALL tc_add_column_if_missing('project', 'updated_at', 'updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_project', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
+CALL tc_add_column_if_missing('digital_team_project', 'business_id', 'business_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project', 'name', 'name VARCHAR(128) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project', 'description', 'description VARCHAR(1024)');
+CALL tc_add_column_if_missing('digital_team_project', 'coordinator_agent_id', 'coordinator_agent_id VARCHAR(128)');
+CALL tc_add_column_if_missing('digital_team_project', 'status', 'status VARCHAR(16) NOT NULL DEFAULT ''ACTIVE''');
+CALL tc_add_column_if_missing('digital_team_project', 'created_by', 'created_by VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_project', 'updated_at', 'updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
 
 -- ── 表 project_member ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS project_member (
+CREATE TABLE IF NOT EXISTS digital_team_project_member (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     project_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -114,20 +164,20 @@ CREATE TABLE IF NOT EXISTS project_member (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_project_member_business UNIQUE (project_id, user_id),
     CONSTRAINT fk_project_member_project FOREIGN KEY (project_id)
-        REFERENCES project (business_id),
+        REFERENCES digital_team_project (business_id),
     INDEX idx_project_member_tenant_user (tenant_id, user_id, project_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CALL tc_add_column_if_missing('project_member', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
-CALL tc_add_column_if_missing('project_member', 'project_id', 'project_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_member', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_member', 'user_id', 'user_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_member', 'role', 'role VARCHAR(16) NOT NULL');
-CALL tc_add_column_if_missing('project_member', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
-CALL tc_add_column_if_missing('project_member', 'updated_at', 'updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_project_member', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
+CALL tc_add_column_if_missing('digital_team_project_member', 'project_id', 'project_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_member', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_member', 'user_id', 'user_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_member', 'role', 'role VARCHAR(16) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_member', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_project_member', 'updated_at', 'updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
 
 -- ── 表 project_expert ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS project_expert (
+CREATE TABLE IF NOT EXISTS digital_team_project_expert (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     project_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -137,20 +187,20 @@ CREATE TABLE IF NOT EXISTS project_expert (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_project_expert_business UNIQUE (project_id, expert_id),
     CONSTRAINT fk_project_expert_project FOREIGN KEY (project_id)
-        REFERENCES project (business_id),
+        REFERENCES digital_team_project (business_id),
     INDEX idx_project_expert_tenant (tenant_id, project_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CALL tc_add_column_if_missing('project_expert', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
-CALL tc_add_column_if_missing('project_expert', 'project_id', 'project_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_expert', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_expert', 'expert_id', 'expert_id VARCHAR(128) NOT NULL');
-CALL tc_add_column_if_missing('project_expert', 'enabled', 'enabled BOOLEAN NOT NULL DEFAULT TRUE');
-CALL tc_add_column_if_missing('project_expert', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
-CALL tc_add_column_if_missing('project_expert', 'updated_at', 'updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_project_expert', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
+CALL tc_add_column_if_missing('digital_team_project_expert', 'project_id', 'project_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_expert', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_expert', 'expert_id', 'expert_id VARCHAR(128) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_expert', 'enabled', 'enabled BOOLEAN NOT NULL DEFAULT TRUE');
+CALL tc_add_column_if_missing('digital_team_project_expert', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_project_expert', 'updated_at', 'updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
 
 -- ── 表 project_conversation ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS project_conversation (
+CREATE TABLE IF NOT EXISTS digital_team_project_conversation (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -164,22 +214,22 @@ CREATE TABLE IF NOT EXISTS project_conversation (
     CONSTRAINT uk_conversation_session UNIQUE (tenant_id, session_id),
     CONSTRAINT uk_project_conversation_business_id UNIQUE (business_id),
     CONSTRAINT fk_conversation_project FOREIGN KEY (project_id)
-        REFERENCES project (business_id)
+        REFERENCES digital_team_project (business_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CALL tc_add_column_if_missing('project_conversation', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
-CALL tc_add_column_if_missing('project_conversation', 'business_id', 'business_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_conversation', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_conversation', 'project_id', 'project_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_conversation', 'session_id', 'session_id VARCHAR(128) NOT NULL');
-CALL tc_add_column_if_missing('project_conversation', 'coordinator_session_id', 'coordinator_session_id VARCHAR(128)');
-CALL tc_add_column_if_missing('project_conversation', 'coordinator_agent_id', 'coordinator_agent_id VARCHAR(128)');
-CALL tc_add_column_if_missing('project_conversation', 'title', 'title VARCHAR(128)');
-CALL tc_add_column_if_missing('project_conversation', 'status', 'status VARCHAR(32) NOT NULL DEFAULT ''ACTIVE''');
-CALL tc_add_column_if_missing('project_conversation', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_project_conversation', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
+CALL tc_add_column_if_missing('digital_team_project_conversation', 'business_id', 'business_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_conversation', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_conversation', 'project_id', 'project_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_conversation', 'session_id', 'session_id VARCHAR(128) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_conversation', 'coordinator_session_id', 'coordinator_session_id VARCHAR(128)');
+CALL tc_add_column_if_missing('digital_team_project_conversation', 'coordinator_agent_id', 'coordinator_agent_id VARCHAR(128)');
+CALL tc_add_column_if_missing('digital_team_project_conversation', 'title', 'title VARCHAR(128)');
+CALL tc_add_column_if_missing('digital_team_project_conversation', 'status', 'status VARCHAR(32) NOT NULL DEFAULT ''ACTIVE''');
+CALL tc_add_column_if_missing('digital_team_project_conversation', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
 
 -- ── 表 project_message ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS project_message (
+CREATE TABLE IF NOT EXISTS digital_team_project_message (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -194,42 +244,42 @@ CREATE TABLE IF NOT EXISTS project_message (
     CONSTRAINT uk_message_client UNIQUE (tenant_id, project_id, client_message_id),
     CONSTRAINT uk_project_message_business_id UNIQUE (business_id),
     CONSTRAINT fk_message_project FOREIGN KEY (project_id)
-        REFERENCES project (business_id),
+        REFERENCES digital_team_project (business_id),
     CONSTRAINT fk_message_conversation FOREIGN KEY (conversation_id)
-        REFERENCES project_conversation (business_id),
+        REFERENCES digital_team_project_conversation (business_id),
     INDEX idx_message_project_created (tenant_id, project_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CALL tc_add_column_if_missing('project_message', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
-CALL tc_add_column_if_missing('project_message', 'business_id', 'business_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_message', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_message', 'project_id', 'project_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_message', 'conversation_id', 'conversation_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_message', 'user_id', 'user_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_message', 'client_message_id', 'client_message_id VARCHAR(128) NOT NULL');
-CALL tc_add_column_if_missing('project_message', 'message_text', 'message_text TEXT NOT NULL');
-CALL tc_add_column_if_missing('project_message', 'attachment_refs', 'attachment_refs TEXT');
-CALL tc_add_column_if_missing('project_message', 'status', 'status VARCHAR(32) NOT NULL');
-CALL tc_add_column_if_missing('project_message', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_project_message', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
+CALL tc_add_column_if_missing('digital_team_project_message', 'business_id', 'business_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_message', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_message', 'project_id', 'project_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_message', 'conversation_id', 'conversation_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_message', 'user_id', 'user_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_message', 'client_message_id', 'client_message_id VARCHAR(128) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_message', 'message_text', 'message_text TEXT NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_message', 'attachment_refs', 'attachment_refs TEXT');
+CALL tc_add_column_if_missing('digital_team_project_message', 'status', 'status VARCHAR(32) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_message', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
 
 -- ── 表 project_event_sequence ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS project_event_sequence (
+CREATE TABLE IF NOT EXISTS digital_team_project_event_sequence (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL,
     project_id VARCHAR(64) NOT NULL,
     next_sequence BIGINT NOT NULL,
     CONSTRAINT uk_project_event_sequence_business UNIQUE (tenant_id, project_id),
     CONSTRAINT fk_event_sequence_project FOREIGN KEY (project_id)
-        REFERENCES project (business_id)
+        REFERENCES digital_team_project (business_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CALL tc_add_column_if_missing('project_event_sequence', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
-CALL tc_add_column_if_missing('project_event_sequence', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_event_sequence', 'project_id', 'project_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_event_sequence', 'next_sequence', 'next_sequence BIGINT NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_event_sequence', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
+CALL tc_add_column_if_missing('digital_team_project_event_sequence', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_event_sequence', 'project_id', 'project_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_event_sequence', 'next_sequence', 'next_sequence BIGINT NOT NULL');
 
 -- ── 表 project_event ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS project_event (
+CREATE TABLE IF NOT EXISTS digital_team_project_event (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -244,42 +294,42 @@ CREATE TABLE IF NOT EXISTS project_event (
     CONSTRAINT uk_task_event_sequence UNIQUE (tenant_id, conversation_id, sequence),
     CONSTRAINT uk_project_event_business_id UNIQUE (business_id),
     CONSTRAINT fk_event_project FOREIGN KEY (project_id)
-        REFERENCES project (business_id),
+        REFERENCES digital_team_project (business_id),
     CONSTRAINT fk_event_conversation FOREIGN KEY (conversation_id)
-        REFERENCES project_conversation (business_id),
+        REFERENCES digital_team_project_conversation (business_id),
     INDEX idx_event_replay (tenant_id, project_id, visibility, sequence)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CALL tc_add_column_if_missing('project_event', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
-CALL tc_add_column_if_missing('project_event', 'business_id', 'business_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_event', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_event', 'project_id', 'project_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_event', 'conversation_id', 'conversation_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_event', 'message_id', 'message_id VARCHAR(64)');
-CALL tc_add_column_if_missing('project_event', 'sequence', 'sequence BIGINT NOT NULL');
-CALL tc_add_column_if_missing('project_event', 'event_type', 'event_type VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_event', 'visibility', 'visibility VARCHAR(16) NOT NULL');
-CALL tc_add_column_if_missing('project_event', 'payload', 'payload TEXT');
-CALL tc_add_column_if_missing('project_event', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_project_event', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
+CALL tc_add_column_if_missing('digital_team_project_event', 'business_id', 'business_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_event', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_event', 'project_id', 'project_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_event', 'conversation_id', 'conversation_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_event', 'message_id', 'message_id VARCHAR(64)');
+CALL tc_add_column_if_missing('digital_team_project_event', 'sequence', 'sequence BIGINT NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_event', 'event_type', 'event_type VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_event', 'visibility', 'visibility VARCHAR(16) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_event', 'payload', 'payload TEXT');
+CALL tc_add_column_if_missing('digital_team_project_event', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
 
 -- ── 表 conversation_event_sequence ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS conversation_event_sequence (
+CREATE TABLE IF NOT EXISTS digital_team_conversation_event_sequence (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL,
     conversation_id VARCHAR(64) NOT NULL,
     next_sequence BIGINT NOT NULL,
     CONSTRAINT uk_conversation_event_sequence_business UNIQUE (tenant_id, conversation_id),
     CONSTRAINT fk_conversation_event_sequence FOREIGN KEY (conversation_id)
-        REFERENCES project_conversation (business_id)
+        REFERENCES digital_team_project_conversation (business_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CALL tc_add_column_if_missing('conversation_event_sequence', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
-CALL tc_add_column_if_missing('conversation_event_sequence', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('conversation_event_sequence', 'conversation_id', 'conversation_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('conversation_event_sequence', 'next_sequence', 'next_sequence BIGINT NOT NULL');
+CALL tc_add_column_if_missing('digital_team_conversation_event_sequence', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
+CALL tc_add_column_if_missing('digital_team_conversation_event_sequence', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_conversation_event_sequence', 'conversation_id', 'conversation_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_conversation_event_sequence', 'next_sequence', 'next_sequence BIGINT NOT NULL');
 
 -- ── 表 coordinator_dispatch ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS coordinator_dispatch (
+CREATE TABLE IF NOT EXISTS digital_team_coordinator_dispatch (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -297,28 +347,28 @@ CREATE TABLE IF NOT EXISTS coordinator_dispatch (
     CONSTRAINT uk_dispatch_message UNIQUE (tenant_id, project_id, message_id),
     CONSTRAINT uk_coordinator_dispatch_business_id UNIQUE (business_id),
     CONSTRAINT fk_dispatch_message FOREIGN KEY (message_id)
-        REFERENCES project_message (business_id),
+        REFERENCES digital_team_project_message (business_id),
     INDEX idx_dispatch_pending (status, available_at),
     INDEX idx_dispatch_lease (status, available_at, lease_expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CALL tc_add_column_if_missing('coordinator_dispatch', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
-CALL tc_add_column_if_missing('coordinator_dispatch', 'business_id', 'business_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_dispatch', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_dispatch', 'project_id', 'project_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_dispatch', 'conversation_id', 'conversation_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_dispatch', 'message_id', 'message_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_dispatch', 'status', 'status VARCHAR(16) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_dispatch', 'attempt_count', 'attempt_count INT NOT NULL DEFAULT 0');
-CALL tc_add_column_if_missing('coordinator_dispatch', 'available_at', 'available_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
-CALL tc_add_column_if_missing('coordinator_dispatch', 'lease_owner', 'lease_owner VARCHAR(128)');
-CALL tc_add_column_if_missing('coordinator_dispatch', 'lease_expires_at', 'lease_expires_at TIMESTAMP NULL');
-CALL tc_add_column_if_missing('coordinator_dispatch', 'last_error', 'last_error VARCHAR(1024)');
-CALL tc_add_column_if_missing('coordinator_dispatch', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
-CALL tc_add_column_if_missing('coordinator_dispatch', 'updated_at', 'updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_coordinator_dispatch', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
+CALL tc_add_column_if_missing('digital_team_coordinator_dispatch', 'business_id', 'business_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_dispatch', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_dispatch', 'project_id', 'project_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_dispatch', 'conversation_id', 'conversation_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_dispatch', 'message_id', 'message_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_dispatch', 'status', 'status VARCHAR(16) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_dispatch', 'attempt_count', 'attempt_count INT NOT NULL DEFAULT 0');
+CALL tc_add_column_if_missing('digital_team_coordinator_dispatch', 'available_at', 'available_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_coordinator_dispatch', 'lease_owner', 'lease_owner VARCHAR(128)');
+CALL tc_add_column_if_missing('digital_team_coordinator_dispatch', 'lease_expires_at', 'lease_expires_at TIMESTAMP NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_dispatch', 'last_error', 'last_error VARCHAR(1024)');
+CALL tc_add_column_if_missing('digital_team_coordinator_dispatch', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_coordinator_dispatch', 'updated_at', 'updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
 
 -- ── 表 coordinator_analysis ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS coordinator_analysis (
+CREATE TABLE IF NOT EXISTS digital_team_coordinator_analysis (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -334,26 +384,26 @@ CREATE TABLE IF NOT EXISTS coordinator_analysis (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_coordinator_analysis_business_id UNIQUE (business_id),
     CONSTRAINT fk_analysis_project FOREIGN KEY (project_id)
-        REFERENCES project (business_id),
+        REFERENCES digital_team_project (business_id),
     INDEX idx_analysis_project_created (tenant_id, project_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CALL tc_add_column_if_missing('coordinator_analysis', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
-CALL tc_add_column_if_missing('coordinator_analysis', 'business_id', 'business_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_analysis', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_analysis', 'project_id', 'project_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_analysis', 'user_id', 'user_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_analysis', 'input_snapshot', 'input_snapshot TEXT NOT NULL');
-CALL tc_add_column_if_missing('coordinator_analysis', 'model_name', 'model_name VARCHAR(128) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_analysis', 'prompt_version', 'prompt_version VARCHAR(32) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_analysis', 'schema_version', 'schema_version VARCHAR(32) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_analysis', 'decision_type', 'decision_type VARCHAR(32) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_analysis', 'decision_json', 'decision_json TEXT NOT NULL');
-CALL tc_add_column_if_missing('coordinator_analysis', 'repaired', 'repaired BOOLEAN NOT NULL DEFAULT FALSE');
-CALL tc_add_column_if_missing('coordinator_analysis', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_coordinator_analysis', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
+CALL tc_add_column_if_missing('digital_team_coordinator_analysis', 'business_id', 'business_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_analysis', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_analysis', 'project_id', 'project_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_analysis', 'user_id', 'user_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_analysis', 'input_snapshot', 'input_snapshot TEXT NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_analysis', 'model_name', 'model_name VARCHAR(128) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_analysis', 'prompt_version', 'prompt_version VARCHAR(32) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_analysis', 'schema_version', 'schema_version VARCHAR(32) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_analysis', 'decision_type', 'decision_type VARCHAR(32) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_analysis', 'decision_json', 'decision_json TEXT NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_analysis', 'repaired', 'repaired BOOLEAN NOT NULL DEFAULT FALSE');
+CALL tc_add_column_if_missing('digital_team_coordinator_analysis', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
 
 -- ── 表 coordinator_human_request ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS coordinator_human_request (
+CREATE TABLE IF NOT EXISTS digital_team_coordinator_human_request (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     analysis_id VARCHAR(64),
@@ -365,24 +415,24 @@ CREATE TABLE IF NOT EXISTS coordinator_human_request (
     resolved_at TIMESTAMP NULL,
     CONSTRAINT uk_coordinator_human_request_business_id UNIQUE (business_id),
     CONSTRAINT fk_human_request_analysis FOREIGN KEY (analysis_id)
-        REFERENCES coordinator_analysis (business_id),
+        REFERENCES digital_team_coordinator_analysis (business_id),
     CONSTRAINT fk_human_request_project FOREIGN KEY (project_id)
-        REFERENCES project (business_id),
+        REFERENCES digital_team_project (business_id),
     INDEX idx_human_request_pending (tenant_id, project_id, status, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CALL tc_add_column_if_missing('coordinator_human_request', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
-CALL tc_add_column_if_missing('coordinator_human_request', 'business_id', 'business_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_human_request', 'analysis_id', 'analysis_id VARCHAR(64)');
-CALL tc_add_column_if_missing('coordinator_human_request', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_human_request', 'project_id', 'project_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_human_request', 'question', 'question TEXT NOT NULL');
-CALL tc_add_column_if_missing('coordinator_human_request', 'status', 'status VARCHAR(16) NOT NULL DEFAULT ''PENDING''');
-CALL tc_add_column_if_missing('coordinator_human_request', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
-CALL tc_add_column_if_missing('coordinator_human_request', 'resolved_at', 'resolved_at TIMESTAMP NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_human_request', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
+CALL tc_add_column_if_missing('digital_team_coordinator_human_request', 'business_id', 'business_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_human_request', 'analysis_id', 'analysis_id VARCHAR(64)');
+CALL tc_add_column_if_missing('digital_team_coordinator_human_request', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_human_request', 'project_id', 'project_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_human_request', 'question', 'question TEXT NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_human_request', 'status', 'status VARCHAR(16) NOT NULL DEFAULT ''PENDING''');
+CALL tc_add_column_if_missing('digital_team_coordinator_human_request', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_coordinator_human_request', 'resolved_at', 'resolved_at TIMESTAMP NULL');
 
 -- ── 表 coordinator_plan ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS coordinator_plan (
+CREATE TABLE IF NOT EXISTS digital_team_coordinator_plan (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -402,29 +452,29 @@ CREATE TABLE IF NOT EXISTS coordinator_plan (
         UNIQUE (tenant_id, project_id, message_id, plan_version),
     CONSTRAINT uk_coordinator_plan_business_id UNIQUE (business_id),
     CONSTRAINT fk_plan_project FOREIGN KEY (project_id)
-        REFERENCES project (business_id),
+        REFERENCES digital_team_project (business_id),
     CONSTRAINT fk_plan_message FOREIGN KEY (message_id)
-        REFERENCES project_message (business_id)
+        REFERENCES digital_team_project_message (business_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CALL tc_add_column_if_missing('coordinator_plan', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
-CALL tc_add_column_if_missing('coordinator_plan', 'business_id', 'business_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_plan', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_plan', 'project_id', 'project_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_plan', 'conversation_id', 'conversation_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_plan', 'message_id', 'message_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_plan', 'analysis_id', 'analysis_id VARCHAR(64)');
-CALL tc_add_column_if_missing('coordinator_plan', 'status', 'status VARCHAR(32) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_plan', 'plan_version', 'plan_version INT NOT NULL DEFAULT 1');
-CALL tc_add_column_if_missing('coordinator_plan', 'intent_json', 'intent_json TEXT');
-CALL tc_add_column_if_missing('coordinator_plan', 'plan_json', 'plan_json TEXT');
-CALL tc_add_column_if_missing('coordinator_plan', 'repair_count', 'repair_count INT NOT NULL DEFAULT 0');
-CALL tc_add_column_if_missing('coordinator_plan', 'supersedes_plan_id', 'supersedes_plan_id VARCHAR(64)');
-CALL tc_add_column_if_missing('coordinator_plan', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
-CALL tc_add_column_if_missing('coordinator_plan', 'updated_at', 'updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_coordinator_plan', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
+CALL tc_add_column_if_missing('digital_team_coordinator_plan', 'business_id', 'business_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_plan', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_plan', 'project_id', 'project_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_plan', 'conversation_id', 'conversation_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_plan', 'message_id', 'message_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_plan', 'analysis_id', 'analysis_id VARCHAR(64)');
+CALL tc_add_column_if_missing('digital_team_coordinator_plan', 'status', 'status VARCHAR(32) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_plan', 'plan_version', 'plan_version INT NOT NULL DEFAULT 1');
+CALL tc_add_column_if_missing('digital_team_coordinator_plan', 'intent_json', 'intent_json TEXT');
+CALL tc_add_column_if_missing('digital_team_coordinator_plan', 'plan_json', 'plan_json TEXT');
+CALL tc_add_column_if_missing('digital_team_coordinator_plan', 'repair_count', 'repair_count INT NOT NULL DEFAULT 0');
+CALL tc_add_column_if_missing('digital_team_coordinator_plan', 'supersedes_plan_id', 'supersedes_plan_id VARCHAR(64)');
+CALL tc_add_column_if_missing('digital_team_coordinator_plan', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_coordinator_plan', 'updated_at', 'updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
 
 -- ── 表 coordinator_task ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS coordinator_task (
+CREATE TABLE IF NOT EXISTS digital_team_coordinator_task (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -456,42 +506,42 @@ CREATE TABLE IF NOT EXISTS coordinator_task (
     CONSTRAINT uk_task_request UNIQUE (tenant_id, request_id),
     CONSTRAINT uk_coordinator_task_business_id UNIQUE (business_id),
     CONSTRAINT fk_task_plan FOREIGN KEY (plan_id)
-        REFERENCES coordinator_plan (business_id),
+        REFERENCES digital_team_coordinator_plan (business_id),
     INDEX idx_task_session (session_id),
     INDEX idx_task_lease (status, lease_expires_at),
     INDEX idx_task_plan_status (plan_id, status, task_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CALL tc_add_column_if_missing('coordinator_task', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
-CALL tc_add_column_if_missing('coordinator_task', 'business_id', 'business_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_task', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_task', 'project_id', 'project_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_task', 'plan_id', 'plan_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_task', 'task_key', 'task_key VARCHAR(128) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_task', 'request_id', 'request_id VARCHAR(128) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_task', 'expert_id', 'expert_id VARCHAR(128) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_task', 'session_id', 'session_id VARCHAR(128)');
-CALL tc_add_column_if_missing('coordinator_task', 'status', 'status VARCHAR(32) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_task', 'objective', 'objective TEXT NOT NULL');
-CALL tc_add_column_if_missing('coordinator_task', 'attachment_refs', 'attachment_refs TEXT');
-CALL tc_add_column_if_missing('coordinator_task', 'result_json', 'result_json TEXT');
-CALL tc_add_column_if_missing('coordinator_task', 'last_sequence', 'last_sequence BIGINT NOT NULL DEFAULT 0');
-CALL tc_add_column_if_missing('coordinator_task', 'lease_owner', 'lease_owner VARCHAR(128)');
-CALL tc_add_column_if_missing('coordinator_task', 'lease_expires_at', 'lease_expires_at TIMESTAMP NULL');
-CALL tc_add_column_if_missing('coordinator_task', 'dependencies', 'dependencies TEXT');
-CALL tc_add_column_if_missing('coordinator_task', 'required_capabilities', 'required_capabilities TEXT');
-CALL tc_add_column_if_missing('coordinator_task', 'expected_output', 'expected_output VARCHAR(512)');
-CALL tc_add_column_if_missing('coordinator_task', 'acceptance_criteria', 'acceptance_criteria VARCHAR(1024)');
-CALL tc_add_column_if_missing('coordinator_task', 'correction_of', 'correction_of VARCHAR(64)');
-CALL tc_add_column_if_missing('coordinator_task', 'correction_count', 'correction_count INT NOT NULL DEFAULT 0');
-CALL tc_add_column_if_missing('coordinator_task', 'result_accepted', 'result_accepted BOOLEAN');
-CALL tc_add_column_if_missing('coordinator_task', 'reused_from_task_id', 'reused_from_task_id VARCHAR(64)');
-CALL tc_add_column_if_missing('coordinator_task', 'consecutive_failures', 'consecutive_failures INT NOT NULL DEFAULT 0');
-CALL tc_add_column_if_missing('coordinator_task', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
-CALL tc_add_column_if_missing('coordinator_task', 'updated_at', 'updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_coordinator_task', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
+CALL tc_add_column_if_missing('digital_team_coordinator_task', 'business_id', 'business_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_task', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_task', 'project_id', 'project_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_task', 'plan_id', 'plan_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_task', 'task_key', 'task_key VARCHAR(128) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_task', 'request_id', 'request_id VARCHAR(128) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_task', 'expert_id', 'expert_id VARCHAR(128) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_task', 'session_id', 'session_id VARCHAR(128)');
+CALL tc_add_column_if_missing('digital_team_coordinator_task', 'status', 'status VARCHAR(32) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_task', 'objective', 'objective TEXT NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_task', 'attachment_refs', 'attachment_refs TEXT');
+CALL tc_add_column_if_missing('digital_team_coordinator_task', 'result_json', 'result_json TEXT');
+CALL tc_add_column_if_missing('digital_team_coordinator_task', 'last_sequence', 'last_sequence BIGINT NOT NULL DEFAULT 0');
+CALL tc_add_column_if_missing('digital_team_coordinator_task', 'lease_owner', 'lease_owner VARCHAR(128)');
+CALL tc_add_column_if_missing('digital_team_coordinator_task', 'lease_expires_at', 'lease_expires_at TIMESTAMP NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_task', 'dependencies', 'dependencies TEXT');
+CALL tc_add_column_if_missing('digital_team_coordinator_task', 'required_capabilities', 'required_capabilities TEXT');
+CALL tc_add_column_if_missing('digital_team_coordinator_task', 'expected_output', 'expected_output VARCHAR(512)');
+CALL tc_add_column_if_missing('digital_team_coordinator_task', 'acceptance_criteria', 'acceptance_criteria VARCHAR(1024)');
+CALL tc_add_column_if_missing('digital_team_coordinator_task', 'correction_of', 'correction_of VARCHAR(64)');
+CALL tc_add_column_if_missing('digital_team_coordinator_task', 'correction_count', 'correction_count INT NOT NULL DEFAULT 0');
+CALL tc_add_column_if_missing('digital_team_coordinator_task', 'result_accepted', 'result_accepted BOOLEAN');
+CALL tc_add_column_if_missing('digital_team_coordinator_task', 'reused_from_task_id', 'reused_from_task_id VARCHAR(64)');
+CALL tc_add_column_if_missing('digital_team_coordinator_task', 'consecutive_failures', 'consecutive_failures INT NOT NULL DEFAULT 0');
+CALL tc_add_column_if_missing('digital_team_coordinator_task', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_coordinator_task', 'updated_at', 'updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
 
 -- ── 表 coordinator_task_event ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS coordinator_task_event (
+CREATE TABLE IF NOT EXISTS digital_team_coordinator_task_event (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(96) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -504,22 +554,22 @@ CREATE TABLE IF NOT EXISTS coordinator_task_event (
     CONSTRAINT uk_task_event_id UNIQUE (tenant_id, event_id),
     CONSTRAINT uk_coordinator_task_event_business_id UNIQUE (business_id),
     CONSTRAINT fk_task_event_task FOREIGN KEY (task_id)
-        REFERENCES coordinator_task (business_id),
+        REFERENCES digital_team_coordinator_task (business_id),
     INDEX idx_task_event_task_id (task_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CALL tc_add_column_if_missing('coordinator_task_event', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
-CALL tc_add_column_if_missing('coordinator_task_event', 'business_id', 'business_id VARCHAR(96) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_task_event', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_task_event', 'task_id', 'task_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_task_event', 'event_id', 'event_id VARCHAR(128) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_task_event', 'sequence', 'sequence BIGINT NOT NULL');
-CALL tc_add_column_if_missing('coordinator_task_event', 'event_type', 'event_type VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_task_event', 'payload', 'payload TEXT');
-CALL tc_add_column_if_missing('coordinator_task_event', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_coordinator_task_event', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
+CALL tc_add_column_if_missing('digital_team_coordinator_task_event', 'business_id', 'business_id VARCHAR(96) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_task_event', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_task_event', 'task_id', 'task_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_task_event', 'event_id', 'event_id VARCHAR(128) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_task_event', 'sequence', 'sequence BIGINT NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_task_event', 'event_type', 'event_type VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_task_event', 'payload', 'payload TEXT');
+CALL tc_add_column_if_missing('digital_team_coordinator_task_event', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
 
 -- ── 表 human_request ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS human_request (
+CREATE TABLE IF NOT EXISTS digital_team_human_request (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     analysis_id VARCHAR(64),
@@ -545,38 +595,38 @@ CREATE TABLE IF NOT EXISTS human_request (
         UNIQUE (tenant_id, response_idempotency_key),
     CONSTRAINT uk_human_request_business_id UNIQUE (business_id),
     CONSTRAINT fk_human_project FOREIGN KEY (project_id)
-        REFERENCES project (business_id),
+        REFERENCES digital_team_project (business_id),
     CONSTRAINT fk_human_analysis FOREIGN KEY (analysis_id)
-        REFERENCES coordinator_analysis (business_id),
+        REFERENCES digital_team_coordinator_analysis (business_id),
     CONSTRAINT fk_human_task FOREIGN KEY (task_id)
-        REFERENCES coordinator_task (business_id),
+        REFERENCES digital_team_coordinator_task (business_id),
     INDEX idx_human_pending (tenant_id, project_id, status, expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CALL tc_add_column_if_missing('human_request', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
-CALL tc_add_column_if_missing('human_request', 'business_id', 'business_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('human_request', 'analysis_id', 'analysis_id VARCHAR(64)');
-CALL tc_add_column_if_missing('human_request', 'task_id', 'task_id VARCHAR(64)');
-CALL tc_add_column_if_missing('human_request', 'message_id', 'message_id VARCHAR(64)');
-CALL tc_add_column_if_missing('human_request', 'dispatch_id', 'dispatch_id VARCHAR(64)');
-CALL tc_add_column_if_missing('human_request', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('human_request', 'project_id', 'project_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('human_request', 'request_type', 'request_type VARCHAR(32) NOT NULL');
-CALL tc_add_column_if_missing('human_request', 'question', 'question TEXT NOT NULL');
-CALL tc_add_column_if_missing('human_request', 'agent_question_id', 'agent_question_id VARCHAR(128)');
-CALL tc_add_column_if_missing('human_request', 'allowed_roles', 'allowed_roles VARCHAR(128) NOT NULL');
-CALL tc_add_column_if_missing('human_request', 'input_schema', 'input_schema TEXT');
-CALL tc_add_column_if_missing('human_request', 'status', 'status VARCHAR(32) NOT NULL DEFAULT ''PENDING''');
-CALL tc_add_column_if_missing('human_request', 'decision', 'decision VARCHAR(32)');
-CALL tc_add_column_if_missing('human_request', 'response_json', 'response_json TEXT');
-CALL tc_add_column_if_missing('human_request', 'response_idempotency_key', 'response_idempotency_key VARCHAR(128)');
-CALL tc_add_column_if_missing('human_request', 'responded_by', 'responded_by VARCHAR(64)');
-CALL tc_add_column_if_missing('human_request', 'expires_at', 'expires_at TIMESTAMP NULL');
-CALL tc_add_column_if_missing('human_request', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
-CALL tc_add_column_if_missing('human_request', 'resolved_at', 'resolved_at TIMESTAMP NULL');
+CALL tc_add_column_if_missing('digital_team_human_request', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
+CALL tc_add_column_if_missing('digital_team_human_request', 'business_id', 'business_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_human_request', 'analysis_id', 'analysis_id VARCHAR(64)');
+CALL tc_add_column_if_missing('digital_team_human_request', 'task_id', 'task_id VARCHAR(64)');
+CALL tc_add_column_if_missing('digital_team_human_request', 'message_id', 'message_id VARCHAR(64)');
+CALL tc_add_column_if_missing('digital_team_human_request', 'dispatch_id', 'dispatch_id VARCHAR(64)');
+CALL tc_add_column_if_missing('digital_team_human_request', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_human_request', 'project_id', 'project_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_human_request', 'request_type', 'request_type VARCHAR(32) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_human_request', 'question', 'question TEXT NOT NULL');
+CALL tc_add_column_if_missing('digital_team_human_request', 'agent_question_id', 'agent_question_id VARCHAR(128)');
+CALL tc_add_column_if_missing('digital_team_human_request', 'allowed_roles', 'allowed_roles VARCHAR(128) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_human_request', 'input_schema', 'input_schema TEXT');
+CALL tc_add_column_if_missing('digital_team_human_request', 'status', 'status VARCHAR(32) NOT NULL DEFAULT ''PENDING''');
+CALL tc_add_column_if_missing('digital_team_human_request', 'decision', 'decision VARCHAR(32)');
+CALL tc_add_column_if_missing('digital_team_human_request', 'response_json', 'response_json TEXT');
+CALL tc_add_column_if_missing('digital_team_human_request', 'response_idempotency_key', 'response_idempotency_key VARCHAR(128)');
+CALL tc_add_column_if_missing('digital_team_human_request', 'responded_by', 'responded_by VARCHAR(64)');
+CALL tc_add_column_if_missing('digital_team_human_request', 'expires_at', 'expires_at TIMESTAMP NULL');
+CALL tc_add_column_if_missing('digital_team_human_request', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_human_request', 'resolved_at', 'resolved_at TIMESTAMP NULL');
 
 -- ── 表 project_artifact ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS project_artifact (
+CREATE TABLE IF NOT EXISTS digital_team_project_artifact (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -597,31 +647,31 @@ CREATE TABLE IF NOT EXISTS project_artifact (
     CONSTRAINT uk_artifact_version UNIQUE (project_id, file_name, version),
     CONSTRAINT uk_project_artifact_business_id UNIQUE (business_id),
     CONSTRAINT fk_artifact_project FOREIGN KEY (project_id)
-        REFERENCES project (business_id),
+        REFERENCES digital_team_project (business_id),
     CONSTRAINT fk_artifact_task FOREIGN KEY (task_id)
-        REFERENCES coordinator_task (business_id),
+        REFERENCES digital_team_coordinator_task (business_id),
     INDEX idx_artifact_project_status (tenant_id, project_id, status, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CALL tc_add_column_if_missing('project_artifact', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
-CALL tc_add_column_if_missing('project_artifact', 'business_id', 'business_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_artifact', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_artifact', 'project_id', 'project_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_artifact', 'task_id', 'task_id VARCHAR(64)');
-CALL tc_add_column_if_missing('project_artifact', 'expert_run_id', 'expert_run_id VARCHAR(128)');
-CALL tc_add_column_if_missing('project_artifact', 'version', 'version INT NOT NULL DEFAULT 1');
-CALL tc_add_column_if_missing('project_artifact', 'storage_key', 'storage_key VARCHAR(128) NOT NULL');
-CALL tc_add_column_if_missing('project_artifact', 'file_name', 'file_name VARCHAR(255) NOT NULL');
-CALL tc_add_column_if_missing('project_artifact', 'media_type', 'media_type VARCHAR(128) NOT NULL');
-CALL tc_add_column_if_missing('project_artifact', 'size_bytes', 'size_bytes BIGINT');
-CALL tc_add_column_if_missing('project_artifact', 'sha256', 'sha256 VARCHAR(64)');
-CALL tc_add_column_if_missing('project_artifact', 'status', 'status VARCHAR(32) NOT NULL DEFAULT ''UPLOADING''');
-CALL tc_add_column_if_missing('project_artifact', 'created_by', 'created_by VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_artifact', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
-CALL tc_add_column_if_missing('project_artifact', 'completed_at', 'completed_at TIMESTAMP NULL');
+CALL tc_add_column_if_missing('digital_team_project_artifact', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
+CALL tc_add_column_if_missing('digital_team_project_artifact', 'business_id', 'business_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_artifact', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_artifact', 'project_id', 'project_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_artifact', 'task_id', 'task_id VARCHAR(64)');
+CALL tc_add_column_if_missing('digital_team_project_artifact', 'expert_run_id', 'expert_run_id VARCHAR(128)');
+CALL tc_add_column_if_missing('digital_team_project_artifact', 'version', 'version INT NOT NULL DEFAULT 1');
+CALL tc_add_column_if_missing('digital_team_project_artifact', 'storage_key', 'storage_key VARCHAR(128) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_artifact', 'file_name', 'file_name VARCHAR(255) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_artifact', 'media_type', 'media_type VARCHAR(128) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_artifact', 'size_bytes', 'size_bytes BIGINT');
+CALL tc_add_column_if_missing('digital_team_project_artifact', 'sha256', 'sha256 VARCHAR(64)');
+CALL tc_add_column_if_missing('digital_team_project_artifact', 'status', 'status VARCHAR(32) NOT NULL DEFAULT ''UPLOADING''');
+CALL tc_add_column_if_missing('digital_team_project_artifact', 'created_by', 'created_by VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_artifact', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_project_artifact', 'completed_at', 'completed_at TIMESTAMP NULL');
 
 -- ── 表 project_artifact_lineage ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS project_artifact_lineage (
+CREATE TABLE IF NOT EXISTS digital_team_project_artifact_lineage (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     output_artifact_id VARCHAR(64) NOT NULL,
     input_artifact_id VARCHAR(64) NOT NULL,
@@ -629,18 +679,18 @@ CREATE TABLE IF NOT EXISTS project_artifact_lineage (
     CONSTRAINT uk_project_artifact_lineage_business
         UNIQUE (output_artifact_id, input_artifact_id),
     CONSTRAINT fk_lineage_output FOREIGN KEY (output_artifact_id)
-        REFERENCES project_artifact (business_id),
+        REFERENCES digital_team_project_artifact (business_id),
     CONSTRAINT fk_lineage_input FOREIGN KEY (input_artifact_id)
-        REFERENCES project_artifact (business_id)
+        REFERENCES digital_team_project_artifact (business_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CALL tc_add_column_if_missing('project_artifact_lineage', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
-CALL tc_add_column_if_missing('project_artifact_lineage', 'output_artifact_id', 'output_artifact_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_artifact_lineage', 'input_artifact_id', 'input_artifact_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_artifact_lineage', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_project_artifact_lineage', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
+CALL tc_add_column_if_missing('digital_team_project_artifact_lineage', 'output_artifact_id', 'output_artifact_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_artifact_lineage', 'input_artifact_id', 'input_artifact_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_artifact_lineage', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
 
 -- ── 表 coordinator_agent_run ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS coordinator_agent_run (
+CREATE TABLE IF NOT EXISTS digital_team_coordinator_agent_run (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -660,29 +710,29 @@ CREATE TABLE IF NOT EXISTS coordinator_agent_run (
     CONSTRAINT uk_coordinator_agent_run_key UNIQUE (tenant_id, run_key),
     CONSTRAINT uk_coordinator_agent_run_business_id UNIQUE (business_id),
     CONSTRAINT fk_coordinator_agent_run_project FOREIGN KEY (project_id)
-        REFERENCES project (business_id),
+        REFERENCES digital_team_project (business_id),
     INDEX idx_coordinator_agent_session (session_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CALL tc_add_column_if_missing('coordinator_agent_run', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
-CALL tc_add_column_if_missing('coordinator_agent_run', 'business_id', 'business_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_agent_run', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_agent_run', 'project_id', 'project_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_agent_run', 'message_id', 'message_id VARCHAR(64)');
-CALL tc_add_column_if_missing('coordinator_agent_run', 'run_key', 'run_key VARCHAR(128) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_agent_run', 'session_id', 'session_id VARCHAR(128)');
-CALL tc_add_column_if_missing('coordinator_agent_run', 'business_session_id', 'business_session_id VARCHAR(128)');
-CALL tc_add_column_if_missing('coordinator_agent_run', 'stage', 'stage VARCHAR(16) NOT NULL DEFAULT ''ANALYZE''');
-CALL tc_add_column_if_missing('coordinator_agent_run', 'status', 'status VARCHAR(32) NOT NULL DEFAULT ''PENDING''');
-CALL tc_add_column_if_missing('coordinator_agent_run', 'last_sequence', 'last_sequence BIGINT NOT NULL DEFAULT 0');
-CALL tc_add_column_if_missing('coordinator_agent_run', 'context_json', 'context_json TEXT NOT NULL');
-CALL tc_add_column_if_missing('coordinator_agent_run', 'invalid_output', 'invalid_output TEXT');
-CALL tc_add_column_if_missing('coordinator_agent_run', 'output_json', 'output_json TEXT');
-CALL tc_add_column_if_missing('coordinator_agent_run', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
-CALL tc_add_column_if_missing('coordinator_agent_run', 'updated_at', 'updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_coordinator_agent_run', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
+CALL tc_add_column_if_missing('digital_team_coordinator_agent_run', 'business_id', 'business_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_agent_run', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_agent_run', 'project_id', 'project_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_agent_run', 'message_id', 'message_id VARCHAR(64)');
+CALL tc_add_column_if_missing('digital_team_coordinator_agent_run', 'run_key', 'run_key VARCHAR(128) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_agent_run', 'session_id', 'session_id VARCHAR(128)');
+CALL tc_add_column_if_missing('digital_team_coordinator_agent_run', 'business_session_id', 'business_session_id VARCHAR(128)');
+CALL tc_add_column_if_missing('digital_team_coordinator_agent_run', 'stage', 'stage VARCHAR(16) NOT NULL DEFAULT ''ANALYZE''');
+CALL tc_add_column_if_missing('digital_team_coordinator_agent_run', 'status', 'status VARCHAR(32) NOT NULL DEFAULT ''PENDING''');
+CALL tc_add_column_if_missing('digital_team_coordinator_agent_run', 'last_sequence', 'last_sequence BIGINT NOT NULL DEFAULT 0');
+CALL tc_add_column_if_missing('digital_team_coordinator_agent_run', 'context_json', 'context_json TEXT NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_agent_run', 'invalid_output', 'invalid_output TEXT');
+CALL tc_add_column_if_missing('digital_team_coordinator_agent_run', 'output_json', 'output_json TEXT');
+CALL tc_add_column_if_missing('digital_team_coordinator_agent_run', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_coordinator_agent_run', 'updated_at', 'updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
 
 -- ── 表 prompt_template ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS prompt_template (
+CREATE TABLE IF NOT EXISTS digital_team_prompt_template (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     prompt_key VARCHAR(128) NOT NULL,
@@ -700,21 +750,21 @@ CREATE TABLE IF NOT EXISTS prompt_template (
     INDEX idx_prompt_active (prompt_key, status, version)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CALL tc_add_column_if_missing('prompt_template', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
-CALL tc_add_column_if_missing('prompt_template', 'business_id', 'business_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('prompt_template', 'prompt_key', 'prompt_key VARCHAR(128) NOT NULL');
-CALL tc_add_column_if_missing('prompt_template', 'agent_scope', 'agent_scope VARCHAR(128) NOT NULL');
-CALL tc_add_column_if_missing('prompt_template', 'scene', 'scene VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('prompt_template', 'version', 'version INT NOT NULL');
-CALL tc_add_column_if_missing('prompt_template', 'status', 'status VARCHAR(16) NOT NULL');
-CALL tc_add_column_if_missing('prompt_template', 'template_content', 'template_content TEXT NOT NULL');
-CALL tc_add_column_if_missing('prompt_template', 'variables_schema', 'variables_schema TEXT');
-CALL tc_add_column_if_missing('prompt_template', 'created_by', 'created_by VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('prompt_template', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
-CALL tc_add_column_if_missing('prompt_template', 'published_at', 'published_at TIMESTAMP NULL');
+CALL tc_add_column_if_missing('digital_team_prompt_template', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
+CALL tc_add_column_if_missing('digital_team_prompt_template', 'business_id', 'business_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_prompt_template', 'prompt_key', 'prompt_key VARCHAR(128) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_prompt_template', 'agent_scope', 'agent_scope VARCHAR(128) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_prompt_template', 'scene', 'scene VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_prompt_template', 'version', 'version INT NOT NULL');
+CALL tc_add_column_if_missing('digital_team_prompt_template', 'status', 'status VARCHAR(16) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_prompt_template', 'template_content', 'template_content TEXT NOT NULL');
+CALL tc_add_column_if_missing('digital_team_prompt_template', 'variables_schema', 'variables_schema TEXT');
+CALL tc_add_column_if_missing('digital_team_prompt_template', 'created_by', 'created_by VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_prompt_template', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_prompt_template', 'published_at', 'published_at TIMESTAMP NULL');
 
 -- ── 表 prompt_execution ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS prompt_execution (
+CREATE TABLE IF NOT EXISTS digital_team_prompt_execution (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -731,25 +781,25 @@ CREATE TABLE IF NOT EXISTS prompt_execution (
     CONSTRAINT uk_prompt_invocation UNIQUE (invocation_id, scene),
     CONSTRAINT uk_prompt_execution_business_id UNIQUE (business_id),
     CONSTRAINT fk_prompt_execution_template FOREIGN KEY (prompt_template_id)
-        REFERENCES prompt_template (business_id)
+        REFERENCES digital_team_prompt_template (business_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CALL tc_add_column_if_missing('prompt_execution', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
-CALL tc_add_column_if_missing('prompt_execution', 'business_id', 'business_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('prompt_execution', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('prompt_execution', 'project_id', 'project_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('prompt_execution', 'conversation_id', 'conversation_id VARCHAR(64)');
-CALL tc_add_column_if_missing('prompt_execution', 'invocation_id', 'invocation_id VARCHAR(128) NOT NULL');
-CALL tc_add_column_if_missing('prompt_execution', 'agent_id', 'agent_id VARCHAR(128) NOT NULL');
-CALL tc_add_column_if_missing('prompt_execution', 'scene', 'scene VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('prompt_execution', 'prompt_template_id', 'prompt_template_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('prompt_execution', 'prompt_version', 'prompt_version INT NOT NULL');
-CALL tc_add_column_if_missing('prompt_execution', 'rendered_prompt', 'rendered_prompt TEXT NOT NULL');
-CALL tc_add_column_if_missing('prompt_execution', 'variables_snapshot', 'variables_snapshot TEXT NOT NULL');
-CALL tc_add_column_if_missing('prompt_execution', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_prompt_execution', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
+CALL tc_add_column_if_missing('digital_team_prompt_execution', 'business_id', 'business_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_prompt_execution', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_prompt_execution', 'project_id', 'project_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_prompt_execution', 'conversation_id', 'conversation_id VARCHAR(64)');
+CALL tc_add_column_if_missing('digital_team_prompt_execution', 'invocation_id', 'invocation_id VARCHAR(128) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_prompt_execution', 'agent_id', 'agent_id VARCHAR(128) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_prompt_execution', 'scene', 'scene VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_prompt_execution', 'prompt_template_id', 'prompt_template_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_prompt_execution', 'prompt_version', 'prompt_version INT NOT NULL');
+CALL tc_add_column_if_missing('digital_team_prompt_execution', 'rendered_prompt', 'rendered_prompt TEXT NOT NULL');
+CALL tc_add_column_if_missing('digital_team_prompt_execution', 'variables_snapshot', 'variables_snapshot TEXT NOT NULL');
+CALL tc_add_column_if_missing('digital_team_prompt_execution', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
 
 -- ── 表 project_conversation_expert_session ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS project_conversation_expert_session (
+CREATE TABLE IF NOT EXISTS digital_team_project_conversation_expert_session (
     id VARCHAR(64) NOT NULL PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL,
     project_id VARCHAR(64) NOT NULL,
@@ -762,17 +812,17 @@ CREATE TABLE IF NOT EXISTS project_conversation_expert_session (
     INDEX idx_expert_session_lookup (tenant_id, project_id, conversation_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CALL tc_add_column_if_missing('project_conversation_expert_session', 'id', 'id VARCHAR(64) NOT NULL PRIMARY KEY');
-CALL tc_add_column_if_missing('project_conversation_expert_session', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_conversation_expert_session', 'project_id', 'project_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_conversation_expert_session', 'conversation_id', 'conversation_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_conversation_expert_session', 'expert_id', 'expert_id VARCHAR(128) NOT NULL');
-CALL tc_add_column_if_missing('project_conversation_expert_session', 'session_id', 'session_id VARCHAR(128) NOT NULL');
-CALL tc_add_column_if_missing('project_conversation_expert_session', 'message_id', 'message_id VARCHAR(64) NOT NULL DEFAULT ''''');
-CALL tc_add_column_if_missing('project_conversation_expert_session', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_project_conversation_expert_session', 'id', 'id VARCHAR(64) NOT NULL PRIMARY KEY');
+CALL tc_add_column_if_missing('digital_team_project_conversation_expert_session', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_conversation_expert_session', 'project_id', 'project_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_conversation_expert_session', 'conversation_id', 'conversation_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_conversation_expert_session', 'expert_id', 'expert_id VARCHAR(128) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_conversation_expert_session', 'session_id', 'session_id VARCHAR(128) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_conversation_expert_session', 'message_id', 'message_id VARCHAR(64) NOT NULL DEFAULT ''''');
+CALL tc_add_column_if_missing('digital_team_project_conversation_expert_session', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
 
 -- ── 表 skill ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS skill (
+CREATE TABLE IF NOT EXISTS digital_team_skill (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL UNIQUE,
     name VARCHAR(128) NOT NULL,
@@ -782,16 +832,16 @@ CREATE TABLE IF NOT EXISTS skill (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CALL tc_add_column_if_missing('skill', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
-CALL tc_add_column_if_missing('skill', 'business_id', 'business_id VARCHAR(64) NOT NULL UNIQUE');
-CALL tc_add_column_if_missing('skill', 'name', 'name VARCHAR(128) NOT NULL');
-CALL tc_add_column_if_missing('skill', 'description', 'description VARCHAR(1024)');
-CALL tc_add_column_if_missing('skill', 'prompt', 'prompt TEXT');
-CALL tc_add_column_if_missing('skill', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
-CALL tc_add_column_if_missing('skill', 'updated_at', 'updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_skill', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
+CALL tc_add_column_if_missing('digital_team_skill', 'business_id', 'business_id VARCHAR(64) NOT NULL UNIQUE');
+CALL tc_add_column_if_missing('digital_team_skill', 'name', 'name VARCHAR(128) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_skill', 'description', 'description VARCHAR(1024)');
+CALL tc_add_column_if_missing('digital_team_skill', 'prompt', 'prompt TEXT');
+CALL tc_add_column_if_missing('digital_team_skill', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_skill', 'updated_at', 'updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
 
 -- ── 表 project_skill ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS project_skill (
+CREATE TABLE IF NOT EXISTS digital_team_project_skill (
     project_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
     skill_id VARCHAR(64) NOT NULL,
@@ -800,21 +850,21 @@ CREATE TABLE IF NOT EXISTS project_skill (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (project_id, skill_id),
     CONSTRAINT fk_project_skill_project FOREIGN KEY (project_id)
-        REFERENCES project (business_id),
+        REFERENCES digital_team_project (business_id),
     CONSTRAINT fk_project_skill_skill FOREIGN KEY (skill_id)
-        REFERENCES skill (business_id),
+        REFERENCES digital_team_skill (business_id),
     INDEX idx_project_skill_tenant (tenant_id, project_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CALL tc_add_column_if_missing('project_skill', 'project_id', 'project_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_skill', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_skill', 'skill_id', 'skill_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('project_skill', 'enabled', 'enabled BOOLEAN NOT NULL DEFAULT TRUE');
-CALL tc_add_column_if_missing('project_skill', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
-CALL tc_add_column_if_missing('project_skill', 'updated_at', 'updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_project_skill', 'project_id', 'project_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_skill', 'tenant_id', 'tenant_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_skill', 'skill_id', 'skill_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_project_skill', 'enabled', 'enabled BOOLEAN NOT NULL DEFAULT TRUE');
+CALL tc_add_column_if_missing('digital_team_project_skill', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_project_skill', 'updated_at', 'updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
 
 -- ── 表 coordinator_cli_submission ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS coordinator_cli_submission (
+CREATE TABLE IF NOT EXISTS digital_team_coordinator_cli_submission (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     task_id VARCHAR(128) NOT NULL,
@@ -825,12 +875,12 @@ CREATE TABLE IF NOT EXISTS coordinator_cli_submission (
     INDEX idx_cli_submission_task (task_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CALL tc_add_column_if_missing('coordinator_cli_submission', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
-CALL tc_add_column_if_missing('coordinator_cli_submission', 'business_id', 'business_id VARCHAR(64) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_cli_submission', 'task_id', 'task_id VARCHAR(128) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_cli_submission', 'kind', 'kind VARCHAR(16) NOT NULL');
-CALL tc_add_column_if_missing('coordinator_cli_submission', 'payload', 'payload TEXT NOT NULL');
-CALL tc_add_column_if_missing('coordinator_cli_submission', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+CALL tc_add_column_if_missing('digital_team_coordinator_cli_submission', 'id', 'id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY');
+CALL tc_add_column_if_missing('digital_team_coordinator_cli_submission', 'business_id', 'business_id VARCHAR(64) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_cli_submission', 'task_id', 'task_id VARCHAR(128) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_cli_submission', 'kind', 'kind VARCHAR(16) NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_cli_submission', 'payload', 'payload TEXT NOT NULL');
+CALL tc_add_column_if_missing('digital_team_coordinator_cli_submission', 'created_at', 'created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
 
 -- ── 种子数据（幂等） ───────────────────────────────────────────────
 -- ============================================================================
@@ -839,7 +889,7 @@ CALL tc_add_column_if_missing('coordinator_cli_submission', 'created_at', 'creat
 -- V11 的 prompt_template 列名 id 已改写为 business_id（V13 代理键语义）。
 -- ============================================================================
 
-INSERT IGNORE INTO skill (business_id, name, description, prompt) VALUES
+INSERT IGNORE INTO digital_team_skill (business_id, name, description, prompt) VALUES
 ('skill-code-review', '代码审查', '自动审查代码质量、安全漏洞和最佳实践合规性',
  'You are a code review expert. Analyze the provided code for bugs, security vulnerabilities, performance issues, and best practice violations. Provide specific, actionable feedback.'),
 ('skill-pdf-gen', 'PDF生成', '根据模板和数据生成格式化的PDF文档',
@@ -852,7 +902,7 @@ INSERT IGNORE INTO skill (business_id, name, description, prompt) VALUES
  'You are an API documentation expert. Generate comprehensive API documentation from code annotations and interface definitions. Include request/response examples and error codes.');
 
 -- 来自 V11__prompt_management.sql
-INSERT IGNORE INTO prompt_template
+INSERT IGNORE INTO digital_team_prompt_template
     (business_id, prompt_key, agent_scope, scene, version, status, template_content,
      variables_schema, created_by, published_at)
 VALUES
@@ -874,7 +924,7 @@ VALUES
      '{"required":["context_json"]}', 'system', CURRENT_TIMESTAMP);
 
 -- 来自 V17__prompt_output_schema.sql
-INSERT IGNORE INTO prompt_template
+INSERT IGNORE INTO digital_team_prompt_template
     (business_id, prompt_key, agent_scope, scene, version, status,
      template_content, variables_schema, created_by, published_at)
 VALUES
@@ -896,7 +946,7 @@ VALUES
      '{"required":["context_json"]}', 'system', CURRENT_TIMESTAMP);
 
 -- 来自 V18__tool_submission_contract.sql
-INSERT IGNORE INTO prompt_template
+INSERT IGNORE INTO digital_team_prompt_template
     (business_id, prompt_key, agent_scope, scene, version, status,
      template_content, variables_schema, created_by, published_at)
 VALUES
@@ -918,7 +968,7 @@ VALUES
      '{"required":["context_json"]}', 'system', CURRENT_TIMESTAMP);
 
 -- 来自 V22__cli_prompt_contract.sql
-INSERT IGNORE INTO prompt_template
+INSERT IGNORE INTO digital_team_prompt_template
     (business_id, prompt_key, agent_scope, scene, version, status,
      template_content, variables_schema, created_by, published_at)
 VALUES
@@ -944,7 +994,7 @@ VALUES
      '{"required":["context_json"]}', 'system', CURRENT_TIMESTAMP);
 
 -- 来自 V24__cli_task_key_prompts.sql
-INSERT IGNORE INTO prompt_template
+INSERT IGNORE INTO digital_team_prompt_template
     (business_id, prompt_key, agent_scope, scene, version, status,
      template_content, variables_schema, created_by, published_at)
 VALUES
@@ -970,7 +1020,7 @@ VALUES
      '{"required":["context_json"]}', 'system', CURRENT_TIMESTAMP);
 
 -- 来自 V25__cli_only_prompts.sql
-INSERT IGNORE INTO prompt_template
+INSERT IGNORE INTO digital_team_prompt_template
     (business_id, prompt_key, agent_scope, scene, version, status,
      template_content, variables_schema, created_by, published_at)
 VALUES

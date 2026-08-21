@@ -4,7 +4,7 @@
 --    explicit at the source instead of relying on agent-side configuration.
 -- 2. Semantic review templates used by the plan / expert-result checks.
 
-INSERT INTO prompt_template
+INSERT INTO digital_team_prompt_template
     (business_id, prompt_key, agent_scope, scene, version, status,
      template_content, variables_schema, created_by, published_at)
 VALUES

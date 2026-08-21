@@ -2,71 +2,21 @@ package org.cmb.infrastructure.persistent.mapper;
 
 import java.sql.Timestamp;
 import java.util.List;
+import java.util.Map;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import org.cmb.application.domain.AgentArtifactUploadContext;
 import org.cmb.application.domain.DispatchWork;
 import org.cmb.application.domain.TaskRecord;
 
 /**
- * SQL access for the execution engine (coordinator_dispatch,
- * coordinator_plan, coordinator_task, coordinator_task_event,
- * project_conversation expert sessions). Queries that may match multiple
- * rows return {@code List} so the repository facade keeps its
+ * SQL access for expert tasks (digital_team_coordinator_task). Join
+ * queries use this table as the main table. Queries that may match
+ * multiple rows return {@code List} so the repository facade keeps its
  * "first row or null" semantics.
  */
 @Mapper
-public interface ExecutionMapper {
-
-    List<String> selectClaimableDispatchId();
-
-    int claimDispatch(
-            @Param("owner") String owner,
-            @Param("leaseExpiresAt") Timestamp leaseExpiresAt,
-            @Param("dispatchId") String dispatchId);
-
-    int renewLease(
-            @Param("dispatchId") String dispatchId,
-            @Param("owner") String owner,
-            @Param("leaseExpiresAt") Timestamp leaseExpiresAt);
-
-    List<DispatchWork> loadWork(@Param("dispatchId") String dispatchId);
-
-    List<String> findExistingPlanId(
-            @Param("tenantId") String tenantId,
-            @Param("projectId") String projectId,
-            @Param("messageId") String messageId);
-
-    List<String> findLatestPlanId(
-            @Param("tenantId") String tenantId,
-            @Param("projectId") String projectId,
-            @Param("messageId") String messageId);
-
-    int insertPlanSimple(
-            @Param("id") String id,
-            @Param("work") DispatchWork work,
-            @Param("analysisId") String analysisId,
-            @Param("intentJson") String intentJson);
-
-    int insertPlanFull(
-            @Param("id") String id,
-            @Param("work") DispatchWork work,
-            @Param("analysisId") String analysisId,
-            @Param("planVersion") int planVersion,
-            @Param("intentJson") String intentJson,
-            @Param("planJson") String planJson,
-            @Param("repairCount") int repairCount);
-
-    int insertReplan(
-            @Param("id") String id,
-            @Param("work") DispatchWork work,
-            @Param("analysisId") String analysisId,
-            @Param("planVersion") int planVersion,
-            @Param("intentJson") String intentJson,
-            @Param("planJson") String planJson,
-            @Param("repairCount") int repairCount,
-            @Param("supersedesPlanId") String supersedesPlanId);
-
-    int supersedePlan(@Param("planId") String planId);
+public interface CoordinatorTaskMapper {
 
     List<TaskRecord> findTasksForMessage(
             @Param("tenantId") String tenantId,
@@ -123,40 +73,31 @@ public interface ExecutionMapper {
             @Param("taskId") String taskId,
             @Param("sessionId") String sessionId);
 
-    List<String> findExpertSession(
-            @Param("tenantId") String tenantId,
-            @Param("projectId") String projectId,
-            @Param("conversationId") String conversationId,
-            @Param("expertId") String expertId,
-            @Param("currentMessageId") String currentMessageId);
-
-    int upsertExpertSession(
-            @Param("id") String id,
-            @Param("tenantId") String tenantId,
-            @Param("projectId") String projectId,
-            @Param("conversationId") String conversationId,
-            @Param("expertId") String expertId,
-            @Param("sessionId") String sessionId,
-            @Param("messageId") String messageId);
-
-    int saveCoordinatorSession(
-            @Param("conversationId") String conversationId,
-            @Param("sessionId") String sessionId,
-            @Param("agentId") String agentId);
-
-    List<String> loadCoordinatorAgent(@Param("conversationId") String conversationId);
-
-    List<String> findDispatchForConversation(@Param("conversationId") String conversationId);
-
     List<TaskRecord> findTaskByBusinessId(@Param("taskId") String taskId);
 
-    List<java.util.Map<String, Object>> findTaskDetail(@Param("taskId") String taskId);
+    List<Map<String, Object>> findTaskDetail(@Param("taskId") String taskId);
 
     int markTaskSucceeded(
             @Param("taskId") String taskId,
             @Param("resultJson") String resultJson);
 
     int markTaskWaitingHuman(@Param("taskId") String taskId);
+
+    /** HITL variant without the {@code RUNNING} guard (CLI ask-human path). */
+    int markTaskWaitingHumanForRequest(@Param("taskId") String taskId);
+
+    int resumeTask(
+            @Param("tenantId") String tenantId,
+            @Param("taskId") String taskId);
+
+    int failTask(
+            @Param("status") String status,
+            @Param("tenantId") String tenantId,
+            @Param("taskId") String taskId);
+
+    List<String> findPlanIdForTask(
+            @Param("tenantId") String tenantId,
+            @Param("taskId") String taskId);
 
     java.lang.Long findMaxLastSequenceBySession(
             @Param("sessionId") String sessionId);
@@ -170,29 +111,12 @@ public interface ExecutionMapper {
             @Param("taskId") String taskId,
             @Param("sequence") long sequence);
 
-    int insertTaskEvent(
-            @Param("id") String id,
-            @Param("tenantId") String tenantId,
-            @Param("taskId") String taskId,
-            @Param("eventId") String eventId,
-            @Param("sequence") long sequence,
-            @Param("eventType") String eventType,
-            @Param("payload") String payload);
-
     int advanceTask(
             @Param("taskId") String taskId,
             @Param("status") String status,
             @Param("sequence") long sequence,
             @Param("resultJson") String resultJson,
             @Param("resultAccepted") boolean resultAccepted);
-
-    int updatePlanStatus(
-            @Param("planId") String planId,
-            @Param("status") String status);
-
-    int failPlansForMessage(
-            @Param("tenantId") String tenantId,
-            @Param("messageId") String messageId);
 
     int failTasksForMessage(
             @Param("tenantId") String tenantId,
@@ -213,13 +137,6 @@ public interface ExecutionMapper {
     Integer selectConsecutiveFailures(@Param("taskId") String taskId);
 
     int resetConsecutiveFailures(@Param("taskId") String taskId);
-
-    int completeDispatch(
-            @Param("dispatchId") String dispatchId,
-            @Param("status") String status,
-            @Param("error") String error);
-
-    int releaseDispatch(@Param("dispatchId") String dispatchId);
 
     List<TaskRecord> findTask(
             @Param("tenantId") String tenantId,
@@ -265,4 +182,20 @@ public interface ExecutionMapper {
             @Param("expectedOutput") String expectedOutput,
             @Param("acceptanceCriteria") String acceptanceCriteria,
             @Param("reusedFromTaskId") String reusedFromTaskId);
+
+    List<AgentArtifactUploadContext> findUploadContextByTaskId(@Param("taskId") String taskId);
+
+    String findProjectIdByTaskId(@Param("taskId") String taskId);
+
+    List<AgentArtifactUploadContext> findAgentUploadContext(
+            @Param("projectId") String projectId,
+            @Param("conversationId") String conversationId,
+            @Param("businessSessionId") String businessSessionId,
+            @Param("agentRunId") String agentRunId,
+            @Param("agentId") String agentId);
+
+    List<Map<String, Object>> findTasks(
+            @Param("tenantId") String tenantId,
+            @Param("projectId") String projectId,
+            @Param("taskId") String taskId);
 }

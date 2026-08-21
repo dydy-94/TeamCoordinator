@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.cmb.infrastructure.persistent.mapper.ProjectArtifactLineageMapper">
+
+    <insert id="recordDependencyLineage">
+        INSERT INTO digital_team_project_artifact_lineage (output_artifact_id, input_artifact_id)
+        SELECT #{outputArtifactId}, a.business_id FROM digital_team_project_artifact a
+        JOIN digital_team_coordinator_task t ON t.business_id = a.task_id
+        WHERE t.plan_id = #{planId} AND t.task_key IN
+        <foreach collection="dependencyKeys" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        AND a.status = 'AVAILABLE'
+    </insert>
+
+</mapper>

@@ -63,7 +63,7 @@ class ArtifactIntegrationTest {
         JsonNode second = reserve(projectId, "report.txt");
         assertEquals(2, second.get("version").asInt());
         assertTrue(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM project_artifact WHERE project_id = ?",
+                "SELECT COUNT(*) FROM digital_team_project_artifact WHERE project_id = ?",
                 Integer.class, projectId) == 2);
         mockMvc.perform(get("/api/v1/projects/" + projectId
                         + "/artifacts/" + artifactId)
@@ -107,10 +107,10 @@ class ArtifactIntegrationTest {
 
         String artifactId = objectMapper.readTree(body).get("artifactId").asText();
         assertEquals("agent:" + run.get("expert_id"), jdbc.queryForObject(
-                "SELECT created_by FROM project_artifact WHERE business_id = ?",
+                "SELECT created_by FROM digital_team_project_artifact WHERE business_id = ?",
                 String.class, artifactId));
         assertEquals(run.get("session_id"), jdbc.queryForObject(
-                "SELECT expert_run_id FROM project_artifact WHERE business_id = ?",
+                "SELECT expert_run_id FROM digital_team_project_artifact WHERE business_id = ?",
                 String.class, artifactId));
         finishDispatch(projectId);
     }
@@ -162,7 +162,7 @@ class ArtifactIntegrationTest {
     private Map<String, Object> awaitExpertRun(String projectId) {
         for (int attempt = 0; attempt < 30; attempt++) {
             java.util.List<Map<String, Object>> rows = jdbc.queryForList(
-                    "SELECT session_id, expert_id FROM coordinator_task "
+                    "SELECT session_id, expert_id FROM digital_team_coordinator_task "
                             + "WHERE project_id = ? AND session_id IS NOT NULL",
                     projectId);
             if (!rows.isEmpty()) {
@@ -176,7 +176,7 @@ class ArtifactIntegrationTest {
     private void finishDispatch(String projectId) {
         for (int attempt = 0; attempt < 10; attempt++) {
             String status = jdbc.queryForObject(
-                    "SELECT status FROM coordinator_dispatch WHERE project_id = ?",
+                    "SELECT status FROM digital_team_coordinator_dispatch WHERE project_id = ?",
                     String.class, projectId);
             if ("COMPLETED".equals(status) || "FAILED".equals(status)) {
                 return;

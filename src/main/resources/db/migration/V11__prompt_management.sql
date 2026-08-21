@@ -1,4 +1,4 @@
-CREATE TABLE prompt_template (
+CREATE TABLE digital_team_prompt_template (
     id VARCHAR(64) NOT NULL PRIMARY KEY,
     prompt_key VARCHAR(128) NOT NULL,
     agent_scope VARCHAR(128) NOT NULL,
@@ -14,9 +14,9 @@ CREATE TABLE prompt_template (
 );
 
 CREATE INDEX idx_prompt_active
-    ON prompt_template (prompt_key, status, version);
+    ON digital_team_prompt_template (prompt_key, status, version);
 
-CREATE TABLE prompt_execution (
+CREATE TABLE digital_team_prompt_execution (
     id VARCHAR(64) NOT NULL PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL,
     project_id VARCHAR(64) NOT NULL,
@@ -31,10 +31,10 @@ CREATE TABLE prompt_execution (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_prompt_invocation UNIQUE (invocation_id, scene),
     CONSTRAINT fk_prompt_execution_template FOREIGN KEY (prompt_template_id)
-        REFERENCES prompt_template (id)
+        REFERENCES digital_team_prompt_template (id)
 );
 
-INSERT INTO prompt_template
+INSERT INTO digital_team_prompt_template
     (id, prompt_key, agent_scope, scene, version, status, template_content,
      variables_schema, created_by, published_at)
 VALUES

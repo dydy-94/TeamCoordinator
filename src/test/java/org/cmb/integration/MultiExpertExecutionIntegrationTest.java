@@ -49,24 +49,24 @@ class MultiExpertExecutionIntegrationTest {
         worker.runOnce();
         assertEquals(Arrays2.of("SUCCEEDED", "SUCCEEDED"), statuses(projectId));
         assertEquals("COMPLETED", jdbc.queryForObject(
-                "SELECT status FROM coordinator_dispatch WHERE project_id = ?",
+                "SELECT status FROM digital_team_coordinator_dispatch WHERE project_id = ?",
                 String.class, projectId));
         assertEquals(Integer.valueOf(2), jdbc.queryForObject(
-                "SELECT COUNT(DISTINCT expert_id) FROM coordinator_task WHERE project_id = ?",
+                "SELECT COUNT(DISTINCT expert_id) FROM digital_team_coordinator_task WHERE project_id = ?",
                 Integer.class, projectId));
         assertEquals(Integer.valueOf(2), jdbc.queryForObject(
-                "SELECT COUNT(*) FROM project_artifact WHERE project_id = ? "
+                "SELECT COUNT(*) FROM digital_team_project_artifact WHERE project_id = ? "
                         + "AND status = 'AVAILABLE'",
                 Integer.class, projectId));
         String writingResult = jdbc.queryForObject(
-                "SELECT result_json FROM coordinator_task WHERE project_id = ? "
+                "SELECT result_json FROM digital_team_coordinator_task WHERE project_id = ? "
                         + "AND task_key = 'write-report'",
                 String.class, projectId);
         assertTrue(writingResult.contains("content"));
         assertTrue(writingResult.contains("Task completed") || writingResult.contains("Mock result"));
         assertEquals(Integer.valueOf(1), jdbc.queryForObject(
-                "SELECT COUNT(*) FROM project_artifact_lineage l "
-                        + "JOIN project_artifact a ON a.business_id = l.output_artifact_id "
+                "SELECT COUNT(*) FROM digital_team_project_artifact_lineage l "
+                        + "JOIN digital_team_project_artifact a ON a.business_id = l.output_artifact_id "
                         + "WHERE a.project_id = ?",
                 Integer.class, projectId));
     }
@@ -86,20 +86,20 @@ class MultiExpertExecutionIntegrationTest {
 
         worker.runOnce();
         assertEquals("COMPLETED", jdbc.queryForObject(
-                "SELECT status FROM coordinator_dispatch WHERE project_id = ?",
+                "SELECT status FROM digital_team_coordinator_dispatch WHERE project_id = ?",
                 String.class, projectId));
     }
 
     private List<String> statuses(String projectId) {
         return jdbc.queryForList(
-                "SELECT status FROM coordinator_task WHERE project_id = ? ORDER BY created_at, task_key",
+                "SELECT status FROM digital_team_coordinator_task WHERE project_id = ? ORDER BY created_at, task_key",
                 String.class, projectId);
     }
 
     private void runUntilTaskCount(String projectId, int expected) {
         for (int attempt = 0; attempt < 50; attempt++) {
             Integer count = jdbc.queryForObject(
-                    "SELECT COUNT(*) FROM coordinator_task WHERE project_id = ?",
+                    "SELECT COUNT(*) FROM digital_team_coordinator_task WHERE project_id = ?",
                     Integer.class, projectId);
             if (count != null && count >= expected) {
                 return;

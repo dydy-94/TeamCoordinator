@@ -1,27 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="org.cmb.infrastructure.persistent.mapper.CliSubmissionMapper">
+<mapper namespace="org.cmb.infrastructure.persistent.mapper.CoordinatorCliSubmissionMapper">
 
     <insert id="insert">
-        INSERT INTO coordinator_cli_submission
+        INSERT INTO digital_team_coordinator_cli_submission
         (business_id, task_id, kind, payload)
         VALUES (#{businessId}, #{taskId}, #{kind}, #{payload})
     </insert>
 
     <update id="replace">
-        UPDATE coordinator_cli_submission SET payload = #{payload},
+        UPDATE digital_team_coordinator_cli_submission SET payload = #{payload},
         created_at = CURRENT_TIMESTAMP
         WHERE task_id = #{taskId} AND kind = #{kind}
     </update>
 
     <select id="find" resultType="string">
-        SELECT payload FROM coordinator_cli_submission
+        SELECT payload FROM digital_team_coordinator_cli_submission
         WHERE task_id = #{taskId} AND kind = #{kind}
     </select>
 
     <delete id="delete">
-        DELETE FROM coordinator_cli_submission
+        DELETE FROM digital_team_coordinator_cli_submission
         WHERE task_id = #{taskId} AND kind = #{kind}
     </delete>
 

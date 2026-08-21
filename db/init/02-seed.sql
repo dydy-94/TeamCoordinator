@@ -4,7 +4,7 @@
 -- V11 的 prompt_template 列名 id 已改写为 business_id（V13 代理键语义）。
 -- ============================================================================
 
-INSERT INTO skill (business_id, name, description, prompt) VALUES
+INSERT INTO digital_team_skill (business_id, name, description, prompt) VALUES
 ('skill-code-review', '代码审查', '自动审查代码质量、安全漏洞和最佳实践合规性',
  'You are a code review expert. Analyze the provided code for bugs, security vulnerabilities, performance issues, and best practice violations. Provide specific, actionable feedback.'),
 ('skill-pdf-gen', 'PDF生成', '根据模板和数据生成格式化的PDF文档',
@@ -17,7 +17,7 @@ INSERT INTO skill (business_id, name, description, prompt) VALUES
  'You are an API documentation expert. Generate comprehensive API documentation from code annotations and interface definitions. Include request/response examples and error codes.');
 
 -- 来自 V11__prompt_management.sql
-INSERT INTO prompt_template
+INSERT INTO digital_team_prompt_template
     (business_id, prompt_key, agent_scope, scene, version, status, template_content,
      variables_schema, created_by, published_at)
 VALUES
@@ -39,7 +39,7 @@ VALUES
      '{"required":["context_json"]}', 'system', CURRENT_TIMESTAMP);
 
 -- 来自 V17__prompt_output_schema.sql
-INSERT INTO prompt_template
+INSERT INTO digital_team_prompt_template
     (business_id, prompt_key, agent_scope, scene, version, status,
      template_content, variables_schema, created_by, published_at)
 VALUES
@@ -61,7 +61,7 @@ VALUES
      '{"required":["context_json"]}', 'system', CURRENT_TIMESTAMP);
 
 -- 来自 V18__tool_submission_contract.sql
-INSERT INTO prompt_template
+INSERT INTO digital_team_prompt_template
     (business_id, prompt_key, agent_scope, scene, version, status,
      template_content, variables_schema, created_by, published_at)
 VALUES
@@ -83,7 +83,7 @@ VALUES
      '{"required":["context_json"]}', 'system', CURRENT_TIMESTAMP);
 
 -- 来自 V22__cli_prompt_contract.sql
-INSERT INTO prompt_template
+INSERT INTO digital_team_prompt_template
     (business_id, prompt_key, agent_scope, scene, version, status,
      template_content, variables_schema, created_by, published_at)
 VALUES
@@ -109,7 +109,7 @@ VALUES
      '{"required":["context_json"]}', 'system', CURRENT_TIMESTAMP);
 
 -- 来自 V24__cli_task_key_prompts.sql
-INSERT INTO prompt_template
+INSERT INTO digital_team_prompt_template
     (business_id, prompt_key, agent_scope, scene, version, status,
      template_content, variables_schema, created_by, published_at)
 VALUES
@@ -135,7 +135,7 @@ VALUES
      '{"required":["context_json"]}', 'system', CURRENT_TIMESTAMP);
 
 -- 来自 V25__cli_only_prompts.sql
-INSERT INTO prompt_template
+INSERT INTO digital_team_prompt_template
     (business_id, prompt_key, agent_scope, scene, version, status,
      template_content, variables_schema, created_by, published_at)
 VALUES

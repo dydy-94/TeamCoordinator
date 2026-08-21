@@ -2,7 +2,10 @@ package org.cmb.infrastructure.persistent;
 
 import java.util.List;
 import java.util.UUID;
+import org.cmb.infrastructure.persistent.mapper.PermissionAuditLogMapper;
+import org.cmb.infrastructure.persistent.mapper.ProjectExpertMapper;
 import org.cmb.infrastructure.persistent.mapper.ProjectMapper;
+import org.cmb.infrastructure.persistent.mapper.ProjectMemberMapper;
 import org.cmb.application.domain.ProjectExpert;
 import org.cmb.application.domain.ProjectMember;
 import org.cmb.application.domain.ProjectRecord;
@@ -13,15 +16,27 @@ import org.springframework.stereotype.Repository;
 
 /**
  * Project persistence facade. Owns orchestration (enum name conversion,
- * audit id generation); all SQL lives in {@link ProjectMapper}.
+ * audit id generation); all SQL lives in the per-table mappers
+ * ({@link ProjectMapper}, {@link ProjectMemberMapper},
+ * {@link ProjectExpertMapper}, {@link PermissionAuditLogMapper}).
  */
 @Repository
 public class ProjectRepository {
 
     private final ProjectMapper mapper;
+    private final ProjectMemberMapper memberMapper;
+    private final ProjectExpertMapper expertMapper;
+    private final PermissionAuditLogMapper auditMapper;
 
-    public ProjectRepository(ProjectMapper mapper) {
+    public ProjectRepository(
+            ProjectMapper mapper,
+            ProjectMemberMapper memberMapper,
+            ProjectExpertMapper expertMapper,
+            PermissionAuditLogMapper auditMapper) {
         this.mapper = mapper;
+        this.memberMapper = memberMapper;
+        this.expertMapper = expertMapper;
+        this.auditMapper = auditMapper;
     }
 
     public void insertProject(ProjectRecord project) {
@@ -40,16 +55,16 @@ public class ProjectRepository {
     }
 
     public ProjectRole findRole(String tenantId, String projectId, String userId) {
-        List<String> roles = mapper.findRole(tenantId, projectId, userId);
+        List<String> roles = memberMapper.findRole(tenantId, projectId, userId);
         return roles.isEmpty() ? null : ProjectRole.valueOf(roles.get(0));
     }
 
     public List<ProjectMember> findMembers(String tenantId, String projectId) {
-        return mapper.findMembers(tenantId, projectId);
+        return memberMapper.findMembers(tenantId, projectId);
     }
 
     public List<ProjectExpert> findExperts(String tenantId, String projectId) {
-        return mapper.findExperts(tenantId, projectId);
+        return expertMapper.findExperts(tenantId, projectId);
     }
 
     public void updateProject(
@@ -64,41 +79,41 @@ public class ProjectRepository {
     }
 
     public boolean memberExists(String tenantId, String projectId, String userId) {
-        Integer count = mapper.countMember(tenantId, projectId, userId);
+        Integer count = memberMapper.countMember(tenantId, projectId, userId);
         return count != null && count > 0;
     }
 
     public void insertMember(
             String tenantId, String projectId, String userId, ProjectRole role) {
-        mapper.insertMember(tenantId, projectId, userId, role.name());
+        memberMapper.insertMember(tenantId, projectId, userId, role.name());
     }
 
     public void updateMember(
             String tenantId, String projectId, String userId, ProjectRole role) {
-        mapper.updateMember(role.name(), tenantId, projectId, userId);
+        memberMapper.updateMember(role.name(), tenantId, projectId, userId);
     }
 
     public int deleteMember(String tenantId, String projectId, String userId) {
-        return mapper.deleteMember(tenantId, projectId, userId);
+        return memberMapper.deleteMember(tenantId, projectId, userId);
     }
 
     public boolean expertExists(String tenantId, String projectId, String expertId) {
-        Integer count = mapper.countExpert(tenantId, projectId, expertId);
+        Integer count = expertMapper.countExpert(tenantId, projectId, expertId);
         return count != null && count > 0;
     }
 
     public void insertExpert(
             String tenantId, String projectId, String expertId, boolean enabled) {
-        mapper.insertExpert(tenantId, projectId, expertId, enabled);
+        expertMapper.insertExpert(tenantId, projectId, expertId, enabled);
     }
 
     public void updateExpert(
             String tenantId, String projectId, String expertId, boolean enabled) {
-        mapper.updateExpert(enabled, tenantId, projectId, expertId);
+        expertMapper.updateExpert(enabled, tenantId, projectId, expertId);
     }
 
     public int deleteExpert(String tenantId, String projectId, String expertId) {
-        return mapper.deleteExpert(tenantId, projectId, expertId);
+        return expertMapper.deleteExpert(tenantId, projectId, expertId);
     }
 
     public void audit(
@@ -107,7 +122,7 @@ public class ProjectRepository {
             String action,
             String targetId,
             String detail) {
-        mapper.insertAudit("audit-" + UUID.randomUUID(), identity.getTenantId(),
+        auditMapper.insertAudit("audit-" + UUID.randomUUID(), identity.getTenantId(),
                 projectId, identity.getUserId(), action, targetId, detail);
     }
 }

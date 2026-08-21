@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.cmb.infrastructure.persistent.mapper.CoordinatorDispatchMapper">
+
+    <resultMap id="dispatchWork" type="org.cmb.application.domain.DispatchWork">
+        <result column="dispatch_id" property="dispatchId"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="project_id" property="projectId"/>
+        <result column="conversation_id" property="conversationId"/>
+        <result column="message_id" property="messageId"/>
+        <result column="user_id" property="userId"/>
+        <result column="message_text" property="text"/>
+        <result column="attachment_refs" property="attachmentRefs"
+                typeHandler="org.cmb.infrastructure.persistent.typehandler.JsonListTypeHandler"/>
+        <result column="business_session_id" property="businessSessionId"/>
+        <result column="coordinator_session_id" property="coordinatorSessionId"/>
+    </resultMap>
+
+    <select id="selectClaimableDispatchId" resultType="string">
+        SELECT d.business_id FROM digital_team_coordinator_dispatch d
+        WHERE d.status IN ('PENDING', 'RUNNING')
+        AND d.available_at &lt;= CURRENT_TIMESTAMP
+        AND (d.lease_expires_at IS NULL
+        OR d.lease_expires_at &lt; CURRENT_TIMESTAMP)
+        AND NOT EXISTS (SELECT 1 FROM digital_team_coordinator_dispatch older
+        WHERE older.tenant_id = d.tenant_id
+        AND older.project_id = d.project_id
+        AND older.conversation_id = d.conversation_id
+        AND older.status IN ('PENDING', 'RUNNING')
+        AND (older.created_at &lt; d.created_at
+        OR (older.created_at = d.created_at AND older.id &lt; d.id)))
+        ORDER BY d.created_at LIMIT 1
+    </select>
+
+    <update id="claimDispatch">
+        UPDATE digital_team_coordinator_dispatch SET status = 'RUNNING', lease_owner = #{owner},
+        lease_expires_at = #{leaseExpiresAt}, attempt_count = attempt_count + 1,
+        updated_at = CURRENT_TIMESTAMP
+        WHERE business_id = #{dispatchId} AND (lease_expires_at IS NULL
+        OR lease_expires_at &lt; CURRENT_TIMESTAMP)
+    </update>
+
+    <update id="renewLease">
+        UPDATE digital_team_coordinator_dispatch SET lease_expires_at = #{leaseExpiresAt},
+        updated_at = CURRENT_TIMESTAMP
+        WHERE business_id = #{dispatchId} AND lease_owner = #{owner} AND status = 'RUNNING'
+    </update>
+
+    <select id="loadWork" resultMap="dispatchWork">
+        SELECT d.business_id AS dispatch_id, d.tenant_id, d.project_id, d.conversation_id,
+        d.message_id, m.user_id, m.message_text, m.attachment_refs,
+        c.session_id AS business_session_id,
+        c.coordinator_session_id
+        FROM digital_team_coordinator_dispatch d JOIN digital_team_project_message m ON m.business_id = d.message_id
+        JOIN digital_team_project_conversation c ON c.business_id = d.conversation_id
+        WHERE d.business_id = #{dispatchId}
+    </select>
+
+    <select id="findDispatchForConversation" resultType="string">
+        SELECT business_id FROM digital_team_coordinator_dispatch
+        WHERE conversation_id = #{conversationId}
+        AND status IN ('PENDING', 'RUNNING')
+        ORDER BY created_at DESC
+    </select>
+
+    <update id="completeDispatch">
+        UPDATE digital_team_coordinator_dispatch SET status = #{status}, last_error = #{error},
+        lease_owner = NULL, lease_expires_at = NULL, updated_at = CURRENT_TIMESTAMP
+        WHERE business_id = #{dispatchId}
+    </update>
+
+    <update id="releaseDispatch">
+        UPDATE digital_team_coordinator_dispatch SET lease_owner = NULL, lease_expires_at = NULL,
+        updated_at = CURRENT_TIMESTAMP WHERE business_id = #{dispatchId} AND status = 'RUNNING'
+    </update>
+
+    <insert id="insertDispatch">
+        INSERT INTO digital_team_coordinator_dispatch
+        (business_id, tenant_id, project_id, conversation_id, message_id, status)
+        VALUES (#{id}, #{tenantId}, #{projectId}, #{conversationId}, #{messageId},
+        'PENDING')
+    </insert>
+
+    <update id="failDispatch">
+        UPDATE digital_team_coordinator_dispatch SET status = #{status}, last_error = #{error},
+        lease_owner = NULL, lease_expires_at = NULL, updated_at = CURRENT_TIMESTAMP
+        WHERE tenant_id = #{tenantId} AND message_id =
+        (SELECT message_id FROM digital_team_coordinator_plan WHERE business_id = #{planId})
+    </update>
+
+    <update id="resetDispatchPending">
+        UPDATE digital_team_coordinator_dispatch SET status = 'PENDING',
+        available_at = CURRENT_TIMESTAMP, lease_owner = NULL,
+        lease_expires_at = NULL WHERE business_id = #{dispatchId}
+        AND tenant_id = #{tenantId}
+    </update>
+
+</mapper>

@@ -46,10 +46,10 @@ org.cmb.teamcoordinator
 ```
 POST /api/v1/projects/{projectId}/tasks/{taskId}/messages
   → CoordinatorMessageService.accept()
-    → INSERT project_message
-    → INSERT project_event (userMessage)      ← 谁发了什么
-    → INSERT project_event (coordinatorPhase: analyzing)
-    → INSERT coordinator_dispatch (PENDING)
+    → INSERT digital_team_project_message
+    → INSERT digital_team_project_event (userMessage)      ← 谁发了什么
+    → INSERT digital_team_project_event (coordinatorPhase: analyzing)
+    → INSERT digital_team_coordinator_dispatch (PENDING)
     → streamHub.publish()                     ← 实时推 SSE
     → 202 Accepted
 ```
@@ -121,7 +121,7 @@ advancePlan()
 ```
 Coordinator Agent 返回 {"decision_type":"ASK_HUMAN","question":"请补充..."}
   → process() 检测 DecisionType.ASK_HUMAN
-  → humanRequests.linkDispatch()          ← 关联 dispatch 和 human_request
+  → humanRequests.linkDispatch()          ← 关联 dispatch 和 digital_team_human_request
   → publishAgentEvent(confirm)            ← 发 SSE 告诉前端
   → completeDispatch("WAITING_HUMAN")     ← dispatch 不再被领取
 
@@ -152,17 +152,17 @@ AgentCore streamEvents 返回 "confirm" chunk
 | 表 | 用途 | 关键字段 |
 |---|---|---|
 | `project` | 项目 | `business_id`, `tenant_id`, `status` |
-| `project_member` | 项目成员 | `user_id`, `role` (OWNER/ADMIN/MEMBER/VIEWER) |
-| `project_expert` | 项目专家 | `expert_id`, `enabled` |
-| `project_conversation` | 对话 Task | `business_id`, `session_id` (业务标识) |
-| `project_message` | 用户消息 | `user_id`, `message_text`, `client_message_id` (幂等) |
-| `project_event` | SSE 事件 | `sequence`, `event_type`, `payload` (JSON) |
-| `coordinator_dispatch` | 调度队列 | `status`, `lease_owner`, `lease_expires_at` |
-| `coordinator_agent_run` | Coordinator Agent 调用 | `run_key` (幂等), `session_id`, `stage`, `last_sequence` |
-| `coordinator_plan` | 执行计划 | `plan_version`, `intent_json`, `plan_json` |
-| `coordinator_task` | 专家任务 | `task_key`, `expert_id`, `session_id`, `status`, `dependencies` |
-| `human_request` | 人工请求 | `type` (CLARIFICATION/APPROVAL), `status`, `allowed_roles` |
-| `project_artifact` | 产物 | `storage_key`, `version`, `status` |
+| `digital_team_project_member` | 项目成员 | `user_id`, `role` (OWNER/ADMIN/MEMBER/VIEWER) |
+| `digital_team_project_expert` | 项目专家 | `expert_id`, `enabled` |
+| `digital_team_project_conversation` | 对话 Task | `business_id`, `session_id` (业务标识) |
+| `digital_team_project_message` | 用户消息 | `user_id`, `message_text`, `client_message_id` (幂等) |
+| `digital_team_project_event` | SSE 事件 | `sequence`, `event_type`, `payload` (JSON) |
+| `digital_team_coordinator_dispatch` | 调度队列 | `status`, `lease_owner`, `lease_expires_at` |
+| `digital_team_coordinator_agent_run` | Coordinator Agent 调用 | `run_key` (幂等), `session_id`, `stage`, `last_sequence` |
+| `digital_team_coordinator_plan` | 执行计划 | `plan_version`, `intent_json`, `plan_json` |
+| `digital_team_coordinator_task` | 专家任务 | `task_key`, `expert_id`, `session_id`, `status`, `dependencies` |
+| `digital_team_human_request` | 人工请求 | `type` (CLARIFICATION/APPROVAL), `status`, `allowed_roles` |
+| `digital_team_project_artifact` | 产物 | `storage_key`, `version`, `status` |
 | `project_conversation_expert_session` | Expert session 映射 | `conversation_id`, `expert_id`, `session_id` |
 
 ## 5. Session ID 模型
@@ -171,21 +171,21 @@ AgentCore streamEvents 返回 "confirm" chunk
 
 | 层级 | 存储位置 | 生成方 | 用途 |
 |---|---|---|---|
-| Task | `project_conversation.session_id` | Coordinator (`"session-" + UUID`) | 业务标识，作为 `X-Session-Id` 头传给 AgentCore |
-| Coordinator Agent | `coordinator_agent_run.session_id` | AgentCore `submitRun` 返回 | 查询/取消 Coordinator Agent run；repair 复用 |
-| Expert Agent | `coordinator_task.session_id` | AgentCore `submitRun` 返回 | 查询/取消/恢复 Expert Agent run；human resume 复用 |
+| Task | `digital_team_project_conversation.session_id` | Coordinator (`"session-" + UUID`) | 业务标识，作为 `X-Session-Id` 头传给 AgentCore |
+| Coordinator Agent | `digital_team_coordinator_agent_run.session_id` | AgentCore `submitRun` 返回 | 查询/取消 Coordinator Agent run；repair 复用 |
+| Expert Agent | `digital_team_coordinator_task.session_id` | AgentCore `submitRun` 返回 | 查询/取消/恢复 Expert Agent run；human resume 复用 |
 
 原则：同一 Task 内，同一 agent 多次调用复用同一个 sessionId（第一次 `submitRun` 返回的那个）。
 
 ### 5.1 Coordinator Session 跨消息复用
 
-Task 内第一条消息 → AgentCore 创建新的 Coordinator session → 存入 `project_conversation.coordinator_session_id`。后续消息的意图分析传入该 `conversationSessionId`，AgentCore 在同一会话内继续对话，保持上下文连续。
+Task 内第一条消息 → AgentCore 创建新的 Coordinator session → 存入 `digital_team_project_conversation.coordinator_session_id`。后续消息的意图分析传入该 `conversationSessionId`，AgentCore 在同一会话内继续对话，保持上下文连续。
 
 ```
 消息1 → Coordinator submitRun() {conversationSessionId: null}
         → AgentCore 返回 sessionId="coord-abc"
-        → 存入 project_conversation.coordinator_session_id
-        → 存入 coordinator_agent_run.session_id
+        → 存入 digital_team_project_conversation.coordinator_session_id
+        → 存入 digital_team_coordinator_agent_run.session_id
 
 消息2 → 读取 coordinator_session_id="coord-abc"
         → Coordinator submitRun() {conversationSessionId: "coord-abc"}
@@ -210,8 +210,8 @@ Task 内第一条消息 → AgentCore 创建新的 Coordinator session → 存�
 
 | 层级 | 存储表 | 复用时机 |
 |---|---|---|
-| Task business session | `project_conversation.session_id` | Task 创建时生成，所有消息共享 |
-| Coordinator Agent session | `project_conversation.coordinator_session_id` | 首次意图分析后保存，后续消息复用 |
+| Task business session | `digital_team_project_conversation.session_id` | Task 创建时生成，所有消息共享 |
+| Coordinator Agent session | `digital_team_project_conversation.coordinator_session_id` | 首次意图分析后保存，后续消息复用 |
 | Expert Agent session | `project_conversation_expert_session(expert_id)` | 首次 Task SUCCEEDED 后保存，后续消息复用 |
 
 ## 6. 事件模型
@@ -228,7 +228,7 @@ data: {AgentEvent JSON}
 
 ### 6.2 事件类型
 
-**Coordinator 生成**（落 `project_event`，用于回放）：
+**Coordinator 生成**（落 `digital_team_project_event`，用于回放）：
 
 | type | 触发时机 |
 |---|---|
@@ -255,7 +255,7 @@ data: {AgentEvent JSON}
 
 ### 6.3 持久化策略
 
-| 事件来源 | 落 `project_event`？ | 回放方式 |
+| 事件来源 | 落 `digital_team_project_event`？ | 回放方式 |
 |---|---|---|
 | Coordinator 事件 | 是 | 从 DB 直接回放 |
 | Agent 事件 | 否 | 插入 `AGENT_RUN_MARKER`（含 sessionId），回放时调 `agentCore.streamEvents(sessionId, 0)` |
@@ -386,8 +386,8 @@ GET    /api/v1/admin/prompts                               管理 Prompt
 | AgentCore 返回重复事件 | `event_id` DB unique key 去重 |
 | AgentCore 返回乱序事件 | 按 `sequence` 排序 |
 | AgentCore Run 丢失 | 合成 `error` 事件，标记任务 FAILED |
-| SSE 断线重连 | `Last-Event-ID` 头 + `project_event` 回放 + `AGENT_RUN_MARKER` 触发 AgentCore 重查 |
-| 跨实例 SSE 投递 | DB 轮询 `project_event` + `AGENT_RUN_MARKER` → `agentCore.streamEvents()` |
+| SSE 断线重连 | `Last-Event-ID` 头 + `digital_team_project_event` 回放 + `AGENT_RUN_MARKER` 触发 AgentCore 重查 |
+| 跨实例 SSE 投递 | DB 轮询 `digital_team_project_event` + `AGENT_RUN_MARKER` → `agentCore.streamEvents()` |
 | 人工请求超时 | 定时扫描过期请求，标记任务 FAILED |
 
 ## 11. 测试

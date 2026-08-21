@@ -2,21 +2,21 @@ package org.cmb.infrastructure.persistent;
 
 import java.util.List;
 import java.util.UUID;
-import org.cmb.infrastructure.persistent.mapper.ConversationTaskMapper;
+import org.cmb.infrastructure.persistent.mapper.ProjectConversationMapper;
 import org.cmb.application.dto.ConversationTaskView;
 import org.cmb.application.domain.RequestIdentity;
 import org.springframework.stereotype.Repository;
 
 /**
  * Conversation-task persistence facade. All SQL lives in
- * {@link ConversationTaskMapper}.
+ * {@link ProjectConversationMapper}.
  */
 @Repository
 public class ConversationTaskRepository {
 
-    private final ConversationTaskMapper mapper;
+    private final ProjectConversationMapper mapper;
 
-    public ConversationTaskRepository(ConversationTaskMapper mapper) {
+    public ConversationTaskRepository(ProjectConversationMapper mapper) {
         this.mapper = mapper;
     }
 

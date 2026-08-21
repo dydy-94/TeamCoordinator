@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.cmb.infrastructure.persistent.mapper.ProjectMemberMapper">
+
+    <resultMap id="projectMember" type="org.cmb.application.domain.ProjectMember">
+        <result column="user_id" property="userId"/>
+        <result column="role" property="role"/>
+    </resultMap>
+
+    <select id="findRole" resultType="string">
+        SELECT role FROM digital_team_project_member
+        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
+        AND user_id = #{userId}
+    </select>
+
+    <select id="findMembers" resultMap="projectMember">
+        SELECT user_id, role FROM digital_team_project_member
+        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
+        ORDER BY user_id
+    </select>
+
+    <select id="countMember" resultType="int">
+        SELECT COUNT(*) FROM digital_team_project_member
+        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
+        AND user_id = #{userId}
+    </select>
+
+    <insert id="insertMember">
+        INSERT INTO digital_team_project_member (tenant_id, project_id, user_id, role)
+        VALUES (#{tenantId}, #{projectId}, #{userId}, #{role})
+    </insert>
+
+    <update id="updateMember">
+        UPDATE digital_team_project_member SET role = #{role}, updated_at = CURRENT_TIMESTAMP
+        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
+        AND user_id = #{userId}
+    </update>
+
+    <delete id="deleteMember">
+        DELETE FROM digital_team_project_member
+        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
+        AND user_id = #{userId}
+    </delete>
+
+</mapper>

@@ -108,14 +108,14 @@ class ProjectPermissionIntegrationTest {
                         new RequestIdentity(TENANT_A, OWNER), projectId));
 
         Integer viewerCount = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM project_member WHERE tenant_id = ? AND project_id = ? "
+                "SELECT COUNT(*) FROM digital_team_project_member WHERE tenant_id = ? AND project_id = ? "
                         + "AND user_id = ?",
                 Integer.class,
                 TENANT_A,
                 projectId,
                 "viewer-a");
         Integer auditCount = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM permission_audit_log WHERE tenant_id = ? AND project_id = ?",
+                "SELECT COUNT(*) FROM digital_team_permission_audit_log WHERE tenant_id = ? AND project_id = ?",
                 Integer.class,
                 TENANT_A,
                 projectId);

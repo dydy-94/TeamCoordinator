@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="org.cmb.infrastructure.persistent.mapper.IntentAnalysisMapper">
+<mapper namespace="org.cmb.infrastructure.persistent.mapper.CoordinatorAnalysisMapper">
 
     <insert id="insertAnalysis">
-        INSERT INTO coordinator_analysis
+        INSERT INTO digital_team_coordinator_analysis
         (business_id, tenant_id, project_id, user_id, input_snapshot, model_name,
         prompt_version, schema_version, decision_type, decision_json, repaired)
         VALUES (#{analysisId}, #{tenantId}, #{projectId}, #{userId}, #{inputSnapshot},

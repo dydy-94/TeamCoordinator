@@ -1,4 +1,4 @@
-CREATE TABLE coordinator_agent_run (
+CREATE TABLE digital_team_coordinator_agent_run (
     id VARCHAR(64) NOT NULL PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL,
     project_id VARCHAR(64) NOT NULL,
@@ -14,8 +14,8 @@ CREATE TABLE coordinator_agent_run (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_coordinator_agent_run_key UNIQUE (tenant_id, run_key),
-    CONSTRAINT fk_coordinator_agent_run_project FOREIGN KEY (project_id) REFERENCES project (id)
+    CONSTRAINT fk_coordinator_agent_run_project FOREIGN KEY (project_id) REFERENCES digital_team_project (id)
 );
 
 CREATE INDEX idx_coordinator_agent_session
-    ON coordinator_agent_run (session_id);
+    ON digital_team_coordinator_agent_run (session_id);

@@ -1,7 +1,7 @@
-ALTER TABLE project_conversation
+ALTER TABLE digital_team_project_conversation
     ADD COLUMN coordinator_session_id VARCHAR(128) NULL AFTER session_id;
 
-CREATE TABLE project_conversation_expert_session (
+CREATE TABLE digital_team_project_conversation_expert_session (
     id VARCHAR(64) NOT NULL PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL,
     project_id VARCHAR(64) NOT NULL,
@@ -14,4 +14,4 @@ CREATE TABLE project_conversation_expert_session (
 );
 
 CREATE INDEX idx_expert_session_lookup
-    ON project_conversation_expert_session (tenant_id, project_id, conversation_id);
+    ON digital_team_project_conversation_expert_session (tenant_id, project_id, conversation_id);

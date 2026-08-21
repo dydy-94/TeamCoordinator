@@ -25,7 +25,7 @@ versions so local and CI builds use the same Java baseline.
 
 Coordinator and expert Prompts are versioned in MySQL. Runtime calls use only
 the `PUBLISHED` version and record the rendered Prompt and variables in
-`prompt_execution`. Manage versions through `/api/v1/admin/prompts`; configure
+`digital_team_prompt_execution`. Manage versions through `/api/v1/admin/prompts`; configure
 administrators with `PROMPT_ADMIN_USERS` as comma-separated user IDs.
 
 Coordinator execution/planning and expert execution/resume use separate
@@ -93,7 +93,7 @@ defaults to 500 ms and can be changed with
 The message outbox is consumed by a database-leased worker. Intent analysis is
 itself submitted to the Coordinator agent through AgentCore. Its `session_id`,
 SSE cursor, input snapshot, and repair stage are stored in
-`coordinator_agent_run`. After a valid decision is returned, expert tasks use
+`digital_team_coordinator_agent_run`. After a valid decision is returned, expert tasks use
 the same submit-and-stream protocol. Another Coordinator instance can take
 over either phase after the dispatch lease expires.
 

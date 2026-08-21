@@ -1,4 +1,4 @@
-CREATE TABLE project (
+CREATE TABLE digital_team_project (
     id VARCHAR(64) NOT NULL PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL,
     name VARCHAR(128) NOT NULL,
@@ -10,9 +10,9 @@ CREATE TABLE project (
     CONSTRAINT uk_project_tenant_name UNIQUE (tenant_id, name)
 );
 
-CREATE INDEX idx_project_tenant ON project (tenant_id, id);
+CREATE INDEX idx_project_tenant ON digital_team_project (tenant_id, id);
 
-CREATE TABLE project_member (
+CREATE TABLE digital_team_project_member (
     project_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
     user_id VARCHAR(64) NOT NULL,
@@ -20,13 +20,13 @@ CREATE TABLE project_member (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (project_id, user_id),
-    CONSTRAINT fk_project_member_project FOREIGN KEY (project_id) REFERENCES project (id)
+    CONSTRAINT fk_project_member_project FOREIGN KEY (project_id) REFERENCES digital_team_project (id)
 );
 
 CREATE INDEX idx_project_member_tenant_user
-    ON project_member (tenant_id, user_id, project_id);
+    ON digital_team_project_member (tenant_id, user_id, project_id);
 
-CREATE TABLE project_expert (
+CREATE TABLE digital_team_project_expert (
     project_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
     expert_id VARCHAR(128) NOT NULL,
@@ -34,12 +34,12 @@ CREATE TABLE project_expert (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (project_id, expert_id),
-    CONSTRAINT fk_project_expert_project FOREIGN KEY (project_id) REFERENCES project (id)
+    CONSTRAINT fk_project_expert_project FOREIGN KEY (project_id) REFERENCES digital_team_project (id)
 );
 
-CREATE INDEX idx_project_expert_tenant ON project_expert (tenant_id, project_id);
+CREATE INDEX idx_project_expert_tenant ON digital_team_project_expert (tenant_id, project_id);
 
-CREATE TABLE permission_audit_log (
+CREATE TABLE digital_team_permission_audit_log (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL,
     project_id VARCHAR(64) NOT NULL,
@@ -51,4 +51,4 @@ CREATE TABLE permission_audit_log (
 );
 
 CREATE INDEX idx_permission_audit_project
-    ON permission_audit_log (tenant_id, project_id, created_at);
+    ON digital_team_permission_audit_log (tenant_id, project_id, created_at);

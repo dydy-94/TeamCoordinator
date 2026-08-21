@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.cmb.infrastructure.persistent.mapper.ProjectEventMapper">
+
+    <resultMap id="projectEvent" type="org.cmb.application.domain.ProjectEvent">
+        <result column="id" property="id"/>
+        <result column="project_id" property="projectId"/>
+        <result column="conversation_id" property="conversationId"/>
+        <result column="message_id" property="messageId"/>
+        <result column="sequence" property="sequence"/>
+        <result column="event_type" property="type"/>
+        <result column="payload" property="payload"
+                typeHandler="org.cmb.infrastructure.persistent.typehandler.JsonNodeTypeHandler"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <insert id="insertEvent">
+        INSERT INTO digital_team_project_event
+        (business_id, tenant_id, project_id, conversation_id, message_id, sequence,
+        event_type, visibility, payload) VALUES (#{id}, #{tenantId}, #{projectId},
+        #{conversationId}, #{messageId}, #{sequence}, #{eventType}, #{visibility},
+        #{payload})
+    </insert>
+
+    <select id="findNextMarkerPayload" resultType="string">
+        SELECT payload FROM digital_team_project_event
+        WHERE tenant_id = #{tenantId} AND conversation_id = #{conversationId}
+        AND event_type = 'AGENT_RUN_MARKER' AND sequence &gt; #{afterSequence}
+        AND payload LIKE CONCAT('%&quot;sessionId&quot;:&quot;', #{sessionId}, '&quot;%')
+        ORDER BY sequence LIMIT 1
+    </select>
+
+    <select id="findPublicEvents" resultMap="projectEvent">
+        SELECT business_id AS id, project_id, conversation_id, message_id, sequence,
+        event_type, payload, created_at FROM digital_team_project_event
+        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
+        AND visibility = 'PUBLIC' AND conversation_id = #{conversationId}
+        AND sequence &gt; #{afterSequence} ORDER BY sequence LIMIT #{limit}
+    </select>
+
+    <select id="findEvents">
+        SELECT sequence, event_type, payload, created_at FROM digital_team_project_event
+        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
+        AND visibility = 'PUBLIC' AND conversation_id = #{taskId} ORDER BY sequence
+    </select>
+
+</mapper>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.cmb.infrastructure.persistent.mapper.PromptExecutionMapper">
+
+    <insert id="insertAudit">
+        INSERT INTO digital_team_prompt_execution
+        (business_id, tenant_id, project_id, conversation_id, invocation_id,
+        agent_id, scene, prompt_template_id, prompt_version,
+        rendered_prompt, variables_snapshot)
+        VALUES (#{id}, #{tenantId}, #{projectId}, #{conversationId}, #{invocationId},
+        #{agentId}, #{scene}, #{templateId}, #{templateVersion}, #{renderedPrompt},
+        #{variablesSnapshot})
+    </insert>
+
+</mapper>

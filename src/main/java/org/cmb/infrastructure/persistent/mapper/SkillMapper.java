@@ -6,8 +6,8 @@ import org.apache.ibatis.annotations.Param;
 import org.cmb.application.domain.Skill;
 
 /**
- * SQL access for platform-level skills and project-skill associations
- * (skill, project_skill). Queries that may match multiple rows return
+ * SQL access for skills (digital_team_skill). Join queries use this table
+ * as the main table. Queries that may match multiple rows return
  * {@code List} so the repository facade keeps its "first row or null"
  * semantics.
  */
@@ -21,26 +21,4 @@ public interface SkillMapper {
     List<Skill> findByProject(
             @Param("tenantId") String tenantId,
             @Param("projectId") String projectId);
-
-    Integer countProjectSkill(
-            @Param("tenantId") String tenantId,
-            @Param("projectId") String projectId,
-            @Param("skillId") String skillId);
-
-    int insertProjectSkill(
-            @Param("tenantId") String tenantId,
-            @Param("projectId") String projectId,
-            @Param("skillId") String skillId,
-            @Param("enabled") boolean enabled);
-
-    int updateProjectSkill(
-            @Param("enabled") boolean enabled,
-            @Param("tenantId") String tenantId,
-            @Param("projectId") String projectId,
-            @Param("skillId") String skillId);
-
-    int deleteProjectSkill(
-            @Param("tenantId") String tenantId,
-            @Param("projectId") String projectId,
-            @Param("skillId") String skillId);
 }

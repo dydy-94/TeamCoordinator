@@ -114,7 +114,7 @@ Coordinator **透传** AgentCore 的所有 SSE 事件（不解析、不转换 ty
 
 ## 持久化与回放
 
-| 事件来源 | 落 `project_event` | 回放方式 |
+| 事件来源 | 落 `digital_team_project_event` | 回放方式 |
 |---------|-------------------|---------|
 | Coordinator 生成 | ✅ 是 | DB 直接读取 `payload` 字段 |
 | AgentCore 透传 | ❌ 否（只存 `AGENT_RUN_MARKER`） | 通过 `marker.sessionId` 调 `agentCore.streamEvents()` 现场拉取 |

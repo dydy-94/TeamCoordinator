@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="org.cmb.infrastructure.persistent.mapper.ConversationTaskMapper">
+<mapper namespace="org.cmb.infrastructure.persistent.mapper.ProjectConversationMapper">
 
     <resultMap id="conversationTaskView" type="org.cmb.application.dto.ConversationTaskView">
         <result column="id" property="taskId"/>
@@ -13,26 +13,45 @@
     </resultMap>
 
     <insert id="insertConversation">
-        INSERT INTO project_conversation
+        INSERT INTO digital_team_project_conversation
         (business_id, tenant_id, project_id, session_id, title, status)
         VALUES (#{id}, #{tenantId}, #{projectId}, #{sessionId}, #{title}, 'ACTIVE')
     </insert>
 
     <select id="listByProject" resultMap="conversationTaskView">
         SELECT business_id AS id, project_id, session_id, title, status, created_at
-        FROM project_conversation WHERE tenant_id = #{tenantId}
+        FROM digital_team_project_conversation WHERE tenant_id = #{tenantId}
         AND project_id = #{projectId} ORDER BY created_at DESC
     </select>
 
     <delete id="delete">
-        DELETE FROM project_conversation
+        DELETE FROM digital_team_project_conversation
         WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
         AND business_id = #{taskId}
     </delete>
 
     <select id="get" resultMap="conversationTaskView">
         SELECT business_id AS id, project_id, session_id, title, status, created_at
-        FROM project_conversation WHERE tenant_id = #{tenantId}
+        FROM digital_team_project_conversation WHERE tenant_id = #{tenantId}
+        AND project_id = #{projectId} AND business_id = #{taskId}
+    </select>
+
+    <update id="saveCoordinatorSession">
+        UPDATE digital_team_project_conversation SET coordinator_session_id = #{sessionId},
+        coordinator_agent_id = #{agentId}
+        WHERE business_id = #{conversationId}
+        AND coordinator_session_id IS NULL
+    </update>
+
+    <select id="loadCoordinatorAgent" resultType="string">
+        SELECT coordinator_agent_id FROM digital_team_project_conversation
+        WHERE business_id = #{conversationId}
+    </select>
+
+    <select id="findConversation">
+        SELECT business_id AS taskId, session_id AS sessionId, title, status,
+        created_at AS createdAt
+        FROM digital_team_project_conversation WHERE tenant_id = #{tenantId}
         AND project_id = #{projectId} AND business_id = #{taskId}
     </select>
 

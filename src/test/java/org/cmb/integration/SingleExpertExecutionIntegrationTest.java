@@ -53,7 +53,7 @@ class SingleExpertExecutionIntegrationTest {
 
         String dispatchId = dispatchId(projectId);
         jdbc.update(
-                "UPDATE coordinator_dispatch SET lease_owner = 'dead-instance', "
+                "UPDATE digital_team_coordinator_dispatch SET lease_owner = 'dead-instance', "
                         + "lease_expires_at = ? WHERE business_id = ?",
                 Timestamp.from(Instant.now().plusSeconds(60)),
                 dispatchId);
@@ -61,7 +61,7 @@ class SingleExpertExecutionIntegrationTest {
         assertEquals("RUNNING", task(projectId).getStatus());
 
         jdbc.update(
-                "UPDATE coordinator_dispatch SET lease_expires_at = ? WHERE business_id = ?",
+                "UPDATE digital_team_coordinator_dispatch SET lease_expires_at = ? WHERE business_id = ?",
                 Timestamp.from(Instant.now().minusSeconds(1)),
                 dispatchId);
         task = runUntilTerminal(projectId);
@@ -75,27 +75,27 @@ class SingleExpertExecutionIntegrationTest {
                 task.getId(), 2L, "RUNNING", null));
 
         Integer requestCount = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM coordinator_task WHERE request_id = ?",
+                "SELECT COUNT(*) FROM digital_team_coordinator_task WHERE request_id = ?",
                 Integer.class,
                 task.getRequestId());
         Integer finalCount = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM project_event WHERE project_id = ? "
+                "SELECT COUNT(*) FROM digital_team_project_event WHERE project_id = ? "
                         + "AND payload LIKE '%\"type\":\"coordinatorChat\"%'",
                 Integer.class,
                 projectId);
         assertTrue(finalCount != null && finalCount > 0);
         assertEquals(Integer.valueOf(1), requestCount);
         String businessSessionId = jdbc.queryForObject(
-                "SELECT c.session_id FROM project_conversation c "
-                        + "JOIN coordinator_dispatch d ON d.conversation_id = c.business_id "
+                "SELECT c.session_id FROM digital_team_project_conversation c "
+                        + "JOIN digital_team_coordinator_dispatch d ON d.conversation_id = c.business_id "
                         + "WHERE d.project_id = ?",
                 String.class, projectId);
         assertEquals(businessSessionId, jdbc.queryForObject(
-                "SELECT business_session_id FROM coordinator_agent_run "
+                "SELECT business_session_id FROM digital_team_coordinator_agent_run "
                         + "WHERE project_id = ?",
                 String.class, projectId));
         String resultJson = jdbc.queryForObject(
-                "SELECT result_json FROM coordinator_task WHERE business_id = ?",
+                "SELECT result_json FROM digital_team_coordinator_task WHERE business_id = ?",
                 String.class, task.getId());
         assertTrue(resultJson.contains("\"content\":"));
     }
@@ -127,11 +127,11 @@ class SingleExpertExecutionIntegrationTest {
         submitMessage(projectId, "分析丢失 Run 场景");
         TaskRecord task = runUntilTaskExists(projectId);
         jdbc.update(
-                "UPDATE coordinator_task SET session_id = 'missing-run', status = 'RUNNING' "
+                "UPDATE digital_team_coordinator_task SET session_id = 'missing-run', status = 'RUNNING' "
                         + "WHERE business_id = ?",
                 task.getId());
         jdbc.update(
-                "UPDATE coordinator_dispatch SET status = 'RUNNING', lease_owner = NULL, "
+                "UPDATE digital_team_coordinator_dispatch SET status = 'RUNNING', lease_owner = NULL, "
                         + "lease_expires_at = NULL WHERE project_id = ?",
                 projectId);
 
@@ -171,7 +171,7 @@ class SingleExpertExecutionIntegrationTest {
 
     private TaskRecord task(String projectId) {
         String taskId = jdbc.queryForObject(
-                "SELECT business_id FROM coordinator_task WHERE project_id = ?",
+                "SELECT business_id FROM digital_team_coordinator_task WHERE project_id = ?",
                 String.class,
                 projectId);
         return executionRepository.findTask("tenant-execution", projectId, taskId);
@@ -180,7 +180,7 @@ class SingleExpertExecutionIntegrationTest {
     private TaskRecord runUntilTaskExists(String projectId) {
         for (int attempt = 0; attempt < 30; attempt++) {
             Integer count = jdbc.queryForObject(
-                    "SELECT COUNT(*) FROM coordinator_task WHERE project_id = ?",
+                    "SELECT COUNT(*) FROM digital_team_coordinator_task WHERE project_id = ?",
                     Integer.class,
                     projectId);
             if (count != null && count > 0) {
@@ -207,14 +207,14 @@ class SingleExpertExecutionIntegrationTest {
 
     private String dispatchId(String projectId) {
         return jdbc.queryForObject(
-                "SELECT business_id FROM coordinator_dispatch WHERE project_id = ?",
+                "SELECT business_id FROM digital_team_coordinator_dispatch WHERE project_id = ?",
                 String.class,
                 projectId);
     }
 
     private String dispatchStatus(String dispatchId) {
         return jdbc.queryForObject(
-                "SELECT status FROM coordinator_dispatch WHERE business_id = ?",
+                "SELECT status FROM digital_team_coordinator_dispatch WHERE business_id = ?",
                 String.class,
                 dispatchId);
     }

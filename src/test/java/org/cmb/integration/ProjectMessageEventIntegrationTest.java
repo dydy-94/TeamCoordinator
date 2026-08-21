@@ -77,12 +77,12 @@ class ProjectMessageEventIntegrationTest {
         assertEquals(firstJson.get("messageId").asText(), duplicateJson.get("messageId").asText());
 
         Integer messageCount = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM project_message WHERE tenant_id = ? AND project_id = ?",
+                "SELECT COUNT(*) FROM digital_team_project_message WHERE tenant_id = ? AND project_id = ?",
                 Integer.class,
                 "tenant-message",
                 projectId);
         Integer dispatchCount = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM coordinator_dispatch WHERE tenant_id = ? AND project_id = ? "
+                "SELECT COUNT(*) FROM digital_team_coordinator_dispatch WHERE tenant_id = ? AND project_id = ? "
                         + "AND status = 'PENDING'",
                 Integer.class,
                 "tenant-message",
@@ -144,7 +144,7 @@ class ProjectMessageEventIntegrationTest {
 
     @Test
     void serializesMessagesWithinOneProjectAcrossInstances() throws Exception {
-        jdbc.update("UPDATE coordinator_dispatch SET status = 'COMPLETED'");
+        jdbc.update("UPDATE digital_team_coordinator_dispatch SET status = 'COMPLETED'");
         String projectId = createProject("message-owner");
         String taskId = createTask(projectId);
         submit(projectId, taskId, "serial-client-1", "first");
@@ -157,7 +157,7 @@ class ProjectMessageEventIntegrationTest {
         DispatchWork retriedFirst = executionRepository.claimNext("instance-b", 30);
         assertEquals(first.getDispatchId(), retriedFirst.getDispatchId());
         jdbc.update(
-                "UPDATE coordinator_dispatch SET status = 'COMPLETED', "
+                "UPDATE digital_team_coordinator_dispatch SET status = 'COMPLETED', "
                         + "lease_owner = NULL, lease_expires_at = NULL WHERE business_id = ?",
                 first.getDispatchId());
 
@@ -175,10 +175,10 @@ class ProjectMessageEventIntegrationTest {
         submit(projectId, secondTask, "task-two-message", "second task only");
 
         String firstSession = jdbc.queryForObject(
-                "SELECT session_id FROM project_conversation WHERE business_id = ?",
+                "SELECT session_id FROM digital_team_project_conversation WHERE business_id = ?",
                 String.class, firstTask);
         String secondSession = jdbc.queryForObject(
-                "SELECT session_id FROM project_conversation WHERE business_id = ?",
+                "SELECT session_id FROM digital_team_project_conversation WHERE business_id = ?",
                 String.class, secondTask);
         assertTrue(!firstSession.equals(secondSession));
 

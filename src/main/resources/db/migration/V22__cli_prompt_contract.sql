@@ -5,7 +5,7 @@
 -- The tool-based versions remain available for deployments that keep the
 -- tool contract; operators pick the version per deployment.
 
-INSERT INTO prompt_template
+INSERT INTO digital_team_prompt_template
     (business_id, prompt_key, agent_scope, scene, version, status,
      template_content, variables_schema, created_by, published_at)
 VALUES

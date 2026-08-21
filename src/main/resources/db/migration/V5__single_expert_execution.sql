@@ -1,11 +1,11 @@
-ALTER TABLE coordinator_dispatch ADD COLUMN lease_owner VARCHAR(128);
-ALTER TABLE coordinator_dispatch ADD COLUMN lease_expires_at TIMESTAMP NULL;
-ALTER TABLE coordinator_dispatch ADD COLUMN last_error VARCHAR(1024);
+ALTER TABLE digital_team_coordinator_dispatch ADD COLUMN lease_owner VARCHAR(128);
+ALTER TABLE digital_team_coordinator_dispatch ADD COLUMN lease_expires_at TIMESTAMP NULL;
+ALTER TABLE digital_team_coordinator_dispatch ADD COLUMN last_error VARCHAR(1024);
 
 CREATE INDEX idx_dispatch_lease
-    ON coordinator_dispatch (status, available_at, lease_expires_at);
+    ON digital_team_coordinator_dispatch (status, available_at, lease_expires_at);
 
-CREATE TABLE coordinator_plan (
+CREATE TABLE digital_team_coordinator_plan (
     id VARCHAR(64) NOT NULL PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL,
     project_id VARCHAR(64) NOT NULL,
@@ -18,11 +18,11 @@ CREATE TABLE coordinator_plan (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_plan_message UNIQUE (tenant_id, project_id, message_id),
-    CONSTRAINT fk_plan_project FOREIGN KEY (project_id) REFERENCES project (id),
-    CONSTRAINT fk_plan_message FOREIGN KEY (message_id) REFERENCES project_message (id)
+    CONSTRAINT fk_plan_project FOREIGN KEY (project_id) REFERENCES digital_team_project (id),
+    CONSTRAINT fk_plan_message FOREIGN KEY (message_id) REFERENCES digital_team_project_message (id)
 );
 
-CREATE TABLE coordinator_task (
+CREATE TABLE digital_team_coordinator_task (
     id VARCHAR(64) NOT NULL PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL,
     project_id VARCHAR(64) NOT NULL,
@@ -42,13 +42,13 @@ CREATE TABLE coordinator_task (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_task_plan_key UNIQUE (plan_id, task_key),
     CONSTRAINT uk_task_request UNIQUE (tenant_id, request_id),
-    CONSTRAINT fk_task_plan FOREIGN KEY (plan_id) REFERENCES coordinator_plan (id)
+    CONSTRAINT fk_task_plan FOREIGN KEY (plan_id) REFERENCES digital_team_coordinator_plan (id)
 );
 
-CREATE INDEX idx_task_session ON coordinator_task (session_id);
-CREATE INDEX idx_task_lease ON coordinator_task (status, lease_expires_at);
+CREATE INDEX idx_task_session ON digital_team_coordinator_task (session_id);
+CREATE INDEX idx_task_lease ON digital_team_coordinator_task (status, lease_expires_at);
 
-CREATE TABLE coordinator_task_event (
+CREATE TABLE digital_team_coordinator_task_event (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL,
     task_id VARCHAR(64) NOT NULL,
@@ -59,5 +59,5 @@ CREATE TABLE coordinator_task_event (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_task_event_id UNIQUE (tenant_id, event_id),
     CONSTRAINT uk_task_event_sequence UNIQUE (task_id, sequence),
-    CONSTRAINT fk_task_event_task FOREIGN KEY (task_id) REFERENCES coordinator_task (id)
+    CONSTRAINT fk_task_event_task FOREIGN KEY (task_id) REFERENCES digital_team_coordinator_task (id)
 );

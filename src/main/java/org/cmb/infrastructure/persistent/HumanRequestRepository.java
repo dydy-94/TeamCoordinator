@@ -6,7 +6,11 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.cmb.infrastructure.persistent.mapper.CoordinatorDispatchMapper;
+import org.cmb.infrastructure.persistent.mapper.CoordinatorPlanMapper;
+import org.cmb.infrastructure.persistent.mapper.CoordinatorTaskMapper;
 import org.cmb.infrastructure.persistent.mapper.HumanRequestMapper;
+import org.cmb.infrastructure.persistent.mapper.ProjectMessageMapper;
 import org.cmb.common.enums.HumanDecision;
 import org.cmb.common.enums.HumanRequestType;
 import org.cmb.application.domain.RequestIdentity;
@@ -14,16 +18,32 @@ import org.springframework.stereotype.Repository;
 
 /**
  * Human-in-the-loop persistence facade. Owns JSON serialization; all SQL
- * lives in {@link HumanRequestMapper}.
+ * lives in {@link HumanRequestMapper} and the side-effect statements in
+ * {@link CoordinatorTaskMapper}, {@link CoordinatorPlanMapper},
+ * {@link CoordinatorDispatchMapper}, {@link ProjectMessageMapper}.
  */
 @Repository
 public class HumanRequestRepository {
 
     private final HumanRequestMapper mapper;
+    private final CoordinatorTaskMapper taskMapper;
+    private final CoordinatorPlanMapper planMapper;
+    private final CoordinatorDispatchMapper dispatchMapper;
+    private final ProjectMessageMapper messageMapper;
     private final ObjectMapper objectMapper;
 
-    public HumanRequestRepository(HumanRequestMapper mapper, ObjectMapper objectMapper) {
+    public HumanRequestRepository(
+            HumanRequestMapper mapper,
+            CoordinatorTaskMapper taskMapper,
+            CoordinatorPlanMapper planMapper,
+            CoordinatorDispatchMapper dispatchMapper,
+            ProjectMessageMapper messageMapper,
+            ObjectMapper objectMapper) {
         this.mapper = mapper;
+        this.taskMapper = taskMapper;
+        this.planMapper = planMapper;
+        this.dispatchMapper = dispatchMapper;
+        this.messageMapper = messageMapper;
         this.objectMapper = objectMapper;
     }
 
@@ -54,23 +74,23 @@ public class HumanRequestRepository {
                 "{\"type\":\"object\",\"minProperties\":1,"
                         + "\"additionalProperties\":{\"type\":\"string\",\"minLength\":1}}",
                 Timestamp.from(Instant.now().plusSeconds(86400)));
-        mapper.markTaskWaitingHuman(taskId);
+        taskMapper.markTaskWaitingHumanForRequest(taskId);
         return id;
     }
 
     public void resumeTask(String tenantId, String taskId) {
-        mapper.resumeTask(tenantId, taskId);
+        taskMapper.resumeTask(tenantId, taskId);
     }
 
     public void failTaskAndDispatch(
             String tenantId, String taskId, String status, String error) {
-        mapper.failTask(status, tenantId, taskId);
-        List<String> planIds = mapper.findPlanIdForTask(tenantId, taskId);
+        taskMapper.failTask(status, tenantId, taskId);
+        List<String> planIds = taskMapper.findPlanIdForTask(tenantId, taskId);
         if (planIds.isEmpty()) {
             return;
         }
-        mapper.failPlan(status, planIds.get(0));
-        mapper.failDispatch(status, error, tenantId, planIds.get(0));
+        planMapper.failPlan(status, planIds.get(0));
+        dispatchMapper.failDispatch(status, error, tenantId, planIds.get(0));
     }
 
     public List<HumanRequestRecord> findExpiredPending() {
@@ -110,8 +130,8 @@ public class HumanRequestRepository {
 
     public void resumeCoordinatorDispatch(
             String tenantId, String messageId, String dispatchId, String answer) {
-        mapper.appendMessageText(answer, messageId, tenantId);
-        mapper.resetDispatchPending(dispatchId, tenantId);
+        messageMapper.appendMessageText(answer, messageId, tenantId);
+        dispatchMapper.resetDispatchPending(dispatchId, tenantId);
     }
 
     private String write(JsonNode value) {

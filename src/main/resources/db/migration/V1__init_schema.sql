@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS schema_version_marker (
+CREATE TABLE IF NOT EXISTS digital_team_schema_version_marker (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     marker VARCHAR(64) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP

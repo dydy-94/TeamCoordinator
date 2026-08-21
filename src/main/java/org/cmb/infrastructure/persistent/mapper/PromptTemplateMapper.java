@@ -6,12 +6,12 @@ import org.apache.ibatis.annotations.Param;
 import org.cmb.application.dto.PromptTemplateView;
 
 /**
- * SQL access for prompt management (prompt_template, prompt_execution).
+ * SQL access for prompt templates (digital_team_prompt_template).
  * Queries that may match multiple rows return {@code List} so the
  * repository facade keeps its "first row or null" semantics.
  */
 @Mapper
-public interface PromptMapper {
+public interface PromptTemplateMapper {
 
     List<PromptTemplateView> findPublished(@Param("promptKey") String promptKey);
 
@@ -34,17 +34,4 @@ public interface PromptMapper {
     int publish(@Param("id") String id);
 
     List<PromptTemplateView> find(@Param("id") String id);
-
-    int insertAudit(
-            @Param("id") String id,
-            @Param("tenantId") String tenantId,
-            @Param("projectId") String projectId,
-            @Param("conversationId") String conversationId,
-            @Param("invocationId") String invocationId,
-            @Param("agentId") String agentId,
-            @Param("scene") String scene,
-            @Param("templateId") String templateId,
-            @Param("templateVersion") int templateVersion,
-            @Param("renderedPrompt") String renderedPrompt,
-            @Param("variablesSnapshot") String variablesSnapshot);
 }

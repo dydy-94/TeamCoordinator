@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.cmb.infrastructure.persistent.mapper.ProjectConversationExpertSessionMapper">
+
+    <select id="findExpertSession" resultType="string">
+        SELECT session_id FROM digital_team_project_conversation_expert_session
+        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
+        AND conversation_id = #{conversationId} AND expert_id = #{expertId}
+        AND message_id &lt;&gt; #{currentMessageId}
+    </select>
+
+    <insert id="upsertExpertSession">
+        INSERT INTO digital_team_project_conversation_expert_session
+        (id, tenant_id, project_id, conversation_id, expert_id, session_id, message_id)
+        VALUES (#{id}, #{tenantId}, #{projectId}, #{conversationId}, #{expertId},
+        #{sessionId}, #{messageId})
+        ON DUPLICATE KEY UPDATE session_id = VALUES(session_id),
+        message_id = VALUES(message_id)
+    </insert>
+
+</mapper>

@@ -95,14 +95,14 @@ class CliSubmissionIntegrationTest {
 
         assertEquals(1, submissionCount(conversationId, "PLAN"));
         Integer planCount = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM coordinator_plan p "
+                "SELECT COUNT(*) FROM digital_team_coordinator_plan p "
                         + "WHERE p.conversation_id = ?",
                 Integer.class, conversationId);
         assertNotNull(planCount);
         assertEquals(1, planCount, "plan submission should drive plan creation");
         Integer taskCount = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM coordinator_task t "
-                        + "JOIN coordinator_plan p ON p.business_id = t.plan_id "
+                "SELECT COUNT(*) FROM digital_team_coordinator_task t "
+                        + "JOIN digital_team_coordinator_plan p ON p.business_id = t.plan_id "
                         + "WHERE p.conversation_id = ?",
                 Integer.class, conversationId);
         assertNotNull(taskCount);
@@ -118,7 +118,7 @@ class CliSubmissionIntegrationTest {
         // Let the mock flow create the plan and start the expert task.
         for (int attempt = 0; attempt < 20; attempt++) {
             Integer running = jdbc.queryForObject(
-                    "SELECT COUNT(*) FROM coordinator_task WHERE project_id = ? "
+                    "SELECT COUNT(*) FROM digital_team_coordinator_task WHERE project_id = ? "
                             + "AND status = 'RUNNING'",
                     Integer.class, projectId);
             if (running != null && running > 0) {
@@ -127,7 +127,7 @@ class CliSubmissionIntegrationTest {
             worker.runOnce();
         }
         String coordinatorTaskId = jdbc.queryForObject(
-                "SELECT business_id FROM coordinator_task WHERE project_id = ? "
+                "SELECT business_id FROM digital_team_coordinator_task WHERE project_id = ? "
                         + "ORDER BY created_at LIMIT 1",
                 String.class, projectId);
         assertNotNull(coordinatorTaskId);
@@ -149,14 +149,14 @@ class CliSubmissionIntegrationTest {
                         .content("{\"result_text\":\"CLI 写回的结果\"}"))
                 .andExpect(status().isOk());
         assertEquals("SUCCEEDED", jdbc.queryForObject(
-                "SELECT status FROM coordinator_task WHERE business_id = ?",
+                "SELECT status FROM digital_team_coordinator_task WHERE business_id = ?",
                 String.class, coordinatorTaskId));
         // 让 worker 消费一轮事件流（游标随流推进），再断言水位。
         worker.runOnce();
         // 事件游标必须随流事件推进（SUCCEEDED 后仍在推进），否则后续
         // 消息的会话水位恒为 0、重放窗口全量吐出历史。
         assertTrue(jdbc.queryForObject(
-                "SELECT last_sequence FROM coordinator_task WHERE business_id = ?",
+                "SELECT last_sequence FROM digital_team_coordinator_task WHERE business_id = ?",
                 Long.class, coordinatorTaskId) > 0L,
                 "task cursor must advance past stream events");
 
@@ -183,7 +183,7 @@ class CliSubmissionIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
         String artifactId = objectMapper.readTree(reserveBody).get("artifactId").asText();
         String storageKey = jdbc.queryForObject(
-                "SELECT storage_key FROM project_artifact WHERE business_id = ?",
+                "SELECT storage_key FROM digital_team_project_artifact WHERE business_id = ?",
                 String.class, artifactId);
         // In-memory store: push the file content through the mock endpoint.
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
@@ -201,7 +201,7 @@ class CliSubmissionIntegrationTest {
         String coordinatorTaskId = null;
         for (int attempt = 0; attempt < 20; attempt++) {
             java.util.List<String> rows = jdbc.queryForList(
-                    "SELECT business_id FROM coordinator_task WHERE project_id = ? "
+                    "SELECT business_id FROM digital_team_coordinator_task WHERE project_id = ? "
                             + "AND status = 'RUNNING' ORDER BY created_at",
                     String.class, projectId);
             if (!rows.isEmpty()) {
@@ -233,7 +233,7 @@ class CliSubmissionIntegrationTest {
         runUntilTerminalFor(projectId);
 
         java.util.List<java.util.Map<String, Object>> markers = jdbc.queryForList(
-                "SELECT payload FROM project_event "
+                "SELECT payload FROM digital_team_project_event "
                         + "WHERE conversation_id = ? AND event_type = 'AGENT_RUN_MARKER' "
                         + "ORDER BY sequence",
                 taskId);
@@ -254,7 +254,7 @@ class CliSubmissionIntegrationTest {
     private void runUntilTerminalFor(String projectId) {
         for (int attempt = 0; attempt < 40; attempt++) {
             Integer running = jdbc.queryForObject(
-                    "SELECT COUNT(*) FROM coordinator_dispatch WHERE project_id = ? "
+                    "SELECT COUNT(*) FROM digital_team_coordinator_dispatch WHERE project_id = ? "
                             + "AND status IN ('PENDING','RUNNING')",
                     Integer.class, projectId);
             if (running != null && running == 0) {
@@ -281,7 +281,7 @@ class CliSubmissionIntegrationTest {
 
     private int submissionCount(String sessionId, String kind) {
         Integer count = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM coordinator_cli_submission "
+                "SELECT COUNT(*) FROM digital_team_coordinator_cli_submission "
                         + "WHERE task_id = ? AND kind = ?",
                 Integer.class, sessionId, kind);
         return count == null ? 0 : count;
@@ -291,7 +291,7 @@ class CliSubmissionIntegrationTest {
     private void driveTicks(String projectId) {
         for (int attempt = 0; attempt < 20; attempt++) {
             Integer count = jdbc.queryForObject(
-                    "SELECT COUNT(*) FROM project_conversation WHERE project_id = ?",
+                    "SELECT COUNT(*) FROM digital_team_project_conversation WHERE project_id = ?",
                     Integer.class, projectId);
             if (count != null && count > 0) {
                 return;
@@ -302,20 +302,20 @@ class CliSubmissionIntegrationTest {
 
     private String conversationId(String projectId) {
         java.util.List<String> rows = jdbc.queryForList(
-                "SELECT business_id FROM project_conversation WHERE project_id = ?",
+                "SELECT business_id FROM digital_team_project_conversation WHERE project_id = ?",
                 String.class, projectId);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
     private void cleanupDispatch(String projectId) {
         jdbc.update(
-                "UPDATE coordinator_dispatch SET status = 'COMPLETED' "
+                "UPDATE digital_team_coordinator_dispatch SET status = 'COMPLETED' "
                         + "WHERE project_id = ? AND status <> 'COMPLETED'",
                 projectId);
         // Terminal tasks free their expert concurrency slots; leftover
         // RUNNING tasks would starve later tests sharing the expert pool.
         jdbc.update(
-                "UPDATE coordinator_task SET status = 'FAILED' "
+                "UPDATE digital_team_coordinator_task SET status = 'FAILED' "
                         + "WHERE project_id = ? AND status NOT IN "
                         + "('SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT')",
                 projectId);

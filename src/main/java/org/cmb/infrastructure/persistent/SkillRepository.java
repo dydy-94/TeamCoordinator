@@ -1,21 +1,24 @@
 package org.cmb.infrastructure.persistent;
 
 import java.util.List;
+import org.cmb.infrastructure.persistent.mapper.ProjectSkillMapper;
 import org.cmb.infrastructure.persistent.mapper.SkillMapper;
 import org.cmb.application.domain.Skill;
 import org.springframework.stereotype.Repository;
 
 /**
  * Repository for platform-level skills and project-skill associations.
- * All SQL lives in {@link SkillMapper}.
+ * All SQL lives in {@link SkillMapper} and {@link ProjectSkillMapper}.
  */
 @Repository
 public class SkillRepository {
 
     private final SkillMapper mapper;
+    private final ProjectSkillMapper projectSkillMapper;
 
-    public SkillRepository(SkillMapper mapper) {
+    public SkillRepository(SkillMapper mapper, ProjectSkillMapper projectSkillMapper) {
         this.mapper = mapper;
+        this.projectSkillMapper = projectSkillMapper;
     }
 
     // ── Global skill pool ─────────────────────────────────────────────────
@@ -36,21 +39,21 @@ public class SkillRepository {
     }
 
     public boolean projectSkillExists(String tenantId, String projectId, String skillId) {
-        Integer count = mapper.countProjectSkill(tenantId, projectId, skillId);
+        Integer count = projectSkillMapper.countProjectSkill(tenantId, projectId, skillId);
         return count != null && count > 0;
     }
 
     public void insertProjectSkill(
             String tenantId, String projectId, String skillId, boolean enabled) {
-        mapper.insertProjectSkill(tenantId, projectId, skillId, enabled);
+        projectSkillMapper.insertProjectSkill(tenantId, projectId, skillId, enabled);
     }
 
     public void updateProjectSkill(
             String tenantId, String projectId, String skillId, boolean enabled) {
-        mapper.updateProjectSkill(enabled, tenantId, projectId, skillId);
+        projectSkillMapper.updateProjectSkill(enabled, tenantId, projectId, skillId);
     }
 
     public int deleteProjectSkill(String tenantId, String projectId, String skillId) {
-        return mapper.deleteProjectSkill(tenantId, projectId, skillId);
+        return projectSkillMapper.deleteProjectSkill(tenantId, projectId, skillId);
     }
 }

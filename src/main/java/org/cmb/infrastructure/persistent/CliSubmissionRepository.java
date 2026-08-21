@@ -2,7 +2,7 @@ package org.cmb.infrastructure.persistent;
 
 import java.util.List;
 import java.util.UUID;
-import org.cmb.infrastructure.persistent.mapper.CliSubmissionMapper;
+import org.cmb.infrastructure.persistent.mapper.CoordinatorCliSubmissionMapper;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Repository;
 
@@ -19,9 +19,9 @@ public class CliSubmissionRepository {
     public static final String KIND_PLAN = "PLAN";
     public static final String KIND_VERDICT = "VERDICT";
 
-    private final CliSubmissionMapper mapper;
+    private final CoordinatorCliSubmissionMapper mapper;
 
-    public CliSubmissionRepository(CliSubmissionMapper mapper) {
+    public CliSubmissionRepository(CoordinatorCliSubmissionMapper mapper) {
         this.mapper = mapper;
     }
 

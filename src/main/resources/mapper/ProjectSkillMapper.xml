@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.cmb.infrastructure.persistent.mapper.ProjectSkillMapper">
+
+    <select id="countProjectSkill" resultType="int">
+        SELECT COUNT(*) FROM digital_team_project_skill
+        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
+        AND skill_id = #{skillId}
+    </select>
+
+    <insert id="insertProjectSkill">
+        INSERT INTO digital_team_project_skill (tenant_id, project_id, skill_id, enabled)
+        VALUES (#{tenantId}, #{projectId}, #{skillId}, #{enabled})
+    </insert>
+
+    <update id="updateProjectSkill">
+        UPDATE digital_team_project_skill SET enabled = #{enabled},
+        updated_at = CURRENT_TIMESTAMP
+        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
+        AND skill_id = #{skillId}
+    </update>
+
+    <delete id="deleteProjectSkill">
+        DELETE FROM digital_team_project_skill
+        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
+        AND skill_id = #{skillId}
+    </delete>
+
+</mapper>

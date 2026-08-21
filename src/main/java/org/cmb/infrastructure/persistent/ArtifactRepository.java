@@ -2,20 +2,31 @@ package org.cmb.infrastructure.persistent;
 
 import java.util.Collections;
 import java.util.List;
-import org.cmb.infrastructure.persistent.mapper.ArtifactMapper;
+import org.cmb.infrastructure.persistent.mapper.CoordinatorTaskMapper;
+import org.cmb.infrastructure.persistent.mapper.ProjectArtifactLineageMapper;
+import org.cmb.infrastructure.persistent.mapper.ProjectArtifactMapper;
 import org.cmb.application.domain.AgentArtifactUploadContext;
 import org.springframework.stereotype.Repository;
 
 /**
- * Artifact persistence facade. All SQL lives in {@link ArtifactMapper}.
+ * Artifact persistence facade. All SQL lives in
+ * {@link ProjectArtifactMapper}, {@link CoordinatorTaskMapper} and
+ * {@link ProjectArtifactLineageMapper}.
  */
 @Repository
 public class ArtifactRepository {
 
-    private final ArtifactMapper mapper;
+    private final ProjectArtifactMapper mapper;
+    private final CoordinatorTaskMapper taskMapper;
+    private final ProjectArtifactLineageMapper lineageMapper;
 
-    public ArtifactRepository(ArtifactMapper mapper) {
+    public ArtifactRepository(
+            ProjectArtifactMapper mapper,
+            CoordinatorTaskMapper taskMapper,
+            ProjectArtifactLineageMapper lineageMapper) {
         this.mapper = mapper;
+        this.taskMapper = taskMapper;
+        this.lineageMapper = lineageMapper;
     }
 
     public int nextVersion(String projectId, String fileName) {
@@ -45,18 +56,18 @@ public class ArtifactRepository {
 
     public AgentArtifactUploadContext findUploadContextByTaskId(String taskId) {
         java.util.List<AgentArtifactUploadContext> rows =
-                mapper.findUploadContextByTaskId(taskId);
+                taskMapper.findUploadContextByTaskId(taskId);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
     public String findProjectIdByTaskId(String taskId) {
-        return mapper.findProjectIdByTaskId(taskId);
+        return taskMapper.findProjectIdByTaskId(taskId);
     }
 
     public AgentArtifactUploadContext findAgentUploadContext(
             String projectId, String conversationId, String businessSessionId,
             String agentRunId, String agentId) {
-        List<AgentArtifactUploadContext> rows = mapper.findAgentUploadContext(
+        List<AgentArtifactUploadContext> rows = taskMapper.findAgentUploadContext(
                 projectId, conversationId, businessSessionId, agentRunId, agentId);
         return rows.isEmpty() ? null : rows.get(0);
     }
@@ -82,7 +93,7 @@ public class ArtifactRepository {
         if (dependencyKeys.isEmpty()) {
             return;
         }
-        mapper.recordDependencyLineage(outputArtifactId, planId, dependencyKeys);
+        lineageMapper.recordDependencyLineage(outputArtifactId, planId, dependencyKeys);
     }
 
     public static final class ArtifactRecord {

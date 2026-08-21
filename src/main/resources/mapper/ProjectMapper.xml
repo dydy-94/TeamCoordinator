@@ -21,18 +21,8 @@
         <result column="updated_at" property="updatedAt"/>
     </resultMap>
 
-    <resultMap id="projectMember" type="org.cmb.application.domain.ProjectMember">
-        <result column="user_id" property="userId"/>
-        <result column="role" property="role"/>
-    </resultMap>
-
-    <resultMap id="projectExpert" type="org.cmb.application.domain.ProjectExpert">
-        <result column="expert_id" property="expertId"/>
-        <result column="enabled" property="enabled"/>
-    </resultMap>
-
     <insert id="insertProject">
-        INSERT INTO project (business_id, tenant_id, name, description,
+        INSERT INTO digital_team_project (business_id, tenant_id, name, description,
         coordinator_agent_id, status, created_by)
         VALUES (#{businessId}, #{tenantId}, #{name}, #{description},
         #{coordinatorAgentId}, #{status}, #{createdBy})
@@ -40,7 +30,7 @@
 
     <select id="findByTenant" resultMap="projectRecord">
         SELECT <include refid="projectColumns"/>
-        FROM project p JOIN project_member m ON m.project_id = p.business_id
+        FROM digital_team_project p JOIN digital_team_project_member m ON m.project_id = p.business_id
         AND m.tenant_id = p.tenant_id
         WHERE p.tenant_id = #{tenantId} AND m.user_id = #{userId}
         ORDER BY p.created_at DESC
@@ -48,89 +38,17 @@
 
     <select id="findVisible" resultMap="projectRecord">
         SELECT <include refid="projectColumns"/>
-        FROM project p JOIN project_member m ON m.project_id = p.business_id
+        FROM digital_team_project p JOIN digital_team_project_member m ON m.project_id = p.business_id
         AND m.tenant_id = p.tenant_id
         WHERE p.tenant_id = #{tenantId} AND p.business_id = #{projectId}
         AND m.user_id = #{userId}
     </select>
 
-    <select id="findRole" resultType="string">
-        SELECT role FROM project_member
-        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
-        AND user_id = #{userId}
-    </select>
-
-    <select id="findMembers" resultMap="projectMember">
-        SELECT user_id, role FROM project_member
-        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
-        ORDER BY user_id
-    </select>
-
-    <select id="findExperts" resultMap="projectExpert">
-        SELECT expert_id, enabled FROM project_expert
-        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
-        ORDER BY expert_id
-    </select>
-
     <update id="updateProject">
-        UPDATE project SET name = #{name}, description = #{description},
+        UPDATE digital_team_project SET name = #{name}, description = #{description},
         coordinator_agent_id = #{coordinatorAgentId}, status = #{status},
         updated_at = CURRENT_TIMESTAMP
         WHERE tenant_id = #{tenantId} AND business_id = #{projectId}
     </update>
-
-    <select id="countMember" resultType="int">
-        SELECT COUNT(*) FROM project_member
-        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
-        AND user_id = #{userId}
-    </select>
-
-    <insert id="insertMember">
-        INSERT INTO project_member (tenant_id, project_id, user_id, role)
-        VALUES (#{tenantId}, #{projectId}, #{userId}, #{role})
-    </insert>
-
-    <update id="updateMember">
-        UPDATE project_member SET role = #{role}, updated_at = CURRENT_TIMESTAMP
-        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
-        AND user_id = #{userId}
-    </update>
-
-    <delete id="deleteMember">
-        DELETE FROM project_member
-        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
-        AND user_id = #{userId}
-    </delete>
-
-    <select id="countExpert" resultType="int">
-        SELECT COUNT(*) FROM project_expert
-        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
-        AND expert_id = #{expertId}
-    </select>
-
-    <insert id="insertExpert">
-        INSERT INTO project_expert (tenant_id, project_id, expert_id, enabled)
-        VALUES (#{tenantId}, #{projectId}, #{expertId}, #{enabled})
-    </insert>
-
-    <update id="updateExpert">
-        UPDATE project_expert SET enabled = #{enabled},
-        updated_at = CURRENT_TIMESTAMP
-        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
-        AND expert_id = #{expertId}
-    </update>
-
-    <delete id="deleteExpert">
-        DELETE FROM project_expert
-        WHERE tenant_id = #{tenantId} AND project_id = #{projectId}
-        AND expert_id = #{expertId}
-    </delete>
-
-    <insert id="insertAudit">
-        INSERT INTO permission_audit_log
-        (business_id, tenant_id, project_id, actor_user_id, action,
-        target_id, detail) VALUES (#{id}, #{tenantId}, #{projectId},
-        #{actorUserId}, #{action}, #{targetId}, #{detail})
-    </insert>
 
 </mapper>

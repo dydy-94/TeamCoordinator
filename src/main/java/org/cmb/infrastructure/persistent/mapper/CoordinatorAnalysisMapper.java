@@ -7,7 +7,7 @@ import org.apache.ibatis.annotations.Param;
  * SQL access for intent analysis runs (coordinator_analysis).
  */
 @Mapper
-public interface IntentAnalysisMapper {
+public interface CoordinatorAnalysisMapper {
 
     int insertAnalysis(
             @Param("analysisId") String analysisId,

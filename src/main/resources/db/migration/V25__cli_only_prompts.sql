@@ -3,7 +3,7 @@
 -- and human questions are all submitted through the tc CLI. Earlier
 -- tool/CLI hybrid versions remain for historical deployments.
 
-INSERT INTO prompt_template
+INSERT INTO digital_team_prompt_template
     (business_id, prompt_key, agent_scope, scene, version, status,
      template_content, variables_schema, created_by, published_at)
 VALUES

@@ -4,7 +4,7 @@
 -- instead of writing plain-text JSON. The Coordinator prefers tool-call input
 -- and falls back to end-event content when the tool is not attached.
 
-INSERT INTO prompt_template
+INSERT INTO digital_team_prompt_template
     (business_id, prompt_key, agent_scope, scene, version, status,
      template_content, variables_schema, created_by, published_at)
 VALUES

@@ -5,7 +5,12 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-import org.cmb.infrastructure.persistent.mapper.ExecutionMapper;
+import org.cmb.infrastructure.persistent.mapper.CoordinatorDispatchMapper;
+import org.cmb.infrastructure.persistent.mapper.CoordinatorPlanMapper;
+import org.cmb.infrastructure.persistent.mapper.CoordinatorTaskEventMapper;
+import org.cmb.infrastructure.persistent.mapper.CoordinatorTaskMapper;
+import org.cmb.infrastructure.persistent.mapper.ProjectConversationExpertSessionMapper;
+import org.cmb.infrastructure.persistent.mapper.ProjectConversationMapper;
 import org.cmb.application.domain.AgentEvent;
 import org.cmb.application.domain.DispatchWork;
 import org.cmb.application.domain.TaskRecord;
@@ -19,27 +24,48 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Execution-engine persistence facade. Owns transaction boundaries and
- * JSON serialization; all SQL lives in {@link ExecutionMapper}.
+ * JSON serialization; all SQL lives in the per-table mappers
+ * ({@link CoordinatorDispatchMapper}, {@link CoordinatorPlanMapper},
+ * {@link CoordinatorTaskMapper}, {@link CoordinatorTaskEventMapper},
+ * {@link ProjectConversationMapper},
+ * {@link ProjectConversationExpertSessionMapper}).
  */
 @Repository
 public class ExecutionRepository {
 
-    private final ExecutionMapper mapper;
+    private final CoordinatorDispatchMapper dispatchMapper;
+    private final CoordinatorPlanMapper planMapper;
+    private final CoordinatorTaskMapper taskMapper;
+    private final CoordinatorTaskEventMapper taskEventMapper;
+    private final ProjectConversationMapper conversationMapper;
+    private final ProjectConversationExpertSessionMapper expertSessionMapper;
     private final ObjectMapper objectMapper;
 
-    public ExecutionRepository(ExecutionMapper mapper, ObjectMapper objectMapper) {
-        this.mapper = mapper;
+    public ExecutionRepository(
+            CoordinatorDispatchMapper dispatchMapper,
+            CoordinatorPlanMapper planMapper,
+            CoordinatorTaskMapper taskMapper,
+            CoordinatorTaskEventMapper taskEventMapper,
+            ProjectConversationMapper conversationMapper,
+            ProjectConversationExpertSessionMapper expertSessionMapper,
+            ObjectMapper objectMapper) {
+        this.dispatchMapper = dispatchMapper;
+        this.planMapper = planMapper;
+        this.taskMapper = taskMapper;
+        this.taskEventMapper = taskEventMapper;
+        this.conversationMapper = conversationMapper;
+        this.expertSessionMapper = expertSessionMapper;
         this.objectMapper = objectMapper;
     }
 
     @Transactional
     public DispatchWork claimNext(String owner, int leaseSeconds) {
-        List<String> ids = mapper.selectClaimableDispatchId();
+        List<String> ids = dispatchMapper.selectClaimableDispatchId();
         if (ids.isEmpty()) {
             return null;
         }
         String id = ids.get(0);
-        int updated = mapper.claimDispatch(owner,
+        int updated = dispatchMapper.claimDispatch(owner,
                 Timestamp.from(Instant.now().plusSeconds(leaseSeconds)), id);
         return updated == 1 ? loadWork(id) : null;
     }
@@ -51,23 +77,23 @@ public class ExecutionRepository {
      * becomes a no-op and another instance may claim it.
      */
     public int renewLease(String dispatchId, String owner, int leaseSeconds) {
-        return mapper.renewLease(dispatchId, owner,
+        return dispatchMapper.renewLease(dispatchId, owner,
                 Timestamp.from(Instant.now().plusSeconds(leaseSeconds)));
     }
 
     public DispatchWork loadWork(String dispatchId) {
-        List<DispatchWork> rows = mapper.loadWork(dispatchId);
+        List<DispatchWork> rows = dispatchMapper.loadWork(dispatchId);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
     public String createPlan(DispatchWork work, CoordinatorDecision decision) {
-        List<String> existing = mapper.findExistingPlanId(
+        List<String> existing = planMapper.findExistingPlanId(
                 work.getTenantId(), work.getProjectId(), work.getMessageId());
         if (!existing.isEmpty()) {
             return existing.get(0);
         }
         String id = "plan-" + UUID.randomUUID();
-        mapper.insertPlanSimple(id, work, decision.getAnalysisId(),
+        planMapper.insertPlanSimple(id, work, decision.getAnalysisId(),
                 write(decision.getTaskIntent()));
         return id;
     }
@@ -77,14 +103,14 @@ public class ExecutionRepository {
             DispatchWork work,
             CoordinatorDecision decision,
             PlanningResult planning) {
-        List<String> existing = mapper.findLatestPlanId(
+        List<String> existing = planMapper.findLatestPlanId(
                 work.getTenantId(), work.getProjectId(), work.getMessageId());
         if (!existing.isEmpty()) {
             return existing.get(0);
         }
         CoordinatorPlanSpec plan = planning.getPlan();
         String id = "plan-" + UUID.randomUUID();
-        mapper.insertPlanFull(id, work, decision.getAnalysisId(),
+        planMapper.insertPlanFull(id, work, decision.getAnalysisId(),
                 plan.getPlanVersion(), write(decision.getTaskIntent()),
                 planning.getRawJson(), planning.getRepairCount());
         for (PlannedTask task : plan.getTasks()) {
@@ -101,7 +127,7 @@ public class ExecutionRepository {
             String previousPlanId) {
         CoordinatorPlanSpec plan = planning.getPlan();
         String id = "plan-" + UUID.randomUUID();
-        mapper.insertReplan(id, work, decision.getAnalysisId(), plan.getPlanVersion(),
+        planMapper.insertReplan(id, work, decision.getAnalysisId(), plan.getPlanVersion(),
                 write(decision.getTaskIntent()), planning.getRawJson(),
                 planning.getRepairCount(), previousPlanId);
         for (PlannedTask task : plan.getTasks()) {
@@ -112,20 +138,20 @@ public class ExecutionRepository {
                 insertReusedTask(work, id, task, reusable);
             }
         }
-        mapper.supersedePlan(previousPlanId);
+        planMapper.supersedePlan(previousPlanId);
         return id;
     }
 
     public List<TaskRecord> findTasksForMessage(DispatchWork work) {
-        return mapper.findTasksForMessage(work.getTenantId(), work.getMessageId());
+        return taskMapper.findTasksForMessage(work.getTenantId(), work.getMessageId());
     }
 
     public boolean assignExpert(String taskId, String expertId) {
-        return mapper.assignExpert(taskId, expertId) == 1;
+        return taskMapper.assignExpert(taskId, expertId) == 1;
     }
 
     public int activeTaskCount(String expertId) {
-        Integer count = mapper.countActiveTasks(expertId);
+        Integer count = taskMapper.countActiveTasks(expertId);
         return count == null ? 0 : count;
     }
 
@@ -135,14 +161,14 @@ public class ExecutionRepository {
         if (original.getCorrectionCount() >= 1) {
             return null;
         }
-        int updated = mapper.markCorrection(original.getId());
+        int updated = taskMapper.markCorrection(original.getId());
         if (updated != 1) {
             return null;
         }
         String id = "task-" + UUID.randomUUID();
         String key = original.getTaskKey() + "-correction";
         String requestId = original.getRequestId() + ":correction-1";
-        mapper.insertCorrectionTask(id, work, original.getPlanId(), key, requestId,
+        taskMapper.insertCorrectionTask(id, work, original.getPlanId(), key, requestId,
                 "Correct the previous result. Return a non-empty resultText for: "
                         + original.getExpectedOutput(),
                 write(work.getAttachmentRefs()),
@@ -171,19 +197,19 @@ public class ExecutionRepository {
     }
 
     public void acceptCorrection(TaskRecord correction, String resultJson) {
-        mapper.acceptCorrection(correction.getCorrectionOf(), resultJson);
+        taskMapper.acceptCorrection(correction.getCorrectionOf(), resultJson);
     }
 
     public TaskRecord createOrLoadTask(
             DispatchWork work, String planId, String expertId, String objective) {
         String requestId = work.getMessageId() + ":single-expert";
-        List<TaskRecord> existing = mapper.findTaskByRequestId(
+        List<TaskRecord> existing = taskMapper.findTaskByRequestId(
                 work.getTenantId(), requestId);
         if (!existing.isEmpty()) {
             return existing.get(0);
         }
         String taskId = "task-" + UUID.randomUUID();
-        mapper.insertSingleExpertTask(taskId, work, planId, requestId, expertId,
+        taskMapper.insertSingleExpertTask(taskId, work, planId, requestId, expertId,
                 objective, write(work.getAttachmentRefs()));
         TaskRecord task = new TaskRecord();
         task.setId(taskId);
@@ -195,17 +221,17 @@ public class ExecutionRepository {
     }
 
     public TaskRecord findTaskForMessage(DispatchWork work) {
-        List<TaskRecord> rows = mapper.findTaskForMessage(
+        List<TaskRecord> rows = taskMapper.findTaskForMessage(
                 work.getTenantId(), work.getMessageId());
         return rows.isEmpty() ? null : rows.get(0);
     }
 
     public void saveSession(String taskId, String sessionId) {
-        mapper.saveSession(taskId, sessionId);
+        taskMapper.saveSession(taskId, sessionId);
     }
 
     public void replaceSession(String taskId, String sessionId) {
-        mapper.replaceSession(taskId, sessionId);
+        taskMapper.replaceSession(taskId, sessionId);
     }
 
     public String findExpertSession(
@@ -213,7 +239,7 @@ public class ExecutionRepository {
             String expertId, String currentMessageId) {
         // Only return session from a DIFFERENT message to avoid
         // parallel tasks within the same plan sharing an expert session.
-        List<String> rows = mapper.findExpertSession(
+        List<String> rows = expertSessionMapper.findExpertSession(
                 tenantId, projectId, conversationId, expertId, currentMessageId);
         return rows.isEmpty() ? null : rows.get(0);
     }
@@ -221,59 +247,59 @@ public class ExecutionRepository {
     public void saveExpertSession(
             String tenantId, String projectId, String conversationId,
             String expertId, String sessionId, String messageId) {
-        mapper.upsertExpertSession("exp-session-" + UUID.randomUUID(), tenantId,
+        expertSessionMapper.upsertExpertSession("exp-session-" + UUID.randomUUID(), tenantId,
                 projectId, conversationId, expertId, sessionId, messageId);
     }
 
     public void saveCoordinatorSession(
             String conversationId, String sessionId, String agentId) {
-        mapper.saveCoordinatorSession(conversationId, sessionId, agentId);
+        conversationMapper.saveCoordinatorSession(conversationId, sessionId, agentId);
     }
 
     public String loadCoordinatorAgent(String conversationId) {
-        List<String> rows = mapper.loadCoordinatorAgent(conversationId);
+        List<String> rows = conversationMapper.loadCoordinatorAgent(conversationId);
         return rows.isEmpty() || rows.get(0) == null ? "" : rows.get(0);
     }
 
     public List<String> findDispatchForConversation(String conversationId) {
-        return mapper.findDispatchForConversation(conversationId);
+        return dispatchMapper.findDispatchForConversation(conversationId);
     }
 
     public TaskRecord findTaskByBusinessId(String taskId) {
-        List<TaskRecord> rows = mapper.findTaskByBusinessId(taskId);
+        List<TaskRecord> rows = taskMapper.findTaskByBusinessId(taskId);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
     public java.util.Map<String, Object> findTaskDetail(String taskId) {
-        List<java.util.Map<String, Object>> rows = mapper.findTaskDetail(taskId);
+        List<java.util.Map<String, Object>> rows = taskMapper.findTaskDetail(taskId);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
     /** Unguarded terminal transition for CLI-submitted expert results. */
     public boolean markTaskSucceeded(String taskId, String resultJson) {
-        return mapper.markTaskSucceeded(taskId, resultJson) == 1;
+        return taskMapper.markTaskSucceeded(taskId, resultJson) == 1;
     }
 
     /** CLI ask-human: RUNNING → WAITING_HUMAN. */
     public boolean markTaskWaitingHuman(String taskId) {
-        return mapper.markTaskWaitingHuman(taskId) == 1;
+        return taskMapper.markTaskWaitingHuman(taskId) == 1;
     }
 
     /** Advance the event cursor only while the task stays RUNNING. */
     public void advanceRunningTask(String taskId, long sequence) {
-        mapper.advanceRunningTask(taskId, sequence);
+        taskMapper.advanceRunningTask(taskId, sequence);
     }
 
     /** 同一专家 session 已消费到的最大事件序列（含所有任务）。 */
     public long findMaxLastSequenceBySession(String sessionId) {
-        Long watermark = mapper.findMaxLastSequenceBySession(sessionId);
+        Long watermark = taskMapper.findMaxLastSequenceBySession(sessionId);
         return watermark == null ? 0L : watermark;
     }
 
     /** 同一专家 session 内、除当前任务外已消费到的最大事件序列。 */
     public long findLastSequenceBySessionExcludingTask(
             String sessionId, String taskId) {
-        Long watermark = mapper.findLastSequenceBySessionExcludingTask(
+        Long watermark = taskMapper.findLastSequenceBySessionExcludingTask(
                 sessionId, taskId);
         return watermark == null ? 0L : watermark;
     }
@@ -281,7 +307,7 @@ public class ExecutionRepository {
     @Transactional
     public boolean recordEvent(String tenantId, String taskId, AgentEvent event) {
         try {
-            mapper.insertTaskEvent("task-event-" + UUID.randomUUID(),
+            taskEventMapper.insertTaskEvent("task-event-" + UUID.randomUUID(),
                     tenantId, taskId, event.getEventId(), event.getSequence(),
                     event.getType(), write(event));
         } catch (DuplicateKeyException ex) {
@@ -292,13 +318,13 @@ public class ExecutionRepository {
 
     public boolean advanceTask(
             String taskId, long sequence, String status, String resultJson) {
-        return mapper.advanceTask(taskId, status, sequence, resultJson,
+        return taskMapper.advanceTask(taskId, status, sequence, resultJson,
                 "SUCCEEDED".equals(status)) == 1;
     }
 
     public void completePlanAndDispatch(
             String planId, String dispatchId, String status, String error) {
-        mapper.updatePlanStatus(planId, status);
+        planMapper.updatePlanStatus(planId, status);
         completeDispatch(dispatchId, status, error);
     }
 
@@ -306,8 +332,8 @@ public class ExecutionRepository {
     public int failTasksForMessage(String tenantId, String messageId) {
         // Keep plan and task states consistent: the plan must not stay
         // RUNNING when all its tasks were force-failed.
-        mapper.failPlansForMessage(tenantId, messageId);
-        return mapper.failTasksForMessage(tenantId, messageId);
+        planMapper.failPlansForMessage(tenantId, messageId);
+        return taskMapper.failTasksForMessage(tenantId, messageId);
     }
 
     /**
@@ -319,7 +345,7 @@ public class ExecutionRepository {
      */
     public int recoverStaleStartingTasks(
             String tenantId, String messageId, Timestamp cutoff) {
-        return mapper.recoverStaleStartingTasks(tenantId, messageId, cutoff);
+        return taskMapper.recoverStaleStartingTasks(tenantId, messageId, cutoff);
     }
 
     /**
@@ -330,49 +356,49 @@ public class ExecutionRepository {
      * stopped, leaving the task RUNNING against a dead session.
      */
     public boolean cancelTask(String taskId, String status, String resultJson) {
-        return mapper.cancelTask(taskId, status, resultJson) == 1;
+        return taskMapper.cancelTask(taskId, status, resultJson) == 1;
     }
 
     /** Count one AgentCore failure tick for a task; returns the new count. */
     public int incrementConsecutiveFailures(String taskId) {
-        mapper.incrementConsecutiveFailures(taskId);
-        Integer count = mapper.selectConsecutiveFailures(taskId);
+        taskMapper.incrementConsecutiveFailures(taskId);
+        Integer count = taskMapper.selectConsecutiveFailures(taskId);
         return count == null ? 0 : count;
     }
 
     public void resetConsecutiveFailures(String taskId) {
-        mapper.resetConsecutiveFailures(taskId);
+        taskMapper.resetConsecutiveFailures(taskId);
     }
 
     public void completeDispatch(String dispatchId, String status, String error) {
-        mapper.completeDispatch(dispatchId, status, error);
+        dispatchMapper.completeDispatch(dispatchId, status, error);
     }
 
     public void releaseDispatch(String dispatchId) {
-        mapper.releaseDispatch(dispatchId);
+        dispatchMapper.releaseDispatch(dispatchId);
     }
 
     public TaskRecord findTask(String tenantId, String projectId, String taskId) {
-        List<TaskRecord> rows = mapper.findTask(tenantId, projectId, taskId);
+        List<TaskRecord> rows = taskMapper.findTask(tenantId, projectId, taskId);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
     public DispatchWork loadWorkForTask(String tenantId, String projectId, String taskId) {
-        List<String> dispatchIds = mapper.findDispatchIdForTask(tenantId, projectId, taskId);
+        List<String> dispatchIds = taskMapper.findDispatchIdForTask(tenantId, projectId, taskId);
         return dispatchIds.isEmpty() ? null : loadWork(dispatchIds.get(0));
     }
 
     private void insertTask(DispatchWork work, String planId, PlannedTask task) {
         String taskId = "task-" + UUID.randomUUID();
         String requestId = work.getMessageId() + ":" + task.getTaskKey();
-        mapper.insertTask(taskId, work, planId, task.getTaskKey(), requestId,
+        taskMapper.insertTask(taskId, work, planId, task.getTaskKey(), requestId,
                 task.getObjective(), write(work.getAttachmentRefs()),
                 write(task.getDependencies()), write(task.getRequiredCapabilities()),
                 task.getExpectedOutput(), task.getAcceptanceCriteria());
     }
 
     private TaskRecord findReusableTask(String planId, String taskKey) {
-        List<TaskRecord> rows = mapper.findReusableTask(planId, taskKey);
+        List<TaskRecord> rows = taskMapper.findReusableTask(planId, taskKey);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
@@ -381,7 +407,7 @@ public class ExecutionRepository {
             String planId,
             PlannedTask task,
             TaskRecord reusable) {
-        mapper.insertReusedTask("task-" + UUID.randomUUID(), work, planId,
+        taskMapper.insertReusedTask("task-" + UUID.randomUUID(), work, planId,
                 task.getTaskKey(), work.getMessageId() + ":v2:" + task.getTaskKey(),
                 reusable.getExpertId(), reusable.getSessionId(), task.getObjective(),
                 write(work.getAttachmentRefs()), reusable.getResultJson(),

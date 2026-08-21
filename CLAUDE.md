@@ -24,8 +24,8 @@ TeamCoordinator is a **Spring Boot 2.7** service that acts as an AI agent orches
 ```
 User Message → Intent Analysis (Coordinator Agent) → Planning → Expert Execution → SSE Events
                     ↕                                      ↕
-             coordinator_agent_run                   coordinator_task
-             coordinator_dispatch                    coordinator_plan
+             digital_team_coordinator_agent_run      digital_team_coordinator_task
+             digital_team_coordinator_dispatch       digital_team_coordinator_plan
 ```
 
 1. **Message intake**: `POST /api/v1/projects/{projectId}/tasks/{taskId}/messages` → `CoordinatorMessageService` inserts a message and dispatch record.
@@ -72,8 +72,10 @@ User Message → Intent Analysis (Coordinator Agent) → Planning → Expert Exe
 ### Database
 
 - MySQL via Flyway migrations (Java-based in `db/migration/` and SQL-based in `resources/db/migration/`).
+- **Runtime schema init/upgrade path is `db/init/*.sql`** (compose mounts them into MySQL; `03-upgrade.sql` is idempotent — rename pass + column/index convergence — safe to re-run). Flyway is disabled by default (`FLYWAY_ENABLED=false`); do not enable it against a DB already migrated by `db/init` — checksums/table names diverged after the `digital_team_` prefix rename.
 - Convention: `databaseId` is the auto-increment primary key; `businessId` is the external-facing UUID. API surfaces only business IDs.
-- Key tables: `project`, `project_member`, `project_expert`, `project_message`, `project_event`, `coordinator_dispatch`, `coordinator_agent_run`, `coordinator_plan`, `coordinator_task`, `coordinator_task_event`, `prompt_template`, `prompt_version`, `prompt_execution`.
+- Key tables (all prefixed with `digital_team_`): `digital_team_project`, `digital_team_project_member`, `digital_team_project_expert`, `digital_team_project_message`, `digital_team_project_event`, `digital_team_coordinator_dispatch`, `digital_team_coordinator_agent_run`, `digital_team_coordinator_plan`, `digital_team_coordinator_task`, `digital_team_coordinator_task_event`, `digital_team_prompt_template`, `digital_team_prompt_execution`.
+- Mapper XMLs follow one-file-per-table: each `resources/mapper/*.xml` + matching interface in `.../persistent/mapper/` is named after its table; JOIN queries live in the main table's XML.
 - Connection pooling via HikariCP (max 10 connections).
 
 ### Configuration

@@ -64,7 +64,7 @@ class PromptManagementIntegrationTest {
         assertTrue(rendered.getContent().contains("\"objective\":\"inspect API\""));
         assertEquals(1, rendered.getVersion());
         assertEquals(Integer.valueOf(1), jdbc.queryForObject(
-                "SELECT COUNT(*) FROM prompt_execution WHERE invocation_id = ?",
+                "SELECT COUNT(*) FROM digital_team_prompt_execution WHERE invocation_id = ?",
                 Integer.class, "invocation-prompt"));
     }
 

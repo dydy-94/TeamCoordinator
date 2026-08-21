@@ -25,23 +25,23 @@ TeamCoordinator 是一个 AI agent 编排服务：
 
 | 概念 | 表 | 说明 |
 |---|---|---|
-| 会话任务 | `project_conversation` | 用户创建的对话容器（用户先建 task 再发消息），跨多轮消息长存 |
-| 消息 | `project_message` | 用户在会话任务下发送的每条消息 |
-| 执行票 | `coordinator_dispatch` | 每条消息对应一张，worker 领取执行；含租约、attempt_count、状态机 |
-| 意图分析记录 | `coordinator_analysis` | 每次意图分析的输入快照与决策 JSON |
-| 执行计划 | `coordinator_plan` | 一个消息的分解方案（plan_version、任务列表）；replan 会产生多版本 |
-| 子任务 | `coordinator_task` | 计划里的可执行单元：objective/expected_output/acceptance_criteria/dependencies/required_capabilities/expert_id/result_json/状态机 |
-| CLI 提交 | `coordinator_cli_submission` | agent 经 tc 命令提交的原始结构化载荷，按 (task_id, kind) 幂等，**消费后删除** |
-| 人类请求 | `human_request` | 协调者提问或专家求助，含问题、状态（PENDING/RESOLVED/EXPIRED）、归属 task |
-| 产物 | `project_artifact` | 专家上传的文件（版本、sha256、状态 AVAILABLE），含依赖血缘 |
-| 事件 | `project_event` | 面向前端的生命周期事件（可持久化重放）；agent 原始事件不落库，经 MARKER 重放 |
+| 会话任务 | `digital_team_project_conversation` | 用户创建的对话容器（用户先建 task 再发消息），跨多轮消息长存 |
+| 消息 | `digital_team_project_message` | 用户在会话任务下发送的每条消息 |
+| 执行票 | `digital_team_coordinator_dispatch` | 每条消息对应一张，worker 领取执行；含租约、attempt_count、状态机 |
+| 意图分析记录 | `digital_team_coordinator_analysis` | 每次意图分析的输入快照与决策 JSON |
+| 执行计划 | `digital_team_coordinator_plan` | 一个消息的分解方案（plan_version、任务列表）；replan 会产生多版本 |
+| 子任务 | `digital_team_coordinator_task` | 计划里的可执行单元：objective/expected_output/acceptance_criteria/dependencies/required_capabilities/expert_id/result_json/状态机 |
+| CLI 提交 | `digital_team_coordinator_cli_submission` | agent 经 tc 命令提交的原始结构化载荷，按 (task_id, kind) 幂等，**消费后删除** |
+| 人类请求 | `digital_team_human_request` | 协调者提问或专家求助，含问题、状态（PENDING/RESOLVED/EXPIRED）、归属 task |
+| 产物 | `digital_team_project_artifact` | 专家上传的文件（版本、sha256、状态 AVAILABLE），含依赖血缘 |
+| 事件 | `digital_team_project_event` | 面向前端的生命周期事件（可持久化重放）；agent 原始事件不落库，经 MARKER 重放 |
 | SSE 生命周期 | 内存（hub） | 每 60s 心跳注释帧保活；按"最近有新事件"刷新活动时间，超 30 分钟无活动发 `inactive` 命名事件后强制断开（配置：`EVENT_HEARTBEAT_INTERVAL_MS` / `EVENT_INACTIVITY_TIMEOUT_MIN`） |
 
 **taskId 是三方唯一共享标识**：AgentCore 运行期无法感知自身 session id，因此所有
 CLI ↔ TeamCoordinator 交互都以 taskId 键控：
 
-- coordinator 的决策/计划提交 → **会话 taskId**（= `project_conversation.business_id`，注入在提示词上下文 `conversation_task_id`）
-- 专家的任务拉取/结果写回/提问/上传 → **协调任务 taskId**（= `coordinator_task.business_id`，派发时下发）
+- coordinator 的决策/计划提交 → **会话 taskId**（= `digital_team_project_conversation.business_id`，注入在提示词上下文 `conversation_task_id`）
+- 专家的任务拉取/结果写回/提问/上传 → **协调任务 taskId**（= `digital_team_coordinator_task.business_id`，派发时下发）
 
 ## 3. 完整业务流程
 
@@ -62,8 +62,8 @@ CLI ↔ TeamCoordinator 交互都以 taskId 键控：
 
 1. 鉴权（任务发起者角色）+ 会话归属校验
 2. `client_message_id` 幂等去重
-3. 落 `project_message`；广播 `userMessage`、`coordinatorPhase(analyzing)` 事件
-4. 插 `coordinator_dispatch` 票（状态 PENDING）
+3. 落 `digital_team_project_message`；广播 `userMessage`、`coordinatorPhase(analyzing)` 事件
+4. 插 `digital_team_coordinator_dispatch` 票（状态 PENDING）
 5. 事务提交后推 SSE；返回 202
 
 ### ② Worker 领取（异步引擎）
@@ -86,7 +86,7 @@ CLI ↔ TeamCoordinator 交互都以 taskId 键控：
 | 决策 | 行为 |
 |---|---|
 | ANSWER | 发 `coordinatorChat` 直接回答 + `completed` 阶段，dispatch COMPLETED |
-| ASK_HUMAN | 建 human_request（问题）+ 发 `coordinatorConfirm` 事件，dispatch WAITING_HUMAN；等用户下条消息 |
+| ASK_HUMAN | 建 digital_team_human_request（问题）+ 发 `coordinatorConfirm` 事件，dispatch WAITING_HUMAN；等用户下条消息 |
 | CREATE_PLAN | 进入计划环节（④） |
 
 ### ④ 计划落库（coordinator agent 提交，服务端直写）
@@ -94,7 +94,7 @@ CLI ↔ TeamCoordinator 交互都以 taskId 键控：
 同一 run 内 agent 继续生成计划 JSON → `tc submit-plan --task <会话taskId> --file plan.json`：
 
 - 服务端校验：JSON Schema（plan-schema-v1，≤8 任务/深度≤2 语义由 CLI 本地校验先行）+ `plan_version=1` + 分支形状
-- **直写** `coordinator_plan` + `coordinator_task`（幂等：同消息已有计划则复用）；决策缺失时仅存储，worker 后补
+- **直写** `digital_team_coordinator_plan` + `digital_team_coordinator_task`（幂等：同消息已有计划则复用）；决策缺失时仅存储，worker 后补
 - worker 的 CREATE_PLAN 分支：读提交表取计划（消费后删除），缺失 → 明确失败
 - 发 `coordinatorPlanUpdate` 事件（任务列表初始 todo）
 
@@ -129,7 +129,7 @@ tc submit-result --task <taskId>     写回结果 → result_json + SUCCEEDED（
 | 提问方 | 提问 | 回答 | 继续 |
 |---|---|---|---|
 | 协调者 | ASK_HUMAN 决策（CLI 提交） | 用户再发一条消息，意图分析注入 pending 状态，coordinator 判断是"回答"还是"新请求" | 新 dispatch 正常执行 |
-| 专家 | `tc ask-human` 直写 WAITING_HUMAN | 用户在前端回答 → 服务端 `resumeRun(session, answer)`（session 从 `coordinator_task.session_id` 查，**agent 全程无感知**） | 专家同一 session 继续，最终 `tc submit-result` |
+| 专家 | `tc ask-human` 直写 WAITING_HUMAN | 用户在前端回答 → 服务端 `resumeRun(session, answer)`（session 从 `digital_team_coordinator_task.session_id` 查，**agent 全程无感知**） | 专家同一 session 继续，最终 `tc submit-result` |
 
 等待期间：会话内串行保证——同一会话的后续消息不会并行执行；协调者提问时 dispatch=WAITING_HUMAN（终态），专家求助时子任务=WAITING_HUMAN（dispatch 仍 RUNNING 等待）。
 
@@ -166,7 +166,7 @@ tc health                                                      # 连通性检查
 
 **dispatch**：PENDING → RUNNING → COMPLETED / FAILED / WAITING_HUMAN / CANCELLED
 
-**coordinator_task**：
+**digital_team_coordinator_task**：
 
 ```
 PENDING ──assignExpert──▶ STARTING ──saveSession──▶ RUNNING

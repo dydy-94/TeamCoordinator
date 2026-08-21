@@ -24,7 +24,7 @@ class ExpertSelectorTest {
             "expert-writing", "Writing Expert", Arrays.asList("writing"));
 
     private static ExecutionRepository loadRepository(Map<String, Integer> loads) {
-        return new ExecutionRepository(null, new ObjectMapper()) {
+        return new ExecutionRepository(null, null, null, null, null, null, new ObjectMapper()) {
             @Override
             public int activeTaskCount(String expertId) {
                 return loads.getOrDefault(expertId, 0);

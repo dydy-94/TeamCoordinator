@@ -14,54 +14,54 @@ public class V10__conversation_tasks_and_sessions extends BaseJavaMigration {
                 connection.getMetaData().getDatabaseProductName());
         try (Statement statement = connection.createStatement()) {
             statement.execute(
-                    "ALTER TABLE project_conversation ADD COLUMN session_id VARCHAR(128)");
+                    "ALTER TABLE digital_team_project_conversation ADD COLUMN session_id VARCHAR(128)");
             statement.execute(
-                    "ALTER TABLE project_conversation ADD COLUMN title VARCHAR(128)");
+                    "ALTER TABLE digital_team_project_conversation ADD COLUMN title VARCHAR(128)");
             statement.execute(
-                    "ALTER TABLE project_conversation ADD COLUMN status VARCHAR(32) "
+                    "ALTER TABLE digital_team_project_conversation ADD COLUMN status VARCHAR(32) "
                             + "NOT NULL DEFAULT 'ACTIVE'");
             statement.execute(
-                    "UPDATE project_conversation SET session_id = CONCAT('session-', id) "
+                    "UPDATE digital_team_project_conversation SET session_id = CONCAT('session-', id) "
                             + "WHERE session_id IS NULL");
             statement.execute(mysql
-                    ? "ALTER TABLE project_conversation MODIFY COLUMN session_id "
+                    ? "ALTER TABLE digital_team_project_conversation MODIFY COLUMN session_id "
                             + "VARCHAR(128) NOT NULL"
-                    : "ALTER TABLE project_conversation ALTER COLUMN session_id "
+                    : "ALTER TABLE digital_team_project_conversation ALTER COLUMN session_id "
                             + "VARCHAR(128) NOT NULL");
             if (mysql) {
                 statement.execute(
-                        "ALTER TABLE project_conversation DROP INDEX uk_conversation_project");
+                        "ALTER TABLE digital_team_project_conversation DROP INDEX uk_conversation_project");
                 statement.execute(
-                        "ALTER TABLE project_event DROP INDEX uk_project_event_sequence");
+                        "ALTER TABLE digital_team_project_event DROP INDEX uk_project_event_sequence");
             } else {
                 statement.execute(
-                        "ALTER TABLE project_conversation "
+                        "ALTER TABLE digital_team_project_conversation "
                                 + "DROP CONSTRAINT uk_conversation_project");
                 statement.execute(
-                        "ALTER TABLE project_event "
+                        "ALTER TABLE digital_team_project_event "
                                 + "DROP CONSTRAINT uk_project_event_sequence");
             }
             statement.execute(
-                    "ALTER TABLE project_conversation ADD CONSTRAINT "
+                    "ALTER TABLE digital_team_project_conversation ADD CONSTRAINT "
                             + "uk_conversation_session UNIQUE (tenant_id, session_id)");
             statement.execute(
-                    "ALTER TABLE project_event ADD CONSTRAINT uk_task_event_sequence "
+                    "ALTER TABLE digital_team_project_event ADD CONSTRAINT uk_task_event_sequence "
                             + "UNIQUE (tenant_id, conversation_id, sequence)");
             statement.execute(
-                    "CREATE TABLE conversation_event_sequence ("
+                    "CREATE TABLE digital_team_conversation_event_sequence ("
                             + "tenant_id VARCHAR(64) NOT NULL, "
                             + "conversation_id VARCHAR(64) NOT NULL, "
                             + "next_sequence BIGINT NOT NULL, "
                             + "PRIMARY KEY (tenant_id, conversation_id), "
                             + "CONSTRAINT fk_conversation_event_sequence FOREIGN KEY "
-                            + "(conversation_id) REFERENCES project_conversation (id))");
+                            + "(conversation_id) REFERENCES digital_team_project_conversation (id))");
             statement.execute(
-                    "INSERT INTO conversation_event_sequence "
+                    "INSERT INTO digital_team_conversation_event_sequence "
                             + "(tenant_id, conversation_id, next_sequence) "
                             + "SELECT tenant_id, conversation_id, MAX(sequence) + 1 "
-                            + "FROM project_event GROUP BY tenant_id, conversation_id");
+                            + "FROM digital_team_project_event GROUP BY tenant_id, conversation_id");
             statement.execute(
-                    "ALTER TABLE coordinator_agent_run "
+                    "ALTER TABLE digital_team_coordinator_agent_run "
                             + "ADD COLUMN business_session_id VARCHAR(128)");
         }
     }

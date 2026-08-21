@@ -14,13 +14,13 @@ public class V6_1__allow_plan_versions extends BaseJavaMigration {
         try (Statement statement = connection.createStatement()) {
             if ("MySQL".equalsIgnoreCase(database)) {
                 statement.execute(
-                        "ALTER TABLE coordinator_plan DROP INDEX uk_plan_message");
+                        "ALTER TABLE digital_team_coordinator_plan DROP INDEX uk_plan_message");
             } else {
                 statement.execute(
-                        "ALTER TABLE coordinator_plan DROP CONSTRAINT uk_plan_message");
+                        "ALTER TABLE digital_team_coordinator_plan DROP CONSTRAINT uk_plan_message");
             }
             statement.execute(
-                    "ALTER TABLE coordinator_plan ADD CONSTRAINT uk_plan_message_version "
+                    "ALTER TABLE digital_team_coordinator_plan ADD CONSTRAINT uk_plan_message_version "
                             + "UNIQUE (tenant_id, project_id, message_id, plan_version)");
         }
     }

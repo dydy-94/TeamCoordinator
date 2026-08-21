@@ -699,7 +699,7 @@ The server assigns the next immutable version and creates it as `DRAFT`.
 `POST /api/v1/admin/prompts/{promptId}/publish`
 
 The selected version becomes `PUBLISHED`; the prior version becomes
-`RETIRED`. Each render is recorded in `prompt_execution` with its template,
+`RETIRED`. Each render is recorded in `digital_team_prompt_execution` with its template,
 version, Agent, scene, variables snapshot and rendered Prompt.
 
 ## 11. Health API

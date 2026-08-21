@@ -17,7 +17,7 @@
 -- ============================================================================
 
 -- 1. 版本标记
-CREATE TABLE schema_version_marker (
+CREATE TABLE digital_team_schema_version_marker (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(96) NOT NULL,
     marker VARCHAR(64) NOT NULL,
@@ -26,7 +26,7 @@ CREATE TABLE schema_version_marker (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 2. 权限审计日志
-CREATE TABLE permission_audit_log (
+CREATE TABLE digital_team_permission_audit_log (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(96) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -41,7 +41,7 @@ CREATE TABLE permission_audit_log (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 3. 项目
-CREATE TABLE project (
+CREATE TABLE digital_team_project (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -58,7 +58,7 @@ CREATE TABLE project (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 4. 项目成员
-CREATE TABLE project_member (
+CREATE TABLE digital_team_project_member (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     project_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -68,12 +68,12 @@ CREATE TABLE project_member (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_project_member_business UNIQUE (project_id, user_id),
     CONSTRAINT fk_project_member_project FOREIGN KEY (project_id)
-        REFERENCES project (business_id),
+        REFERENCES digital_team_project (business_id),
     INDEX idx_project_member_tenant_user (tenant_id, user_id, project_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 5. 项目专家
-CREATE TABLE project_expert (
+CREATE TABLE digital_team_project_expert (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     project_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -83,12 +83,12 @@ CREATE TABLE project_expert (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_project_expert_business UNIQUE (project_id, expert_id),
     CONSTRAINT fk_project_expert_project FOREIGN KEY (project_id)
-        REFERENCES project (business_id),
+        REFERENCES digital_team_project (business_id),
     INDEX idx_project_expert_tenant (tenant_id, project_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 6. 会话任务（用户创建的 task）
-CREATE TABLE project_conversation (
+CREATE TABLE digital_team_project_conversation (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -102,11 +102,11 @@ CREATE TABLE project_conversation (
     CONSTRAINT uk_conversation_session UNIQUE (tenant_id, session_id),
     CONSTRAINT uk_project_conversation_business_id UNIQUE (business_id),
     CONSTRAINT fk_conversation_project FOREIGN KEY (project_id)
-        REFERENCES project (business_id)
+        REFERENCES digital_team_project (business_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 7. 用户消息
-CREATE TABLE project_message (
+CREATE TABLE digital_team_project_message (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -121,25 +121,25 @@ CREATE TABLE project_message (
     CONSTRAINT uk_message_client UNIQUE (tenant_id, project_id, client_message_id),
     CONSTRAINT uk_project_message_business_id UNIQUE (business_id),
     CONSTRAINT fk_message_project FOREIGN KEY (project_id)
-        REFERENCES project (business_id),
+        REFERENCES digital_team_project (business_id),
     CONSTRAINT fk_message_conversation FOREIGN KEY (conversation_id)
-        REFERENCES project_conversation (business_id),
+        REFERENCES digital_team_project_conversation (business_id),
     INDEX idx_message_project_created (tenant_id, project_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 8. 项目事件序列号
-CREATE TABLE project_event_sequence (
+CREATE TABLE digital_team_project_event_sequence (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL,
     project_id VARCHAR(64) NOT NULL,
     next_sequence BIGINT NOT NULL,
     CONSTRAINT uk_project_event_sequence_business UNIQUE (tenant_id, project_id),
     CONSTRAINT fk_event_sequence_project FOREIGN KEY (project_id)
-        REFERENCES project (business_id)
+        REFERENCES digital_team_project (business_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 9. 面向前端的事件（持久化，支持 Last-Event-ID 重放）
-CREATE TABLE project_event (
+CREATE TABLE digital_team_project_event (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -154,25 +154,25 @@ CREATE TABLE project_event (
     CONSTRAINT uk_task_event_sequence UNIQUE (tenant_id, conversation_id, sequence),
     CONSTRAINT uk_project_event_business_id UNIQUE (business_id),
     CONSTRAINT fk_event_project FOREIGN KEY (project_id)
-        REFERENCES project (business_id),
+        REFERENCES digital_team_project (business_id),
     CONSTRAINT fk_event_conversation FOREIGN KEY (conversation_id)
-        REFERENCES project_conversation (business_id),
+        REFERENCES digital_team_project_conversation (business_id),
     INDEX idx_event_replay (tenant_id, project_id, visibility, sequence)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 10. 会话事件序列号
-CREATE TABLE conversation_event_sequence (
+CREATE TABLE digital_team_conversation_event_sequence (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL,
     conversation_id VARCHAR(64) NOT NULL,
     next_sequence BIGINT NOT NULL,
     CONSTRAINT uk_conversation_event_sequence_business UNIQUE (tenant_id, conversation_id),
     CONSTRAINT fk_conversation_event_sequence FOREIGN KEY (conversation_id)
-        REFERENCES project_conversation (business_id)
+        REFERENCES digital_team_project_conversation (business_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 11. 执行票（worker 领取的调度单元）
-CREATE TABLE coordinator_dispatch (
+CREATE TABLE digital_team_coordinator_dispatch (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -190,13 +190,13 @@ CREATE TABLE coordinator_dispatch (
     CONSTRAINT uk_dispatch_message UNIQUE (tenant_id, project_id, message_id),
     CONSTRAINT uk_coordinator_dispatch_business_id UNIQUE (business_id),
     CONSTRAINT fk_dispatch_message FOREIGN KEY (message_id)
-        REFERENCES project_message (business_id),
+        REFERENCES digital_team_project_message (business_id),
     INDEX idx_dispatch_pending (status, available_at),
     INDEX idx_dispatch_lease (status, available_at, lease_expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 12. 意图分析记录
-CREATE TABLE coordinator_analysis (
+CREATE TABLE digital_team_coordinator_analysis (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -212,12 +212,12 @@ CREATE TABLE coordinator_analysis (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_coordinator_analysis_business_id UNIQUE (business_id),
     CONSTRAINT fk_analysis_project FOREIGN KEY (project_id)
-        REFERENCES project (business_id),
+        REFERENCES digital_team_project (business_id),
     INDEX idx_analysis_project_created (tenant_id, project_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 13. 协调者提问记录
-CREATE TABLE coordinator_human_request (
+CREATE TABLE digital_team_coordinator_human_request (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     analysis_id VARCHAR(64),
@@ -229,14 +229,14 @@ CREATE TABLE coordinator_human_request (
     resolved_at TIMESTAMP NULL,
     CONSTRAINT uk_coordinator_human_request_business_id UNIQUE (business_id),
     CONSTRAINT fk_human_request_analysis FOREIGN KEY (analysis_id)
-        REFERENCES coordinator_analysis (business_id),
+        REFERENCES digital_team_coordinator_analysis (business_id),
     CONSTRAINT fk_human_request_project FOREIGN KEY (project_id)
-        REFERENCES project (business_id),
+        REFERENCES digital_team_project (business_id),
     INDEX idx_human_request_pending (tenant_id, project_id, status, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 14. 执行计划
-CREATE TABLE coordinator_plan (
+CREATE TABLE digital_team_coordinator_plan (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -256,13 +256,13 @@ CREATE TABLE coordinator_plan (
         UNIQUE (tenant_id, project_id, message_id, plan_version),
     CONSTRAINT uk_coordinator_plan_business_id UNIQUE (business_id),
     CONSTRAINT fk_plan_project FOREIGN KEY (project_id)
-        REFERENCES project (business_id),
+        REFERENCES digital_team_project (business_id),
     CONSTRAINT fk_plan_message FOREIGN KEY (message_id)
-        REFERENCES project_message (business_id)
+        REFERENCES digital_team_project_message (business_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 15. 协调子任务（专家执行单元）
-CREATE TABLE coordinator_task (
+CREATE TABLE digital_team_coordinator_task (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -294,14 +294,14 @@ CREATE TABLE coordinator_task (
     CONSTRAINT uk_task_request UNIQUE (tenant_id, request_id),
     CONSTRAINT uk_coordinator_task_business_id UNIQUE (business_id),
     CONSTRAINT fk_task_plan FOREIGN KEY (plan_id)
-        REFERENCES coordinator_plan (business_id),
+        REFERENCES digital_team_coordinator_plan (business_id),
     INDEX idx_task_session (session_id),
     INDEX idx_task_lease (status, lease_expires_at),
     INDEX idx_task_plan_status (plan_id, status, task_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 16. 专家任务事件（当前基本闲置：事件事实源在 AgentCore）
-CREATE TABLE coordinator_task_event (
+CREATE TABLE digital_team_coordinator_task_event (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(96) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -314,12 +314,12 @@ CREATE TABLE coordinator_task_event (
     CONSTRAINT uk_task_event_id UNIQUE (tenant_id, event_id),
     CONSTRAINT uk_coordinator_task_event_business_id UNIQUE (business_id),
     CONSTRAINT fk_task_event_task FOREIGN KEY (task_id)
-        REFERENCES coordinator_task (business_id),
+        REFERENCES digital_team_coordinator_task (business_id),
     INDEX idx_task_event_task_id (task_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 17. 人类请求（协调者提问 / 专家求助共用）
-CREATE TABLE human_request (
+CREATE TABLE digital_team_human_request (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     analysis_id VARCHAR(64),
@@ -345,16 +345,16 @@ CREATE TABLE human_request (
         UNIQUE (tenant_id, response_idempotency_key),
     CONSTRAINT uk_human_request_business_id UNIQUE (business_id),
     CONSTRAINT fk_human_project FOREIGN KEY (project_id)
-        REFERENCES project (business_id),
+        REFERENCES digital_team_project (business_id),
     CONSTRAINT fk_human_analysis FOREIGN KEY (analysis_id)
-        REFERENCES coordinator_analysis (business_id),
+        REFERENCES digital_team_coordinator_analysis (business_id),
     CONSTRAINT fk_human_task FOREIGN KEY (task_id)
-        REFERENCES coordinator_task (business_id),
+        REFERENCES digital_team_coordinator_task (business_id),
     INDEX idx_human_pending (tenant_id, project_id, status, expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 18. 产物
-CREATE TABLE project_artifact (
+CREATE TABLE digital_team_project_artifact (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -375,14 +375,14 @@ CREATE TABLE project_artifact (
     CONSTRAINT uk_artifact_version UNIQUE (project_id, file_name, version),
     CONSTRAINT uk_project_artifact_business_id UNIQUE (business_id),
     CONSTRAINT fk_artifact_project FOREIGN KEY (project_id)
-        REFERENCES project (business_id),
+        REFERENCES digital_team_project (business_id),
     CONSTRAINT fk_artifact_task FOREIGN KEY (task_id)
-        REFERENCES coordinator_task (business_id),
+        REFERENCES digital_team_coordinator_task (business_id),
     INDEX idx_artifact_project_status (tenant_id, project_id, status, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 19. 产物血缘（输出 ← 输入）
-CREATE TABLE project_artifact_lineage (
+CREATE TABLE digital_team_project_artifact_lineage (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     output_artifact_id VARCHAR(64) NOT NULL,
     input_artifact_id VARCHAR(64) NOT NULL,
@@ -390,13 +390,13 @@ CREATE TABLE project_artifact_lineage (
     CONSTRAINT uk_project_artifact_lineage_business
         UNIQUE (output_artifact_id, input_artifact_id),
     CONSTRAINT fk_lineage_output FOREIGN KEY (output_artifact_id)
-        REFERENCES project_artifact (business_id),
+        REFERENCES digital_team_project_artifact (business_id),
     CONSTRAINT fk_lineage_input FOREIGN KEY (input_artifact_id)
-        REFERENCES project_artifact (business_id)
+        REFERENCES digital_team_project_artifact (business_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 20. coordinator agent run 记录
-CREATE TABLE coordinator_agent_run (
+CREATE TABLE digital_team_coordinator_agent_run (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -416,12 +416,12 @@ CREATE TABLE coordinator_agent_run (
     CONSTRAINT uk_coordinator_agent_run_key UNIQUE (tenant_id, run_key),
     CONSTRAINT uk_coordinator_agent_run_business_id UNIQUE (business_id),
     CONSTRAINT fk_coordinator_agent_run_project FOREIGN KEY (project_id)
-        REFERENCES project (business_id),
+        REFERENCES digital_team_project (business_id),
     INDEX idx_coordinator_agent_session (session_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 21. 提示词模板（数据库管理，PUBLISHED/DRAFT 版本化）
-CREATE TABLE prompt_template (
+CREATE TABLE digital_team_prompt_template (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     prompt_key VARCHAR(128) NOT NULL,
@@ -440,7 +440,7 @@ CREATE TABLE prompt_template (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 22. 提示词执行审计
-CREATE TABLE prompt_execution (
+CREATE TABLE digital_team_prompt_execution (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
@@ -457,11 +457,11 @@ CREATE TABLE prompt_execution (
     CONSTRAINT uk_prompt_invocation UNIQUE (invocation_id, scene),
     CONSTRAINT uk_prompt_execution_business_id UNIQUE (business_id),
     CONSTRAINT fk_prompt_execution_template FOREIGN KEY (prompt_template_id)
-        REFERENCES prompt_template (business_id)
+        REFERENCES digital_team_prompt_template (business_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 23. 会话-专家 session 复用映射
-CREATE TABLE project_conversation_expert_session (
+CREATE TABLE digital_team_project_conversation_expert_session (
     id VARCHAR(64) NOT NULL PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL,
     project_id VARCHAR(64) NOT NULL,
@@ -475,7 +475,7 @@ CREATE TABLE project_conversation_expert_session (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 24. 技能目录
-CREATE TABLE skill (
+CREATE TABLE digital_team_skill (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL UNIQUE,
     name VARCHAR(128) NOT NULL,
@@ -486,7 +486,7 @@ CREATE TABLE skill (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 25. 项目技能挂载
-CREATE TABLE project_skill (
+CREATE TABLE digital_team_project_skill (
     project_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
     skill_id VARCHAR(64) NOT NULL,
@@ -495,14 +495,14 @@ CREATE TABLE project_skill (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (project_id, skill_id),
     CONSTRAINT fk_project_skill_project FOREIGN KEY (project_id)
-        REFERENCES project (business_id),
+        REFERENCES digital_team_project (business_id),
     CONSTRAINT fk_project_skill_skill FOREIGN KEY (skill_id)
-        REFERENCES skill (business_id),
+        REFERENCES digital_team_skill (business_id),
     INDEX idx_project_skill_tenant (tenant_id, project_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 26. CLI 提交载荷（按 task_id+kind 幂等，消费后删除）
-CREATE TABLE coordinator_cli_submission (
+CREATE TABLE digital_team_coordinator_cli_submission (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL,
     task_id VARCHAR(128) NOT NULL,

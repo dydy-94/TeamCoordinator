@@ -69,7 +69,7 @@ class ExecutionFaultToleranceIntegrationTest {
         // Correct owner extends it beyond the renewal interval.
         assertEquals(1, executionRepository.renewLease(claimedId, "instance-a", 30));
         Timestamp expires = jdbc.queryForObject(
-                "SELECT lease_expires_at FROM coordinator_dispatch WHERE business_id = ?",
+                "SELECT lease_expires_at FROM digital_team_coordinator_dispatch WHERE business_id = ?",
                 Timestamp.class,
                 claimedId);
         assertNotNull(expires);
@@ -82,7 +82,7 @@ class ExecutionFaultToleranceIntegrationTest {
         // Leave the dispatch terminal so it does not steal ticks from
         // other tests in the shared claim pool.
         jdbc.update(
-                "UPDATE coordinator_dispatch SET status = 'COMPLETED' WHERE business_id = ?",
+                "UPDATE digital_team_coordinator_dispatch SET status = 'COMPLETED' WHERE business_id = ?",
                 claimedId);
     }
 
@@ -93,7 +93,7 @@ class ExecutionFaultToleranceIntegrationTest {
         TaskRecord task = runUntilTaskExists(projectId);
         makeDispatchClaimable(projectId);
         jdbc.update(
-                "UPDATE coordinator_task SET session_id = 'missing-run', status = 'RUNNING' "
+                "UPDATE digital_team_coordinator_task SET session_id = 'missing-run', status = 'RUNNING' "
                         + "WHERE business_id = ?",
                 task.getId());
 
@@ -127,14 +127,14 @@ class ExecutionFaultToleranceIntegrationTest {
         // Simulate a crash between submitRun and saveSession: STARTING with
         // no session and an old updated_at, plus a claimable dispatch.
         String planId = jdbc.queryForObject(
-                "SELECT plan_id FROM coordinator_task WHERE business_id = ?",
+                "SELECT plan_id FROM digital_team_coordinator_task WHERE business_id = ?",
                 String.class,
                 task.getId());
         jdbc.update(
-                "UPDATE coordinator_plan SET status = 'RUNNING' WHERE business_id = ?",
+                "UPDATE digital_team_coordinator_plan SET status = 'RUNNING' WHERE business_id = ?",
                 planId);
         jdbc.update(
-                "UPDATE coordinator_task SET status = 'STARTING', session_id = NULL, "
+                "UPDATE digital_team_coordinator_task SET status = 'STARTING', session_id = NULL, "
                         + "updated_at = ? WHERE business_id = ?",
                 Timestamp.from(Instant.now().minusSeconds(120)),
                 task.getId());
@@ -165,7 +165,7 @@ class ExecutionFaultToleranceIntegrationTest {
         for (String expertId : expertIds) {
             for (int i = 0; i < 2; i++) {
                 jdbc.update(
-                        "INSERT INTO coordinator_task "
+                        "INSERT INTO digital_team_coordinator_task "
                                 + "(business_id, tenant_id, project_id, plan_id, task_key, "
                                 + "request_id, expert_id, status, objective, last_sequence) "
                                 + "VALUES (?, ?, ?, ?, ?, ?, ?, 'RUNNING', 'fake load', 0)",
@@ -181,7 +181,7 @@ class ExecutionFaultToleranceIntegrationTest {
         // Take the load project's dispatch out of the claim pool so it does
         // not monopolize claimNext for the rest of the test.
         jdbc.update(
-                "UPDATE coordinator_dispatch SET status = 'COMPLETED' WHERE project_id = ?",
+                "UPDATE digital_team_coordinator_dispatch SET status = 'COMPLETED' WHERE project_id = ?",
                 loadProject);
 
         String projectId = createProject();
@@ -196,14 +196,14 @@ class ExecutionFaultToleranceIntegrationTest {
         }
 
         // Capacity frees up: the message completes.
-        jdbc.update("DELETE FROM coordinator_task WHERE request_id LIKE 'fake-request-%'");
+        jdbc.update("DELETE FROM digital_team_coordinator_task WHERE request_id LIKE 'fake-request-%'");
         assertEquals("SUCCEEDED", runUntilTerminal(projectId).getStatus());
 
         // Leave no RUNNING task behind: the load project's dispatch was
         // completed above, so its real task would otherwise occupy an
         // expert slot forever and poison the shared expert pool.
         jdbc.update(
-                "UPDATE coordinator_task SET status = 'FAILED' WHERE project_id = ? "
+                "UPDATE digital_team_coordinator_task SET status = 'FAILED' WHERE project_id = ? "
                         + "AND request_id NOT LIKE 'fake-request-%'",
                 loadProject);
     }
@@ -214,24 +214,24 @@ class ExecutionFaultToleranceIntegrationTest {
         submitMessage(projectId, "失败一致性");
         TaskRecord task = runUntilTaskExists(projectId);
         jdbc.update(
-                "UPDATE coordinator_task SET status = 'RUNNING' WHERE business_id = ?",
+                "UPDATE digital_team_coordinator_task SET status = 'RUNNING' WHERE business_id = ?",
                 task.getId());
         String messageId = jdbc.queryForObject(
-                "SELECT message_id FROM coordinator_plan WHERE business_id = ?",
+                "SELECT message_id FROM digital_team_coordinator_plan WHERE business_id = ?",
                 String.class,
                 task.getPlanId());
 
         executionRepository.failTasksForMessage(TENANT, messageId);
 
         assertEquals("FAILED", jdbc.queryForObject(
-                "SELECT status FROM coordinator_plan WHERE business_id = ?",
+                "SELECT status FROM digital_team_coordinator_plan WHERE business_id = ?",
                 String.class,
                 task.getPlanId()));
         assertEquals("FAILED", task(projectId).getStatus());
 
         // Terminal dispatch: keep it out of the shared claim pool.
         jdbc.update(
-                "UPDATE coordinator_dispatch SET status = 'FAILED' WHERE project_id = ?",
+                "UPDATE digital_team_coordinator_dispatch SET status = 'FAILED' WHERE project_id = ?",
                 projectId);
     }
 
@@ -243,7 +243,7 @@ class ExecutionFaultToleranceIntegrationTest {
         // A stale last_sequence far above the synthetic cancel sequence: the
         // sequence-guarded advanceTask would reject it, cancelTask must not.
         jdbc.update(
-                "UPDATE coordinator_task SET last_sequence = 1000, status = 'RUNNING' "
+                "UPDATE digital_team_coordinator_task SET last_sequence = 1000, status = 'RUNNING' "
                         + "WHERE business_id = ?",
                 task.getId());
 
@@ -256,7 +256,7 @@ class ExecutionFaultToleranceIntegrationTest {
 
         // Terminal dispatch: keep it out of the shared claim pool.
         jdbc.update(
-                "UPDATE coordinator_dispatch SET status = 'CANCELLED' WHERE project_id = ?",
+                "UPDATE digital_team_coordinator_dispatch SET status = 'CANCELLED' WHERE project_id = ?",
                 projectId);
     }
 
@@ -264,7 +264,7 @@ class ExecutionFaultToleranceIntegrationTest {
 
     private int consecutiveFailures(String taskId) {
         Integer count = jdbc.queryForObject(
-                "SELECT consecutive_failures FROM coordinator_task WHERE business_id = ?",
+                "SELECT consecutive_failures FROM digital_team_coordinator_task WHERE business_id = ?",
                 Integer.class,
                 taskId);
         return count == null ? 0 : count;
@@ -272,7 +272,7 @@ class ExecutionFaultToleranceIntegrationTest {
 
     private void makeDispatchClaimable(String projectId) {
         jdbc.update(
-                "UPDATE coordinator_dispatch SET status = 'RUNNING', lease_owner = NULL, "
+                "UPDATE digital_team_coordinator_dispatch SET status = 'RUNNING', lease_owner = NULL, "
                         + "lease_expires_at = NULL WHERE project_id = ?",
                 projectId);
     }
@@ -308,7 +308,7 @@ class ExecutionFaultToleranceIntegrationTest {
 
     private TaskRecord task(String projectId) {
         String taskId = jdbc.queryForObject(
-                "SELECT business_id FROM coordinator_task WHERE project_id = ? "
+                "SELECT business_id FROM digital_team_coordinator_task WHERE project_id = ? "
                         + "AND request_id NOT LIKE 'fake-request-%' ORDER BY created_at LIMIT 1",
                 String.class,
                 projectId);
@@ -318,7 +318,7 @@ class ExecutionFaultToleranceIntegrationTest {
     private TaskRecord runUntilTaskExists(String projectId) {
         for (int attempt = 0; attempt < 30; attempt++) {
             Integer count = jdbc.queryForObject(
-                    "SELECT COUNT(*) FROM coordinator_task WHERE project_id = ?",
+                    "SELECT COUNT(*) FROM digital_team_coordinator_task WHERE project_id = ?",
                     Integer.class,
                     projectId);
             if (count != null && count > 0) {
@@ -345,14 +345,14 @@ class ExecutionFaultToleranceIntegrationTest {
 
     private String dispatchId(String projectId) {
         return jdbc.queryForObject(
-                "SELECT business_id FROM coordinator_dispatch WHERE project_id = ?",
+                "SELECT business_id FROM digital_team_coordinator_dispatch WHERE project_id = ?",
                 String.class,
                 projectId);
     }
 
     private String dispatchStatus(String dispatchId) {
         return jdbc.queryForObject(
-                "SELECT status FROM coordinator_dispatch WHERE business_id = ?",
+                "SELECT status FROM digital_team_coordinator_dispatch WHERE business_id = ?",
                 String.class,
                 dispatchId);
     }

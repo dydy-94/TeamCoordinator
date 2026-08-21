@@ -1,23 +1,23 @@
 package org.cmb.infrastructure.persistent;
 
-import org.cmb.infrastructure.persistent.mapper.IntentAnalysisMapper;
+import org.cmb.infrastructure.persistent.mapper.CoordinatorAnalysisMapper;
 import org.cmb.application.domain.CoordinatorDecision;
 import org.cmb.application.domain.RequestIdentity;
 import org.springframework.stereotype.Repository;
 
 /**
  * Intent-analysis persistence facade. All SQL lives in
- * {@link IntentAnalysisMapper}; human-request persistence is delegated to
+ * {@link CoordinatorAnalysisMapper}; human-request persistence is delegated to
  * {@link HumanRequestRepository}.
  */
 @Repository
 public class IntentAnalysisRepository {
 
-    private final IntentAnalysisMapper mapper;
+    private final CoordinatorAnalysisMapper mapper;
     private final HumanRequestRepository humanRequests;
 
     public IntentAnalysisRepository(
-            IntentAnalysisMapper mapper, HumanRequestRepository humanRequests) {
+            CoordinatorAnalysisMapper mapper, HumanRequestRepository humanRequests) {
         this.mapper = mapper;
         this.humanRequests = humanRequests;
     }

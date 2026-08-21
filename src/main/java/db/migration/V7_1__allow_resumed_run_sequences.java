@@ -14,14 +14,14 @@ public class V7_1__allow_resumed_run_sequences extends BaseJavaMigration {
         try (Statement statement = connection.createStatement()) {
             statement.execute(
                     "CREATE INDEX idx_task_event_task_id "
-                            + "ON coordinator_task_event (task_id)");
+                            + "ON digital_team_coordinator_task_event (task_id)");
             if ("MySQL".equalsIgnoreCase(database)) {
                 statement.execute(
-                        "ALTER TABLE coordinator_task_event "
+                        "ALTER TABLE digital_team_coordinator_task_event "
                                 + "DROP INDEX uk_task_event_sequence");
             } else {
                 statement.execute(
-                        "ALTER TABLE coordinator_task_event "
+                        "ALTER TABLE digital_team_coordinator_task_event "
                                 + "DROP CONSTRAINT uk_task_event_sequence");
             }
         }

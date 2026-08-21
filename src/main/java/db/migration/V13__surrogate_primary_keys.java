@@ -15,32 +15,32 @@ import org.flywaydb.core.api.migration.Context;
 public class V13__surrogate_primary_keys extends BaseJavaMigration {
 
     private static final List<String> STRING_ID_TABLES = Arrays.asList(
-            "project",
-            "project_conversation",
-            "project_message",
-            "project_event",
-            "coordinator_dispatch",
-            "coordinator_analysis",
-            "coordinator_human_request",
-            "coordinator_plan",
-            "coordinator_task",
-            "human_request",
-            "project_artifact",
-            "coordinator_agent_run",
-            "prompt_template",
-            "prompt_execution");
+            "digital_team_project",
+            "digital_team_project_conversation",
+            "digital_team_project_message",
+            "digital_team_project_event",
+            "digital_team_coordinator_dispatch",
+            "digital_team_coordinator_analysis",
+            "digital_team_coordinator_human_request",
+            "digital_team_coordinator_plan",
+            "digital_team_coordinator_task",
+            "digital_team_human_request",
+            "digital_team_project_artifact",
+            "digital_team_coordinator_agent_run",
+            "digital_team_prompt_template",
+            "digital_team_prompt_execution");
 
     private static final List<String> TECHNICAL_ID_TABLES = Arrays.asList(
-            "schema_version_marker",
-            "permission_audit_log",
-            "coordinator_task_event");
+            "digital_team_schema_version_marker",
+            "digital_team_permission_audit_log",
+            "digital_team_coordinator_task_event");
 
     private static final List<String> ASSOCIATION_TABLES = Arrays.asList(
-            "project_member",
-            "project_expert",
-            "project_event_sequence",
-            "conversation_event_sequence",
-            "project_artifact_lineage");
+            "digital_team_project_member",
+            "digital_team_project_expert",
+            "digital_team_project_event_sequence",
+            "digital_team_conversation_event_sequence",
+            "digital_team_project_artifact_lineage");
 
     @Override
     public void migrate(Context context) throws Exception {
@@ -50,10 +50,10 @@ public class V13__surrogate_primary_keys extends BaseJavaMigration {
         List<ForeignKey> foreignKeys = importedKeys(connection);
         try (Statement statement = connection.createStatement()) {
             statement.execute(mysql
-                    ? "ALTER TABLE project_message DROP INDEX uk_message_idempotency"
-                    : "ALTER TABLE project_message DROP CONSTRAINT uk_message_idempotency");
+                    ? "ALTER TABLE digital_team_project_message DROP INDEX uk_message_idempotency"
+                    : "ALTER TABLE digital_team_project_message DROP CONSTRAINT uk_message_idempotency");
             statement.execute(
-                    "ALTER TABLE project_message DROP COLUMN idempotency_key");
+                    "ALTER TABLE digital_team_project_message DROP COLUMN idempotency_key");
             for (ForeignKey foreignKey : foreignKeys) {
                 statement.execute("ALTER TABLE " + foreignKey.table
                         + (mysql ? " DROP FOREIGN KEY " : " DROP CONSTRAINT ")

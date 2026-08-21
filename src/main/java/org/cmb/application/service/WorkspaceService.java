@@ -4,7 +4,13 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.cmb.infrastructure.persistent.mapper.WorkspaceMapper;
+import org.cmb.infrastructure.persistent.mapper.CoordinatorPlanMapper;
+import org.cmb.infrastructure.persistent.mapper.CoordinatorTaskMapper;
+import org.cmb.infrastructure.persistent.mapper.HumanRequestMapper;
+import org.cmb.infrastructure.persistent.mapper.ProjectArtifactMapper;
+import org.cmb.infrastructure.persistent.mapper.ProjectConversationMapper;
+import org.cmb.infrastructure.persistent.mapper.ProjectEventMapper;
+import org.cmb.infrastructure.persistent.mapper.ProjectMessageMapper;
 import org.cmb.application.dto.ProjectView;
 import org.springframework.stereotype.Service;
 
@@ -14,15 +20,34 @@ import org.springframework.stereotype.Service;
  * column aliases verbatim (front-end contract), and each row map is
  * re-wrapped as {@link LinkedHashMap} for stable serialization. The single
  * conversation row keeps the old {@code queryForMap} semantics (empty map
- * when no row matches).
+ * when no row matches). Read-only queries live in each table's own mapper.
  */
 @Service
 public class WorkspaceService {
 
-    private final WorkspaceMapper mapper;
+    private final ProjectConversationMapper conversationMapper;
+    private final ProjectMessageMapper messageMapper;
+    private final ProjectEventMapper eventMapper;
+    private final CoordinatorPlanMapper planMapper;
+    private final CoordinatorTaskMapper taskMapper;
+    private final HumanRequestMapper humanRequestMapper;
+    private final ProjectArtifactMapper artifactMapper;
 
-    public WorkspaceService(WorkspaceMapper mapper) {
-        this.mapper = mapper;
+    public WorkspaceService(
+            ProjectConversationMapper conversationMapper,
+            ProjectMessageMapper messageMapper,
+            ProjectEventMapper eventMapper,
+            CoordinatorPlanMapper planMapper,
+            CoordinatorTaskMapper taskMapper,
+            HumanRequestMapper humanRequestMapper,
+            ProjectArtifactMapper artifactMapper) {
+        this.conversationMapper = conversationMapper;
+        this.messageMapper = messageMapper;
+        this.eventMapper = eventMapper;
+        this.planMapper = planMapper;
+        this.taskMapper = taskMapper;
+        this.humanRequestMapper = humanRequestMapper;
+        this.artifactMapper = artifactMapper;
     }
 
     public Map<String, Object> snapshot(
@@ -30,19 +55,19 @@ public class WorkspaceService {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("project", project);
         result.put("task", singleOrEmpty(
-                mapper.findConversation(tenantId, projectId, taskId)));
+                conversationMapper.findConversation(tenantId, projectId, taskId)));
         result.put("messages",
-                asLinkedMaps(mapper.findMessages(tenantId, projectId, taskId)));
+                asLinkedMaps(messageMapper.findMessages(tenantId, projectId, taskId)));
         result.put("events",
-                asLinkedMaps(mapper.findEvents(tenantId, projectId, taskId)));
+                asLinkedMaps(eventMapper.findEvents(tenantId, projectId, taskId)));
         result.put("plans",
-                asLinkedMaps(mapper.findPlans(tenantId, projectId, taskId)));
+                asLinkedMaps(planMapper.findPlans(tenantId, projectId, taskId)));
         result.put("tasks",
-                asLinkedMaps(mapper.findTasks(tenantId, projectId, taskId)));
+                asLinkedMaps(taskMapper.findTasks(tenantId, projectId, taskId)));
         result.put("humanRequests",
-                asLinkedMaps(mapper.findHumanRequests(tenantId, projectId, taskId)));
+                asLinkedMaps(humanRequestMapper.findHumanRequests(tenantId, projectId, taskId)));
         result.put("artifacts",
-                asLinkedMaps(mapper.findArtifacts(tenantId, projectId)));
+                asLinkedMaps(artifactMapper.findArtifacts(tenantId, projectId)));
         return result;
     }
 

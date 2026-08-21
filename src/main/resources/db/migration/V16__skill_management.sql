@@ -1,4 +1,4 @@
-CREATE TABLE skill (
+CREATE TABLE digital_team_skill (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id VARCHAR(64) NOT NULL UNIQUE,
     name VARCHAR(128) NOT NULL,
@@ -8,7 +8,7 @@ CREATE TABLE skill (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE project_skill (
+CREATE TABLE digital_team_project_skill (
     project_id VARCHAR(64) NOT NULL,
     tenant_id VARCHAR(64) NOT NULL,
     skill_id VARCHAR(64) NOT NULL,
@@ -16,14 +16,14 @@ CREATE TABLE project_skill (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (project_id, skill_id),
-    CONSTRAINT fk_project_skill_project FOREIGN KEY (project_id) REFERENCES project (business_id),
-    CONSTRAINT fk_project_skill_skill FOREIGN KEY (skill_id) REFERENCES skill (business_id)
+    CONSTRAINT fk_project_skill_project FOREIGN KEY (project_id) REFERENCES digital_team_project (business_id),
+    CONSTRAINT fk_project_skill_skill FOREIGN KEY (skill_id) REFERENCES digital_team_skill (business_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE INDEX idx_project_skill_tenant ON project_skill (tenant_id, project_id);
+CREATE INDEX idx_project_skill_tenant ON digital_team_project_skill (tenant_id, project_id);
 
 -- Seed some built-in skills for the platform
-INSERT INTO skill (business_id, name, description, prompt) VALUES
+INSERT INTO digital_team_skill (business_id, name, description, prompt) VALUES
 ('skill-code-review', '代码审查', '自动审查代码质量、安全漏洞和最佳实践合规性',
  'You are a code review expert. Analyze the provided code for bugs, security vulnerabilities, performance issues, and best practice violations. Provide specific, actionable feedback.'),
 ('skill-pdf-gen', 'PDF生成', '根据模板和数据生成格式化的PDF文档',

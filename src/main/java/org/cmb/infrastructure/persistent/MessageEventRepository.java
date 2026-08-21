@@ -5,7 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-import org.cmb.infrastructure.persistent.mapper.MessageEventMapper;
+import org.cmb.infrastructure.persistent.mapper.ConversationEventSequenceMapper;
+import org.cmb.infrastructure.persistent.mapper.CoordinatorDispatchMapper;
+import org.cmb.infrastructure.persistent.mapper.ProjectEventMapper;
+import org.cmb.infrastructure.persistent.mapper.ProjectMessageMapper;
 import org.cmb.application.domain.AgentEvent;
 import org.cmb.common.enums.EventVisibility;
 import org.cmb.application.dto.MessageAcceptedResponse;
@@ -18,23 +21,36 @@ import org.springframework.stereotype.Repository;
 
 /**
  * Message/event persistence facade. Owns sequence allocation and JSON
- * (de)serialization; all SQL lives in {@link MessageEventMapper}.
+ * (de)serialization; all SQL lives in the per-table mappers
+ * ({@link ProjectMessageMapper}, {@link ProjectEventMapper},
+ * {@link ConversationEventSequenceMapper}, {@link CoordinatorDispatchMapper}).
  */
 @Repository
 public class MessageEventRepository {
 
-    private final MessageEventMapper mapper;
+    private final ProjectMessageMapper messageMapper;
+    private final ProjectEventMapper eventMapper;
+    private final ConversationEventSequenceMapper sequenceMapper;
+    private final CoordinatorDispatchMapper dispatchMapper;
     private final ObjectMapper objectMapper;
 
-    public MessageEventRepository(MessageEventMapper mapper, ObjectMapper objectMapper) {
-        this.mapper = mapper;
+    public MessageEventRepository(
+            ProjectMessageMapper messageMapper,
+            ProjectEventMapper eventMapper,
+            ConversationEventSequenceMapper sequenceMapper,
+            CoordinatorDispatchMapper dispatchMapper,
+            ObjectMapper objectMapper) {
+        this.messageMapper = messageMapper;
+        this.eventMapper = eventMapper;
+        this.sequenceMapper = sequenceMapper;
+        this.dispatchMapper = dispatchMapper;
         this.objectMapper = objectMapper;
     }
 
     public MessageAcceptedResponse findDuplicate(
             RequestIdentity identity, String projectId, String taskId,
             MessageRequest request) {
-        List<MessageAcceptedResponse> rows = mapper.findDuplicate(
+        List<MessageAcceptedResponse> rows = messageMapper.findDuplicate(
                 identity.getTenantId(), projectId, taskId,
                 request.getClientMessageId());
         return rows.isEmpty() ? null : rows.get(0);
@@ -46,7 +62,7 @@ public class MessageEventRepository {
             String conversationId,
             String messageId,
             MessageRequest request) {
-        mapper.insertMessage(
+        messageMapper.insertMessage(
                 messageId,
                 identity.getTenantId(),
                 projectId,
@@ -59,13 +75,13 @@ public class MessageEventRepository {
 
     public long allocateSequence(String tenantId, String taskId) {
         try {
-            mapper.insertSequence(tenantId, taskId);
+            sequenceMapper.insertSequence(tenantId, taskId);
             return 1L;
         } catch (DuplicateKeyException ignored) {
             for (int attempt = 0; attempt < 20; attempt++) {
-                List<Long> rows = mapper.selectSequence(tenantId, taskId);
+                List<Long> rows = sequenceMapper.selectSequence(tenantId, taskId);
                 Long next = rows.isEmpty() ? null : rows.get(0);
-                int updated = mapper.updateSequence(tenantId, taskId, next, next + 1);
+                int updated = sequenceMapper.updateSequence(tenantId, taskId, next, next + 1);
                 if (updated == 1) {
                     return next;
                 }
@@ -92,7 +108,7 @@ public class MessageEventRepository {
         event.setType(type);
         event.setPayload(payload);
         event.setCreatedAt(Instant.now());
-        mapper.insertEvent(
+        eventMapper.insertEvent(
                 event.getId(),
                 identity.getTenantId(),
                 projectId,
@@ -110,7 +126,7 @@ public class MessageEventRepository {
             String projectId,
             String conversationId,
             String messageId) {
-        mapper.insertDispatch(
+        dispatchMapper.insertDispatch(
                 "dispatch-" + UUID.randomUUID(),
                 identity.getTenantId(),
                 projectId,
@@ -122,7 +138,7 @@ public class MessageEventRepository {
     public String findNextMarkerPayload(
             String tenantId, String conversationId, String sessionId,
             long afterSequence) {
-        java.util.List<String> rows = mapper.findNextMarkerPayload(
+        java.util.List<String> rows = eventMapper.findNextMarkerPayload(
                 tenantId, conversationId, sessionId, afterSequence);
         return rows.isEmpty() ? null : rows.get(0);
     }
@@ -135,7 +151,7 @@ public class MessageEventRepository {
     public List<ProjectEvent> findPublicEvents(
             String tenantId, String projectId, String taskId,
             long afterSequence, int limit) {
-        List<ProjectEvent> events = mapper.findPublicEvents(
+        List<ProjectEvent> events = eventMapper.findPublicEvents(
                 tenantId, projectId, taskId, afterSequence, limit);
         for (ProjectEvent event : events) {
             JsonNode payload = event.getPayload();
@@ -154,7 +170,7 @@ public class MessageEventRepository {
 
     public List<String> findRecentMessageTexts(
             String tenantId, String projectId, String taskId, int limit) {
-        return mapper.findRecentMessageTexts(tenantId, projectId, taskId, limit);
+        return messageMapper.findRecentMessageTexts(tenantId, projectId, taskId, limit);
     }
 
     private String writeJson(Object value) {

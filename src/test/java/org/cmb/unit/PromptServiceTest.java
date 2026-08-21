@@ -86,7 +86,7 @@ class PromptServiceTest {
         private final PromptTemplateView template;
 
         StubPromptRepository(PromptTemplateView template) {
-            super(null);
+            super(null, null);
             this.template = template;
         }
 
