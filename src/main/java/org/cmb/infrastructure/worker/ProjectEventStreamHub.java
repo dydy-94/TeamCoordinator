@@ -256,11 +256,13 @@ public class ProjectEventStreamHub {
             return;
         }
         events.sort(Comparator.comparingLong(AgentEvent::getSequence));
-        // 窗口 (start, end]：end 为同会话下一 MARKER 的 startSequence，
+        // 窗口 (floor, end]：end 为同会话下一 MARKER 的 startSequence，
         // 保证只下发本消息的事件；旧 MARKER 无 start 时回退会话游标。
-        long floor = startSequence != null
-                ? startSequence
-                : subscriber.agentCursors.getOrDefault(sessionId, 0L);
+        // floor 同时受会话游标约束：live 直转已推进游标的部分（同实例
+        // 订阅者已收到）不再重复下发；跨实例订阅者游标为 0，回放补发
+        // 全部窗口。
+        long floor = replayFloor(startSequence,
+                subscriber.agentCursors.getOrDefault(sessionId, 0L));
         long ceiling = endSequence != null ? endSequence : Long.MAX_VALUE;
         for (AgentEvent ae : filterAgentReplay(events, floor, ceiling)) {
             subscriber.emitter.send(SseEmitter.event()
@@ -269,6 +271,17 @@ public class ProjectEventStreamHub {
                     .data(ae));
             subscriber.agentCursors.put(sessionId, ae.getSequence());
         }
+    }
+
+    /**
+     * 回放下界：MARKER 自带 startSequence 时以其为准，但同时受会话
+     * 游标约束——live 直转已推进游标（同实例订阅者已收到）的部分不再
+     * 重复下发；旧 MARKER 无 start 时回退会话游标。
+     */
+    protected long replayFloor(Long startSequence, long sessionCursor) {
+        return startSequence != null
+                ? Math.max(startSequence, sessionCursor)
+                : sessionCursor;
     }
 
     /**
@@ -381,16 +394,47 @@ public class ProjectEventStreamHub {
                    .data(event);
         }
         subscriber.emitter.send(builder);
+        recordDelivered(subscriber, event);
+    }
+
+    /**
+     * 投递确认：持久化事件推进数据库序列游标（唯一允许推进该游标的
+     * 入口）；live 事件推进其 agent 会话游标。两个游标分属不同命名
+     * 空间，混用会把持久化游标污染成 live 计数器值，导致后续
+     * userMessage 等持久化事件被去重逻辑误丢弃。
+     */
+    protected void recordDelivered(Subscriber subscriber, ProjectEvent event) {
+        if (event.isLiveOnly()) {
+            AgentEvent agentEvent = event.getAgentEvent();
+            if (agentEvent != null && agentEvent.getSessionId() != null
+                    && agentEvent.getSequence() > 0L) {
+                subscriber.agentCursors.merge(
+                        agentEvent.getSessionId(), agentEvent.getSequence(),
+                        Math::max);
+            }
+            return;
+        }
         subscriber.lastSequence = event.getSequence();
     }
 
     /**
-     * 序列去重：持久化事件按单调序列过滤重放；live 事件（内存计数器命名
-     * 空间）一律投递。
+     * 序列去重：持久化事件按数据库序列过滤重放；live 事件按会话级
+     * agent 游标去重——同一 agent 事件经由 live 直转与 MARKER 回放
+     * 两条路径到达订阅者时只投递一次。无会话信息的 live 事件（合成
+     * 通知）一律投递。
      */
     protected boolean shouldDeliver(Subscriber subscriber, ProjectEvent event) {
-        return event.isLiveOnly()
-                || event.getSequence() > subscriber.lastSequence;
+        if (event.isLiveOnly()) {
+            AgentEvent agentEvent = event.getAgentEvent();
+            if (agentEvent == null || agentEvent.getSessionId() == null
+                    || agentEvent.getSequence() <= 0L) {
+                return true;
+            }
+            long cursor = subscriber.agentCursors.getOrDefault(
+                    agentEvent.getSessionId(), 0L);
+            return agentEvent.getSequence() > cursor;
+        }
+        return event.getSequence() > subscriber.lastSequence;
     }
 
     private void remove(

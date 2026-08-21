@@ -524,11 +524,18 @@ public class SingleExpertWorker {
      */
     private void consumeEvents(DispatchWork work, TaskRecord task) {
         List<AgentEvent> events;
+        // 复用专家 session 时，新任务行的游标从 0 开始——必须从会话
+        // 水位起，否则整段历史会被当作本消息的 live 输出重推。
+        long cursor = task.getLastSequence();
+        if (cursor == 0L && task.getSessionId() != null) {
+            cursor = executionRepository.findMaxLastSequenceBySession(
+                    task.getSessionId());
+        }
         try {
             events = new ArrayList<>(
                     agentCore.streamEvents(
                             task.getExpertId(), task.getSessionId(),
-                            task.getLastSequence(), work.getBusinessSessionId()));
+                            cursor, work.getBusinessSessionId()));
         } catch (RuntimeException ex) {
             // Transient AgentCore outage (5xx, connection failure): tolerate
             // it up to the threshold instead of failing the whole message.

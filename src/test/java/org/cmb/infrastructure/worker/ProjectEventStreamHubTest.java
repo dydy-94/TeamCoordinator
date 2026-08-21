@@ -23,7 +23,7 @@ import org.junit.jupiter.api.Test;
 class ProjectEventStreamHubTest {
 
     private static MessageEventRepository stubRepository() {
-        return new MessageEventRepository(null, new ObjectMapper());
+        return new MessageEventRepository(null, null, null, null, new ObjectMapper());
     }
 
     private static DigitalTeamProperties properties(int inactivityTimeoutMin) {
@@ -110,6 +110,75 @@ class ProjectEventStreamHubTest {
                 "live agent events must never be deduped against DB sequences");
         assertEquals(false, hub.shouldDeliver(subscriber, persisted),
                 "persisted events must respect the replay cursor");
+    }
+
+    @Test
+    void liveEventsAreDedupedByAgentSessionCursor() {
+        RecordingHub hub = new RecordingHub(properties(30));
+        ProjectEventStreamHub.Subscriber subscriber =
+                new ProjectEventStreamHub.Subscriber(new SseEmitter(0L), 10L);
+
+        ProjectEvent live = new ProjectEvent();
+        live.setSequence(99L); // live 事件的持久化命名空间序列与去重无关
+        live.setLiveOnly(true);
+        AgentEvent seen = AgentEvent.of("liveStatus");
+        seen.setSessionId("session-a");
+        seen.setSequence(5L);
+        live.setAgentEvent(seen);
+
+        assertTrue(hub.shouldDeliver(subscriber, live));
+        hub.recordDelivered(subscriber, live);
+
+        // 同会话更小序列（MARKER 回放先到、live 后到）被去重
+        ProjectEvent dup = new ProjectEvent();
+        dup.setLiveOnly(true);
+        dup.setAgentEvent(agentWithSession("session-a", 4L));
+        assertEquals(false, hub.shouldDeliver(subscriber, dup));
+
+        // 同会话更大序列正常投递
+        ProjectEvent next = new ProjectEvent();
+        next.setLiveOnly(true);
+        next.setAgentEvent(agentWithSession("session-a", 6L));
+        assertTrue(hub.shouldDeliver(subscriber, next));
+
+        // 不同会话互不影响
+        ProjectEvent other = new ProjectEvent();
+        other.setLiveOnly(true);
+        other.setAgentEvent(agentWithSession("session-b", 1L));
+        assertTrue(hub.shouldDeliver(subscriber, other));
+
+        // 无会话信息的 live 事件（合成通知）一律投递
+        ProjectEvent bare = new ProjectEvent();
+        bare.setLiveOnly(true);
+        bare.setAgentEvent(AgentEvent.of("liveStatus"));
+        assertTrue(hub.shouldDeliver(subscriber, bare));
+
+        // live 投递不推进持久化游标：序列 11 的持久化事件仍可投递
+        ProjectEvent persisted = new ProjectEvent();
+        persisted.setSequence(11L);
+        assertTrue(hub.shouldDeliver(subscriber, persisted));
+        hub.recordDelivered(subscriber, persisted);
+        assertEquals(false, hub.shouldDeliver(subscriber, persisted),
+                "持久化事件投递一次后必须被持久化游标去重");
+    }
+
+    @Test
+    void replayFloorIsBoundedBySessionCursor() {
+        RecordingHub hub = new RecordingHub(properties(30));
+        // live 直转未推进游标（跨实例订阅者）：以 MARKER startSequence 为准
+        assertEquals(24L, hub.replayFloor(24L, 0L));
+        // live 直转已推进游标（同实例订阅者已收到）：不再重复下发
+        assertEquals(30L, hub.replayFloor(24L, 30L));
+        // 旧 MARKER 无 startSequence：回退会话游标
+        assertEquals(0L, hub.replayFloor(null, 0L));
+        assertEquals(30L, hub.replayFloor(null, 30L));
+    }
+
+    private static AgentEvent agentWithSession(String sessionId, long sequence) {
+        AgentEvent event = AgentEvent.of("liveStatus");
+        event.setSessionId(sessionId);
+        event.setSequence(sequence);
+        return event;
     }
 
     @Test
