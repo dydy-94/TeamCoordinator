@@ -264,9 +264,17 @@ public class SingleExpertWorker {
         // Build event sink that forwards coordinator agent events to the task SSE
         // without persisting them — AgentCore events should be re-fetched on replay,
         // not stored in project_event. Only Coordinator-generated lifecycle events
-        // (coordinatorPhase, coordinatorChat, etc.) are persisted.
+        // (coordinatorPhase, coordinatorChat, etc.) are persisted. The burst is
+        // bracketed by agentStart/agentEnd so clients can identify the AgentCore
+        // chunk boundaries.
+        final boolean[] coordinatorStreamOpened = {false};
         Consumer<AgentEvent> coordinatorEventSink = event -> {
             event.setAgentId(CoordinatorAgentClient.COORDINATOR_AGENT_ID);
+            if (!coordinatorStreamOpened[0]) {
+                coordinatorStreamOpened[0] = true;
+                publishAgentBoundary(work, "agentStart",
+                        event.getSessionId(), CoordinatorAgentClient.COORDINATOR_AGENT_ID);
+            }
             publishAgentEventLive(work, event);
         };
         // Insert AGENT_RUN_MARKER before the AgentCore call when we already
@@ -289,6 +297,12 @@ public class SingleExpertWorker {
                 work.getMessageId(), work.getBusinessSessionId(),
                 existingCoordSession,
                 request, coordinatorEventSink);
+        if (coordinatorStreamOpened[0]) {
+            String sid = decision != null
+                    ? decision.getCoordinatorSessionId() : existingCoordSession;
+            publishAgentBoundary(work, "agentEnd",
+                    sid, CoordinatorAgentClient.COORDINATOR_AGENT_ID);
+        }
         if (decision == null) {
             executionRepository.releaseDispatch(work.getDispatchId());
             return;
@@ -565,6 +579,10 @@ public class SingleExpertWorker {
         }
         executionRepository.resetConsecutiveFailures(task.getId());
         events.sort(Comparator.comparingLong(AgentEvent::getSequence));
+        // agentStart/agentEnd 边界：标记本批次 AgentCore 流的起止，
+        // 与 MARKER 回放侧的边界语义一致（live 与回放经会话游标去重，
+        // 每个订阅者只会看到一对边界）。
+        boolean streamOpened = false;
         for (AgentEvent event : events) {
             // Ensure event has agentId set
             if (event.getAgentId() == null) {
@@ -573,11 +591,20 @@ public class SingleExpertWorker {
             if (event.getEventId() == null) {
                 event.setEventId(event.getSessionId() + ":" + event.getSequence());
             }
+            if (!streamOpened) {
+                streamOpened = true;
+                publishAgentBoundary(work, "agentStart",
+                        task.getSessionId(), event.getAgentId());
+            }
             // Dedup by cursor: AgentCore streamEvents(afterSequence) already
             // filters out events with sequence <= lastSequence. No DB storage
             // needed — AgentCore persists its own event history.
             applyEvent(work, task, event);
             task.setLastSequence(Math.max(task.getLastSequence(), event.getSequence()));
+        }
+        if (streamOpened) {
+            publishAgentBoundary(work, "agentEnd",
+                    task.getSessionId(), task.getExpertId());
         }
         if (!isTerminal(task.getStatus())) {
             executionRepository.releaseDispatch(work.getDispatchId());
@@ -767,6 +794,23 @@ public class SingleExpertWorker {
 
     // Monotonic counter for live-only events (not persisted, no sequence allocation)
     private long liveEventCounter;
+
+    /**
+     * 发布 AgentCore 流的边界标记（agentStart/agentEnd）。live-only、不落库、
+     * 无序列号（不参与会话游标推进），仅作为 SSE 流内标记：两帧之间的
+     * chunk 全部来自 AgentCore。
+     */
+    private void publishAgentBoundary(
+            DispatchWork work, String boundaryType,
+            String sessionId, String agentId) {
+        AgentEvent boundary = AgentEvent.of(boundaryType);
+        boundary.setAgentId(agentId);
+        boundary.setSessionId(sessionId);
+        if ("agentStart".equals(boundaryType)) {
+            boundary.setContent(agentId);
+        }
+        publishAgentEventLive(work, boundary);
+    }
 
     /**
      * Push an AgentEvent to live SSE subscribers — no DB persistence.

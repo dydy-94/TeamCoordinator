@@ -4,11 +4,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.cmb.application.domain.AgentEvent;
+import org.cmb.application.domain.AgentRunRequest;
+import org.cmb.application.domain.AgentRunResponse;
 import org.cmb.application.domain.ProjectEvent;
 import org.cmb.common.config.DigitalTeamProperties;
+import org.cmb.common.enums.ProjectEventType;
 import org.cmb.infrastructure.persistent.MessageEventRepository;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.cmb.infrastructure.remoteaccess.MockAgentCoreAdapter;
@@ -52,6 +56,39 @@ class ProjectEventStreamHubTest {
         protected void sendInactiveFrame(Subscriber subscriber, long now) {
             inactive.incrementAndGet();
         }
+    }
+
+    /** Captures agentStart/agentEnd boundary frames instead of real IO. */
+    private static final class BoundaryRecordingHub extends ProjectEventStreamHub {
+        final AtomicInteger starts = new AtomicInteger();
+        final AtomicInteger ends = new AtomicInteger();
+
+        BoundaryRecordingHub(DigitalTeamProperties properties, MockAgentCoreAdapter agentCore) {
+            super(stubRepository(), agentCore, properties);
+        }
+
+        @Override
+        protected void sendAgentBoundary(Subscriber subscriber, long markerSequence,
+                String boundaryType, String agentId, String sessionId) {
+            if ("agentStart".equals(boundaryType)) {
+                starts.incrementAndGet();
+            } else {
+                ends.incrementAndGet();
+            }
+        }
+    }
+
+    private static ProjectEvent marker(String sessionId, String expertId,
+            long markerSequence, long startSequence) {
+        ProjectEvent marker = new ProjectEvent();
+        marker.setSequence(markerSequence);
+        marker.setType(ProjectEventType.AGENT_RUN_MARKER);
+        ObjectNode payload = new ObjectMapper().createObjectNode();
+        payload.put("sessionId", sessionId);
+        payload.put("expertId", expertId);
+        payload.put("startSequence", startSequence);
+        marker.setPayload(payload);
+        return marker;
     }
 
     @Test
@@ -179,6 +216,38 @@ class ProjectEventStreamHubTest {
         event.setSessionId(sessionId);
         event.setSequence(sequence);
         return event;
+    }
+
+    @Test
+    void agentReplayBurstIsBracketedByStartAndEndBoundaries() throws Exception {
+        MockAgentCoreAdapter agentCore = new MockAgentCoreAdapter(new DigitalTeamProperties());
+        BoundaryRecordingHub hub = new BoundaryRecordingHub(properties(30), agentCore);
+        AgentRunRequest request = new AgentRunRequest();
+        request.setTaskText("produce a report");
+        AgentRunResponse run = agentCore.submitRun("expert-analysis", request);
+
+        hub.subscribe("tenant", "project", "task", 0L,
+                () -> Collections.singletonList(marker(
+                        run.getSessionId(), "expert-analysis", 8L, 0L)));
+
+        assertEquals(1, hub.starts.get(), "one agentStart per replay burst");
+        assertEquals(1, hub.ends.get(), "one agentEnd per replay burst");
+    }
+
+    @Test
+    void emptyReplayWindowEmitsNoBoundaries() throws Exception {
+        MockAgentCoreAdapter agentCore = new MockAgentCoreAdapter(new DigitalTeamProperties());
+        BoundaryRecordingHub hub = new BoundaryRecordingHub(properties(30), agentCore);
+        AgentRunRequest request = new AgentRunRequest();
+        request.setTaskText("produce a report");
+        AgentRunResponse run = agentCore.submitRun("expert-analysis", request);
+
+        hub.subscribe("tenant", "project", "task", 0L,
+                () -> Collections.singletonList(marker(
+                        run.getSessionId(), "expert-analysis", 8L, 9999L)));
+
+        assertEquals(0, hub.starts.get(), "empty window must not emit agentStart");
+        assertEquals(0, hub.ends.get(), "empty window must not emit agentEnd");
     }
 
     @Test

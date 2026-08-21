@@ -245,7 +245,10 @@ public class ProjectEventStreamHub {
     /**
      * Replay agent events from AgentCore for a marker encountered during
      * SSE replay. Each agent event gets its own SSE frame with the
-     * agent event's type as the event name.
+     * agent event's type as the event name. The burst is bracketed by
+     * {@code agentStart} / {@code agentEnd} boundary frames so clients can
+     * tell AgentCore-sourced chunks apart from Coordinator events without
+     * hardcoding type lists. An empty window emits no boundaries.
      */
     private void replayAgentEvents(Subscriber subscriber, String expertId,
                                     String sessionId, long markerSequence,
@@ -264,13 +267,41 @@ public class ProjectEventStreamHub {
         long floor = replayFloor(startSequence,
                 subscriber.agentCursors.getOrDefault(sessionId, 0L));
         long ceiling = endSequence != null ? endSequence : Long.MAX_VALUE;
-        for (AgentEvent ae : filterAgentReplay(events, floor, ceiling)) {
+        List<AgentEvent> window = filterAgentReplay(events, floor, ceiling);
+        if (window.isEmpty()) {
+            return;
+        }
+        sendAgentBoundary(subscriber, markerSequence,
+                "agentStart", expertId, sessionId);
+        for (AgentEvent ae : window) {
             subscriber.emitter.send(SseEmitter.event()
                     .id(Long.toString(markerSequence))
                     .name(ae.getType())
                     .data(ae));
             subscriber.agentCursors.put(sessionId, ae.getSequence());
         }
+        sendAgentBoundary(subscriber, markerSequence,
+                "agentEnd", expertId, sessionId);
+    }
+
+    /**
+     * 发送一段 AgentCore 流的边界帧（agentStart/agentEnd）。边界帧不落库、
+     * 不参与游标推进，仅作为流内标记：两帧之间的 chunk 全部来自 AgentCore。
+     */
+    protected void sendAgentBoundary(
+            Subscriber subscriber, long markerSequence,
+            String boundaryType, String agentId, String sessionId)
+            throws IOException {
+        AgentEvent boundary = AgentEvent.of(boundaryType);
+        boundary.setAgentId(agentId);
+        boundary.setSessionId(sessionId);
+        if ("agentStart".equals(boundaryType)) {
+            boundary.setContent(agentId);
+        }
+        subscriber.emitter.send(SseEmitter.event()
+                .id(Long.toString(markerSequence))
+                .name(boundaryType)
+                .data(boundary));
     }
 
     /**
