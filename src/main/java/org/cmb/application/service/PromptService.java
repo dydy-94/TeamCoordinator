@@ -13,11 +13,8 @@ import org.cmb.application.dto.RenderedPrompt;
 public interface PromptService {
 
     String COORDINATOR_EXECUTION = "coordinator.execution";
-    String COORDINATOR_PLANNING = "coordinator.planning";
     String EXPERT_EXECUTION = "expert.execution";
     String EXPERT_RESUME = "expert.resume";
-    String COORDINATOR_PLAN_CHECK = "coordinator.plan_check";
-    String EXPERT_RESULT_CHECK = "expert.result_check";
 
     RenderedPrompt render(
             String promptKey, Object context, String tenantId, String projectId,
@@ -34,4 +31,7 @@ public interface PromptService {
             RequestIdentity identity, CreatePromptTemplateRequest request);
 
     PromptTemplateDO publish(RequestIdentity identity, String id);
+
+    /** 删除模板版本(仅 DRAFT;PUBLISHED 版本需先发布同分类其他版本)。 */
+    void delete(RequestIdentity identity, String id);
 }

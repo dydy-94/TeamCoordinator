@@ -54,6 +54,17 @@ public class ProjectRepository {
         return rows.isEmpty() ? null : rows.get(0);
     }
 
+    /** 平台管理员:租户下全部项目(不按成员过滤)。 */
+    public List<ProjectDO> findAllByTenant(String tenantId) {
+        return mapper.findAllByTenant(tenantId);
+    }
+
+    /** 平台管理员:按 id 直查项目(不按成员过滤)。 */
+    public ProjectDO findById(String tenantId, String projectId) {
+        List<ProjectDO> rows = mapper.findById(tenantId, projectId);
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
     public ProjectRole findRole(String tenantId, String projectId, String userId) {
         List<String> roles = memberMapper.findRole(tenantId, projectId, userId);
         return roles.isEmpty() ? null : ProjectRole.valueOf(roles.get(0));

@@ -11,6 +11,7 @@ import org.cmb.application.dto.ProjectView;
 
 import java.util.List;
 import java.util.UUID;
+import org.cmb.infrastructure.persistent.PlatformAdminRepository;
 import org.cmb.infrastructure.persistent.ProjectRepository;
 import org.cmb.infrastructure.persistent.SkillRepository;
 import org.cmb.application.domain.ExpertDescriptor;
@@ -33,13 +34,22 @@ public class ProjectServiceImpl implements ProjectService {
     private final ExpertRegistry expertRegistry;
     private final SkillRepository skillRepository;
     private final DigitalTeamProperties properties;
+    private final PlatformAdminRepository platformAdminTable;
 
     public ProjectServiceImpl(ProjectRepository repository, ExpertRegistry expertRegistry,
-            SkillRepository skillRepository, DigitalTeamProperties properties) {
+            SkillRepository skillRepository, DigitalTeamProperties properties,
+            PlatformAdminRepository platformAdminTable) {
         this.repository = repository;
         this.expertRegistry = expertRegistry;
         this.skillRepository = skillRepository;
         this.properties = properties;
+        this.platformAdminTable = platformAdminTable;
+    }
+
+    /** 平台管理员(env ∪ 表)豁免项目成员过滤。 */
+    private boolean isPlatformAdmin(String userId) {
+        return properties.getPlatform().getAdminUsers().contains(userId)
+                || platformAdminTable.isAdmin(userId);
     }
 
     @Transactional
@@ -67,8 +77,10 @@ public class ProjectServiceImpl implements ProjectService {
     @Transactional(readOnly = true)
     public java.util.List<ProjectView> list(RequestIdentity identity) {
         java.util.List<ProjectView> result = new java.util.ArrayList<>();
-        for (ProjectDO project : repository.findByTenant(
-                identity.getTenantId(), identity.getUserId())) {
+        java.util.List<ProjectDO> projects = isPlatformAdmin(identity.getUserId())
+                ? repository.findAllByTenant(identity.getTenantId())
+                : repository.findByTenant(identity.getTenantId(), identity.getUserId());
+        for (ProjectDO project : projects) {
             ProjectView view = new ProjectView();
             view.setId(project.getId());
             view.setName(project.getName());
@@ -256,6 +268,9 @@ public class ProjectServiceImpl implements ProjectService {
     private ProjectDO requireVisible(RequestIdentity identity, String projectId) {
         ProjectDO project =
                 repository.findVisible(identity.getTenantId(), projectId, identity.getUserId());
+        if (project == null && isPlatformAdmin(identity.getUserId())) {
+            project = repository.findById(identity.getTenantId(), projectId);
+        }
         if (project == null) {
             throw ApiException.notFound("PROJECT_NOT_FOUND", "Project was not found.");
         }
@@ -264,11 +279,14 @@ public class ProjectServiceImpl implements ProjectService {
 
     private ProjectDO requireOwnerAndActive(RequestIdentity identity, String projectId) {
         ProjectDO project = requireVisible(identity, projectId);
-        ProjectRole role =
-                repository.findRole(identity.getTenantId(), projectId, identity.getUserId());
-        if (role != ProjectRole.OWNER) {
-            throw ApiException.forbidden(
-                    "PROJECT_MANAGE_FORBIDDEN", "Only OWNER can manage project configuration.");
+        if (!isPlatformAdmin(identity.getUserId())) {
+            ProjectRole role =
+                    repository.findRole(identity.getTenantId(), projectId, identity.getUserId());
+            if (role != ProjectRole.OWNER) {
+                throw ApiException.forbidden(
+                        "PROJECT_MANAGE_FORBIDDEN",
+                        "Only OWNER can manage project configuration.");
+            }
         }
         if (project.getStatus() == ProjectStatus.ARCHIVED) {
             throw ApiException.conflict("PROJECT_ARCHIVED", "Archived projects are read-only.");

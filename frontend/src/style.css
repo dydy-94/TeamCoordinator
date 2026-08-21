@@ -776,3 +776,51 @@ button.danger:hover {
   background: var(--primary-soft, #eff6ff);
   color: var(--primary, #2563eb);
 }
+
+.admin-tenant-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid #eee;
+}
+.admin-tenant-name { font-weight: 600; min-width: 180px; }
+.admin-tenant-name small { color: #888; font-weight: 400; margin-left: 6px; }
+.admin-tenant-meta { flex: 1; color: #666; font-size: 13px; }
+.admin-create { display: flex; gap: 8px; margin: 10px 0; }
+.admin-create input, .admin-create select {
+  flex: 1; padding: 6px; border: 1px solid #ccc; border-radius: 4px;
+}
+.admin-member-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 4px 0; border-bottom: 1px dashed #eee;
+}
+
+.admin-page { padding: 16px 20px; max-width: 960px; }
+.page-header { display: flex; justify-content: space-between; align-items: center; }
+.admin-section {
+  margin-top: 16px; padding: 12px 16px; border: 1px solid #e0e0e0;
+  border-radius: 8px; background: #fff;
+}
+.prompt-row {
+  display: flex; gap: 8px; align-items: center; padding: 6px 0;
+  border-bottom: 1px dashed #eee;
+}
+.prompt-key { flex: 1; font-weight: 600; }
+.prompt-key small { color: #888; font-weight: 400; margin-left: 6px; }
+.prompt-editor { margin-top: 12px; padding: 12px; background: #fafafa; border-radius: 8px; }
+.prompt-editor label { display: block; margin-bottom: 8px; font-size: 13px; }
+.prompt-editor input, .prompt-editor textarea {
+  display: block; width: 100%; margin-top: 4px; padding: 6px;
+  border: 1px solid #ccc; border-radius: 4px; font: inherit;
+}
+
+.prompt-group { border-bottom: 1px solid #eee; }
+.prompt-versions {
+  margin: 0 0 6px 20px; padding: 6px 8px; background: #fafafa; border-radius: 6px;
+}
+.prompt-version-row {
+  display: flex; gap: 8px; align-items: center; padding: 3px 0;
+  border-bottom: 1px dashed #eee; font-size: 13px;
+}
+.prompt-version-row span { flex: 1; color: #555; }

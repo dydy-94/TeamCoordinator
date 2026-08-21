@@ -67,7 +67,7 @@ corresponding AgentCore run.
 
 ### 2.2 Identity Headers
 
-All `/api/v1/**` endpoints require:
+All tenant-scoped `/api/v1/**` endpoints require:
 
 | Header | Required | Description |
 |---|---:|---|
@@ -76,6 +76,27 @@ All `/api/v1/**` endpoints require:
 | `Content-Type` | For JSON body | `application/json` |
 
 Missing identity headers return `401 IDENTITY_REQUIRED`.
+
+**Tenant gate (fail-closed):** the tenant named by `X-Tenant-Id` must exist
+and be `ACTIVE`, and the user named by `X-User-Id` must be a member of it
+(`digital_team_tenant_user`). Otherwise the request fails before reaching
+business logic:
+
+| Condition | HTTP | Code |
+|---|---|---|
+| Unknown tenant | 404 | `TENANT_NOT_FOUND` |
+| Tenant disabled | 403 | `TENANT_DISABLED` |
+| User not a tenant member | 403 | `TENANT_ACCESS_FORBIDDEN` |
+
+Platform administrators (env `PLATFORM_ADMIN_USERS`, comma-separated, ∪ the
+`digital_team_platform_admin` table — inserting a `user_id` row grants
+admin, no API) bypass the membership check — they may access any ACTIVE
+tenant — but still cannot access a disabled or unknown tenant. Exceptions
+that do not carry the tenant gate:
+`/health`, `/ready`, `/mock/**`, `/api/v1/agent-tools/**` (tool-token auth),
+`/api/v1/skills`, `/api/v1/experts`, and the tenant endpoints themselves
+(`/api/v1/tenants*`, `/api/v1/admin/tenants*` — they require only
+`X-User-Id`).
 
 Example:
 
@@ -665,7 +686,6 @@ files.
 | Prompt key | Scene | Purpose |
 |---|---|---|
 | `coordinator.execution` | `COORDINATOR_EXECUTION` | Intent routing, delegation context and output protocol |
-| `coordinator.planning` | `COORDINATOR_PLANNING` | Expert task decomposition and dependency planning |
 | `expert.execution` | `EXPERT_EXECUTION` | Subtask background, acceptance criteria and communication protocol |
 | `expert.resume` | `EXPERT_RESUME` | Resume an expert task after human input |
 
@@ -1043,3 +1063,46 @@ Response: `204 No Content`, or `404` if not found.
 | `MINIO_BUCKET` | `digital-team` | Object storage bucket |
 | `DIGITAL_TEAM_MVP_ENABLED` | `true` | MVP feature flag |
 | `DIGITAL_TEAM_EMERGENCY_STOP` | `false` | Emergency kill switch |
+
+## 15. Tenant API
+
+Tenant management. These endpoints require only `X-User-Id` (the user may
+hold a stale tenant in local storage). User ids come from the external login
+system — this service stores no user entity, only tenant→user assignments.
+
+### 15.1 List My Tenants (tenant switcher source)
+
+```http
+GET /api/v1/tenants
+X-User-Id: user-001
+```
+
+Returns the tenants the user belongs to, each with `role`
+(`TENANT_ADMIN` | `MEMBER`) and `status` (`ACTIVE` | `DISABLED`).
+
+### 15.2 Tenant-admin self-service (requires TENANT_ADMIN of the tenant)
+
+| Method & path | Body / params | Description |
+|---|---|---|
+| `PATCH /api/v1/tenants/{tenantId}` | `{name?, description?}` | Update own tenant info (owner/status not changeable) |
+| `GET /api/v1/tenants/{tenantId}/members` | — | List members |
+| `POST /api/v1/tenants/{tenantId}/members` | `{userId, role}` | Assign member (`TENANT_ADMIN`/`MEMBER`) |
+| `DELETE /api/v1/tenants/{tenantId}/members/{userId}` | — | Remove member (204) |
+
+### 15.3 Platform admin endpoints (`PLATFORM_ADMIN_USERS`)
+
+| Method & path | Body / params | Description |
+|---|---|---|
+| `GET /api/v1/admin/tenants` | — | List all tenants |
+| `POST /api/v1/admin/tenants` | `{name, description?, ownerUserId}` | Create tenant (201); creator becomes `TENANT_ADMIN` |
+| `PATCH /api/v1/admin/tenants/{tenantId}` | `{name?, description?, ownerUserId?}` | Full update |
+| `POST /api/v1/admin/tenants/{tenantId}/disable` | — | Disable tenant (204, idempotent) |
+| `DELETE /api/v1/admin/tenants/{tenantId}` | — | Hard delete (204) — only when the tenant has no projects |
+| `POST /api/v1/admin/tenants/{tenantId}/members` | `{userId, role}` | Assign member in any tenant |
+| `DELETE /api/v1/admin/tenants/{tenantId}/members/{userId}` | — | Remove member (204) |
+
+Error codes: `PLATFORM_ADMIN_REQUIRED` (403), `TENANT_MANAGE_FORBIDDEN` (403),
+`TENANT_NAME_EXISTS` (409), `TENANT_HAS_PROJECTS` (409),
+`TENANT_OWNER_REMOVAL_FORBIDDEN` (409),
+`TENANT_LAST_ADMIN_REMOVAL_FORBIDDEN` (409), `TENANT_ROLE_INVALID` (400),
+`TENANT_NOT_FOUND` (404).

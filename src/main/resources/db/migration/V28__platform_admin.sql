@@ -1,0 +1,6 @@
+CREATE TABLE digital_team_platform_admin (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(64) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_platform_admin_user UNIQUE (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

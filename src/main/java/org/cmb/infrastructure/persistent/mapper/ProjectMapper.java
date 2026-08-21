@@ -32,6 +32,14 @@ public interface ProjectMapper {
             @Param("projectId") String projectId,
             @Param("userId") String userId);
 
+    /** 平台管理员:租户下全部项目(不按成员过滤)。 */
+    List<ProjectDO> findAllByTenant(@Param("tenantId") String tenantId);
+
+    /** 平台管理员:按 id 直查项目(不按成员过滤)。 */
+    List<ProjectDO> findById(
+            @Param("tenantId") String tenantId,
+            @Param("projectId") String projectId);
+
     int updateProject(
             @Param("name") String name,
             @Param("description") String description,

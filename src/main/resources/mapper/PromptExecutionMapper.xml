@@ -13,4 +13,8 @@
         #{variablesSnapshot})
     </insert>
 
+    <delete id="deleteByTemplate">
+        DELETE FROM digital_team_prompt_execution WHERE prompt_template_id = #{templateId}
+    </delete>
+
 </mapper>

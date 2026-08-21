@@ -8,6 +8,7 @@ import org.cmb.application.domain.entity.PromptTemplateDO;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
+import org.cmb.infrastructure.persistent.PlatformAdminRepository;
 import org.cmb.infrastructure.persistent.PromptRepository;
 import org.cmb.common.exception.ApiException;
 import org.cmb.common.config.DigitalTeamProperties;
@@ -19,14 +20,17 @@ public class PromptServiceImpl implements PromptService {
 
     private final PromptRepository repository;
     private final ObjectMapper objectMapper;
-    private final List<String> adminUsers;
+    private final List<String> platformAdmins;
+    private final PlatformAdminRepository platformAdminTable;
 
     public PromptServiceImpl(
             PromptRepository repository, ObjectMapper objectMapper,
-            DigitalTeamProperties properties) {
+            DigitalTeamProperties properties,
+            PlatformAdminRepository platformAdminTable) {
         this.repository = repository;
         this.objectMapper = objectMapper;
-        this.adminUsers = properties.getPrompt().getAdminUsers();
+        this.platformAdmins = properties.getPlatform().getAdminUsers();
+        this.platformAdminTable = platformAdminTable;
     }
 
     public RenderedPrompt render(
@@ -94,8 +98,26 @@ public class PromptServiceImpl implements PromptService {
         return result;
     }
 
+    @Override
+    public void delete(RequestIdentity identity, String id) {
+        requireAdmin(identity);
+        PromptTemplateDO target = repository.find(id);
+        if (target == null) {
+            throw ApiException.notFound("PROMPT_NOT_FOUND", "Prompt template was not found.");
+        }
+        if ("PUBLISHED".equals(target.getStatus())) {
+            throw ApiException.conflict(
+                    "PROMPT_PUBLISHED_DELETE_FORBIDDEN",
+                    "The published version cannot be deleted; "
+                            + "publish another version of the same key first.");
+        }
+        repository.delete(id);
+    }
+
+    /** 提示词管理与租户管理统一鉴权:平台管理员(env ∪ 表)。 */
     private void requireAdmin(RequestIdentity identity) {
-        if (!adminUsers.contains(identity.getUserId())) {
+        String userId = identity.getUserId();
+        if (!platformAdmins.contains(userId) && !platformAdminTable.isAdmin(userId)) {
             throw ApiException.forbidden(
                     "PROMPT_ADMIN_REQUIRED", "Prompt administrator permission is required.");
         }

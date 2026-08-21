@@ -59,6 +59,16 @@ public class PromptRepository {
         return find(id);
     }
 
+    /**
+     * 删除模板版本及其渲染审计记录(审计行 FK 引用模板,
+     * 必须先清 execution 再删模板)。
+     */
+    @Transactional
+    public void delete(String id) {
+        executionMapper.deleteByTemplate(id);
+        mapper.deleteTemplate(id);
+    }
+
     public PromptTemplateDO find(String id) {
         List<PromptTemplateDO> rows = mapper.find(id);
         return rows.isEmpty() ? null : rows.get(0);

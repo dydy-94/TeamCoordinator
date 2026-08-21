@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.cmb.infrastructure.persistent.mapper.TenantUserMapper">
+
+    <resultMap id="tenantUser" type="org.cmb.application.domain.entity.TenantUserDO">
+        <result column="id" property="databaseId"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="user_id" property="userId"/>
+        <result column="role" property="role"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <insert id="insertMember">
+        INSERT INTO digital_team_tenant_user (tenant_id, user_id, role)
+        VALUES (#{tenantId}, #{userId}, #{role})
+    </insert>
+
+    <insert id="upsertMember">
+        INSERT INTO digital_team_tenant_user (tenant_id, user_id, role)
+        VALUES (#{tenantId}, #{userId}, #{role})
+        ON DUPLICATE KEY UPDATE role = #{role}, updated_at = CURRENT_TIMESTAMP
+    </insert>
+
+    <delete id="deleteMember">
+        DELETE FROM digital_team_tenant_user
+        WHERE tenant_id = #{tenantId} AND user_id = #{userId}
+    </delete>
+
+    <select id="listMembers" resultMap="tenantUser">
+        SELECT id, tenant_id, user_id, role, created_at, updated_at
+        FROM digital_team_tenant_user
+        WHERE tenant_id = #{tenantId}
+        ORDER BY user_id
+    </select>
+
+    <select id="findMembership" resultMap="tenantUser">
+        SELECT id, tenant_id, user_id, role, created_at, updated_at
+        FROM digital_team_tenant_user
+        WHERE tenant_id = #{tenantId} AND user_id = #{userId}
+    </select>
+
+    <select id="listByUser" resultMap="tenantUser">
+        SELECT id, tenant_id, user_id, role, created_at, updated_at
+        FROM digital_team_tenant_user
+        WHERE user_id = #{userId}
+        ORDER BY tenant_id
+    </select>
+
+    <select id="countMembers" resultType="int">
+        SELECT COUNT(*) FROM digital_team_tenant_user WHERE tenant_id = #{tenantId}
+    </select>
+
+    <select id="countAdmins" resultType="int">
+        SELECT COUNT(*) FROM digital_team_tenant_user
+        WHERE tenant_id = #{tenantId} AND role = 'TENANT_ADMIN'
+    </select>
+
+    <delete id="deleteByTenant">
+        DELETE FROM digital_team_tenant_user WHERE tenant_id = #{tenantId}
+    </delete>
+
+</mapper>

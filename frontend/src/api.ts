@@ -335,3 +335,138 @@ export function getArtifactByStorage(
 ): Promise<{ artifactId: string; fileName: string; downloadUrl?: string; status: string }> {
   return request(`/api/v1/projects/${projectId}/artifacts/by-storage/${storageKey}`);
 }
+
+// ── Tenants ──────────────────────────────────────────────────
+
+export interface TenantInfo {
+  tenantId: string;
+  name: string;
+  description?: string;
+  ownerUserId: string;
+  status: "ACTIVE" | "DISABLED";
+  role?: "TENANT_ADMIN" | "MEMBER";
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface TenantMember {
+  userId: string;
+  role: "TENANT_ADMIN" | "MEMBER";
+  createdAt?: string;
+}
+
+export function listMyTenants(): Promise<TenantInfo[]> {
+  return request<TenantInfo[]>("/api/v1/tenants");
+}
+
+export function listTenantMembers(tenantId: string): Promise<TenantMember[]> {
+  return request<TenantMember[]>(`/api/v1/tenants/${tenantId}/members`);
+}
+
+export function updateTenantInfo(
+  tenantId: string,
+  data: { name?: string; description?: string }
+): Promise<TenantInfo> {
+  return request<TenantInfo>(`/api/v1/tenants/${tenantId}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export function assignTenantMember(
+  tenantId: string,
+  userId: string,
+  role: "TENANT_ADMIN" | "MEMBER"
+): Promise<TenantMember[]> {
+  return request<TenantMember[]>(`/api/v1/tenants/${tenantId}/members`, {
+    method: "POST",
+    body: JSON.stringify({ userId, role }),
+  });
+}
+
+export function removeTenantMember(tenantId: string, userId: string): Promise<void> {
+  return request(`/api/v1/tenants/${tenantId}/members/${userId}`, {
+    method: "DELETE",
+  });
+}
+
+export function listAdminTenants(): Promise<TenantInfo[]> {
+  return request<TenantInfo[]>("/api/v1/admin/tenants");
+}
+
+export function createAdminTenant(
+  name: string,
+  ownerUserId: string,
+  description?: string
+): Promise<TenantInfo> {
+  return request<TenantInfo>("/api/v1/admin/tenants", {
+    method: "POST",
+    body: JSON.stringify({ name, description: description || "", ownerUserId }),
+  });
+}
+
+export function disableAdminTenant(tenantId: string): Promise<void> {
+  return request(`/api/v1/admin/tenants/${tenantId}/disable`, {
+    method: "POST",
+  });
+}
+
+export function deleteAdminTenant(tenantId: string): Promise<void> {
+  return request(`/api/v1/admin/tenants/${tenantId}`, {
+    method: "DELETE",
+  });
+}
+
+// ── Prompts (admin) ─────────────────────────────────────────
+
+export interface PromptTemplate {
+  id: string;
+  promptKey: string;
+  agentScope: string;
+  scene: string;
+  version: number;
+  status: "PUBLISHED" | "DRAFT";
+  templateContent: string;
+  variablesSchema?: string;
+  createdAt?: string;
+  publishedAt?: string;
+}
+
+export function listPromptTemplates(): Promise<PromptTemplate[]> {
+  return request<PromptTemplate[]>("/api/v1/admin/prompts");
+}
+
+export function createPromptTemplate(data: {
+  promptKey: string;
+  agentScope: string;
+  scene: string;
+  templateContent: string;
+  variablesSchema?: string;
+}): Promise<PromptTemplate> {
+  return request<PromptTemplate>("/api/v1/admin/prompts", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function publishPromptTemplate(promptId: string): Promise<PromptTemplate> {
+  return request<PromptTemplate>(`/api/v1/admin/prompts/${promptId}/publish`, {
+    method: "POST",
+  });
+}
+
+export function deletePromptTemplate(promptId: string): Promise<void> {
+  return request(`/api/v1/admin/prompts/${promptId}`, {
+    method: "DELETE",
+  });
+}
+
+export function updateAdminTenant(
+  tenantId: string,
+  data: { name?: string; description?: string; ownerUserId?: string }
+): Promise<TenantInfo> {
+  return request<TenantInfo>(`/api/v1/admin/tenants/${tenantId}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}

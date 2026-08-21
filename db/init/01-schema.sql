@@ -455,3 +455,40 @@ CREATE TABLE digital_team_coordinator_cli_submission (
     CONSTRAINT uk_cli_submission UNIQUE (task_id, kind),
     INDEX idx_cli_submission_task (task_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 23. 租户（多租户根表：租户域所有表的隔离边界）
+CREATE TABLE digital_team_tenant (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    business_id VARCHAR(64) NOT NULL,
+    name VARCHAR(128) NOT NULL,
+    description VARCHAR(512),
+    owner_user_id VARCHAR(64) NOT NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'ACTIVE',
+    created_by VARCHAR(64) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_tenant_business_id UNIQUE (business_id),
+    CONSTRAINT uk_tenant_name UNIQUE (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 24. 租户成员（租户 → 外部 userId 赋权；用户来自外部登录系统）
+CREATE TABLE digital_team_tenant_user (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    tenant_id VARCHAR(64) NOT NULL,
+    user_id VARCHAR(64) NOT NULL,
+    role VARCHAR(16) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_tenant_user UNIQUE (tenant_id, user_id),
+    CONSTRAINT fk_tenant_user_tenant FOREIGN KEY (tenant_id)
+        REFERENCES digital_team_tenant (business_id),
+    INDEX idx_tenant_user_user (user_id, tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 25. 平台管理员（直接插入 user_id 即赋权；校验 = 本表 ∪ PLATFORM_ADMIN_USERS）
+CREATE TABLE digital_team_platform_admin (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(64) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_platform_admin_user UNIQUE (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

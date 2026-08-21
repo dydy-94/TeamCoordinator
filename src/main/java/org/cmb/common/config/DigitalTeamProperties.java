@@ -10,9 +10,9 @@ public class DigitalTeamProperties {
     private final AgentCore agentCore = new AgentCore();
     private final Storage storage = new Storage();
     private final Rollout rollout = new Rollout();
-    private final Prompt prompt = new Prompt();
     private final Execution execution = new Execution();
     private final Events events = new Events();
+    private final Platform platform = new Platform();
 
     public AgentCore getAgentCore() {
         return agentCore;
@@ -34,7 +34,7 @@ public class DigitalTeamProperties {
         return rollout;
     }
 
-    public Prompt getPrompt() { return prompt; }
+    public Platform getPlatform() { return platform; }
 
     public static class AgentCore {
         private boolean mockEnabled = true;
@@ -124,7 +124,8 @@ public class DigitalTeamProperties {
         public void setEmergencyStop(boolean value) { this.emergencyStop = value; }
     }
 
-    public static class Prompt {
+    /** 平台管理员(租户管理引导角色):外部 userId 列表。 */
+    public static class Platform {
         private List<String> adminUsers = new ArrayList<>();
 
         public List<String> getAdminUsers() { return adminUsers; }

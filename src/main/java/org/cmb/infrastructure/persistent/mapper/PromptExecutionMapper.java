@@ -21,4 +21,6 @@ public interface PromptExecutionMapper {
             @Param("templateVersion") int templateVersion,
             @Param("renderedPrompt") String renderedPrompt,
             @Param("variablesSnapshot") String variablesSnapshot);
+
+    int deleteByTemplate(@Param("templateId") String templateId);
 }

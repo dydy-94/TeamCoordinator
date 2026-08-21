@@ -2,6 +2,7 @@ package org.cmb.integration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -66,6 +67,45 @@ class PromptManagementIntegrationTest {
         assertEquals(Integer.valueOf(1), jdbc.queryForObject(
                 "SELECT COUNT(*) FROM digital_team_prompt_execution WHERE invocation_id = ?",
                 Integer.class, "invocation-prompt"));
+    }
+
+    @Test
+    void deletesDraftVersionButRefusesPublished() throws Exception {
+        // 建 DRAFT → 可删(204)
+        String body = mockMvc.perform(post("/api/v1/admin/prompts")
+                        .headers(identity("prompt-admin"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"promptKey\":\"test.delete\","
+                                + "\"agentScope\":\"EXPERT_COMMON\","
+                                + "\"scene\":\"EXPERT_EXECUTION\","
+                                + "\"templateContent\":\"Delete {{context_json}}\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String draftId = objectMapper.readTree(body).get("id").asText();
+
+        mockMvc.perform(delete("/api/v1/admin/prompts/" + draftId)
+                        .headers(identity("prompt-admin")))
+                .andExpect(status().isNoContent());
+
+        // 发布后的版本不可删(409),需先发布同 key 其他版本
+        String published = mockMvc.perform(post("/api/v1/admin/prompts")
+                        .headers(identity("prompt-admin"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"promptKey\":\"test.delete-pub\","
+                                + "\"agentScope\":\"EXPERT_COMMON\","
+                                + "\"scene\":\"EXPERT_EXECUTION\","
+                                + "\"templateContent\":\"Pub {{context_json}}\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String publishedId = objectMapper.readTree(published).get("id").asText();
+        mockMvc.perform(post("/api/v1/admin/prompts/" + publishedId + "/publish")
+                        .headers(identity("prompt-admin")))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(delete("/api/v1/admin/prompts/" + publishedId)
+                        .headers(identity("prompt-admin")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PROMPT_PUBLISHED_DELETE_FORBIDDEN"));
     }
 
     private HttpHeaders identity(String userId) {

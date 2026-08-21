@@ -44,6 +44,19 @@
         AND m.user_id = #{userId}
     </select>
 
+    <select id="findAllByTenant" resultMap="projectRecord">
+        SELECT <include refid="projectColumns"/>
+        FROM digital_team_project p
+        WHERE p.tenant_id = #{tenantId}
+        ORDER BY p.created_at DESC
+    </select>
+
+    <select id="findById" resultMap="projectRecord">
+        SELECT <include refid="projectColumns"/>
+        FROM digital_team_project p
+        WHERE p.tenant_id = #{tenantId} AND p.business_id = #{projectId}
+    </select>
+
     <update id="updateProject">
         UPDATE digital_team_project SET name = #{name}, description = #{description},
         coordinator_agent_id = #{coordinatorAgentId}, status = #{status},

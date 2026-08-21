@@ -34,4 +34,6 @@ public interface PromptTemplateMapper {
     int publish(@Param("id") String id);
 
     List<PromptTemplateDO> find(@Param("id") String id);
+
+    int deleteTemplate(@Param("id") String id);
 }

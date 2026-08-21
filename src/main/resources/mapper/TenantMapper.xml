@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.cmb.infrastructure.persistent.mapper.TenantMapper">
+
+    <resultMap id="tenant" type="org.cmb.application.domain.entity.TenantDO">
+        <result column="id" property="databaseId"/>
+        <result column="business_id" property="businessId"/>
+        <result column="name" property="name"/>
+        <result column="description" property="description"/>
+        <result column="owner_user_id" property="ownerUserId"/>
+        <result column="status" property="status"/>
+        <result column="created_by" property="createdBy"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <insert id="insertTenant">
+        INSERT INTO digital_team_tenant
+        (business_id, name, description, owner_user_id, status, created_by)
+        VALUES (#{businessId}, #{name}, #{description}, #{ownerUserId},
+        #{status}, #{createdBy})
+    </insert>
+
+    <update id="updateTenant">
+        UPDATE digital_team_tenant
+        SET name = #{name}, description = #{description},
+            owner_user_id = #{ownerUserId}, updated_at = CURRENT_TIMESTAMP
+        WHERE business_id = #{tenantId}
+    </update>
+
+    <update id="updateStatus">
+        UPDATE digital_team_tenant SET status = #{status}, updated_at = CURRENT_TIMESTAMP
+        WHERE business_id = #{tenantId}
+    </update>
+
+    <select id="selectById" resultMap="tenant">
+        SELECT id, business_id, name, description, owner_user_id, status,
+        created_by, created_at, updated_at FROM digital_team_tenant
+        WHERE business_id = #{tenantId}
+    </select>
+
+    <select id="selectByName" resultMap="tenant">
+        SELECT id, business_id, name, description, owner_user_id, status,
+        created_by, created_at, updated_at FROM digital_team_tenant
+        WHERE name = #{name}
+    </select>
+
+    <select id="listAll" resultMap="tenant">
+        SELECT id, business_id, name, description, owner_user_id, status,
+        created_by, created_at, updated_at FROM digital_team_tenant
+        ORDER BY created_at, business_id
+    </select>
+
+    <select id="countProjects" resultType="int">
+        SELECT COUNT(*) FROM digital_team_project WHERE tenant_id = #{tenantId}
+    </select>
+
+    <delete id="deleteTenant">
+        DELETE FROM digital_team_tenant WHERE business_id = #{tenantId}
+    </delete>
+
+</mapper>

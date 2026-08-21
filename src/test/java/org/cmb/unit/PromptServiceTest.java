@@ -8,7 +8,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.cmb.common.config.DigitalTeamProperties;
+import org.cmb.infrastructure.persistent.PlatformAdminRepository;
 import org.cmb.infrastructure.persistent.PromptRepository;
+import org.cmb.infrastructure.persistent.mapper.PlatformAdminMapper;
 import org.cmb.application.service.PromptService;
 import org.cmb.application.service.impl.PromptServiceImpl;
 import org.cmb.application.domain.entity.PromptTemplateDO;
@@ -63,7 +65,13 @@ class PromptServiceTest {
         return new PromptServiceImpl(
                 new StubPromptRepository(template),
                 new ObjectMapper(),
-                new DigitalTeamProperties());
+                new DigitalTeamProperties(),
+                new PlatformAdminRepository(new PlatformAdminMapper() {
+                    @Override
+                    public int countByUser(String userId) {
+                        return 0;
+                    }
+                }));
     }
 
     private Map<String, Object> context(String text) {

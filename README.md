@@ -30,10 +30,11 @@ versions so local and CI builds use the same Java baseline.
 
 Coordinator and expert Prompts are versioned in MySQL. Runtime calls use only
 the `PUBLISHED` version and record the rendered Prompt and variables in
-`digital_team_prompt_execution`. Manage versions through `/api/v1/admin/prompts`; configure
-administrators with `PROMPT_ADMIN_USERS` as comma-separated user IDs.
+`digital_team_prompt_execution`. Manage versions through `/api/v1/admin/prompts`;
+access is gated by the same platform-administrator identity as tenant
+management (`PLATFORM_ADMIN_USERS` env list ∪ `digital_team_platform_admin` table).
 
-Coordinator execution/planning and expert execution/resume use separate
+Coordinator execution and expert execution/resume use separate
 templates and context builders. Templates use `{{context_json}}`; Prompt text
 is no longer loaded from classpath `.txt` files.
 

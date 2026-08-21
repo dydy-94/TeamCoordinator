@@ -64,4 +64,9 @@
         WHERE business_id = #{id}
     </select>
 
+
+    <delete id="deleteTemplate">
+        DELETE FROM digital_team_prompt_template WHERE business_id = #{id}
+    </delete>
+
 </mapper>

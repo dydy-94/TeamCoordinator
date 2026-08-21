@@ -1,9 +1,9 @@
 # 数据库表详解
 
-> 本文档覆盖 TeamCoordinator 使用的全部 22 张 MySQL 表(均带 `digital_team_` 前缀),
+> 本文档覆盖 TeamCoordinator 使用的全部 25 张 MySQL 表(均带 `digital_team_` 前缀),
 > 逐一说明每个字段的**含义、用途与生成来源**。schema 的权威定义是
-> `db/init/01-schema.sql`(等价于 Flyway V1~V26 全量执行后的最终结构;
-> V26 清除了 4 张不再使用的遗留表)。
+> `db/init/01-schema.sql`(等价于 Flyway V1~V28 全量执行后的最终结构;
+> V26 清除了 4 张不再使用的遗留表,V27 新增租户与租户成员表,V28 新增平台管理员表)。
 
 ## 全局约定
 
@@ -20,6 +20,7 @@
 
 | 分组 | 表 |
 |---|---|
+| 租户 | tenant、tenant_user |
 | 租户/项目与权限 | project、project_member、project_expert、project_skill、skill、permission_audit_log |
 | 对话与消息 | project_conversation、project_message、project_conversation_expert_session |
 | 事件与 SSE | project_event、conversation_event_sequence |
@@ -489,3 +490,59 @@ tc CLI 与 AgentCore 侧向 Coordinator 提交结构化结果的**暂存通道**
 
 **写入方**:`CliSubmissionService.submitDecision/submitPlan/submitVerdict`(幂等 replace)。
 **消费方**:`SingleExpertWorker.process`(decision/plan)、语义评审服务(verdict)——消费后 `delete`。
+
+---
+
+# 23. digital_team_tenant — 租户(多租户根表)
+
+多租户隔离的根实体。所有租户域表的 `tenant_id` 均引用本表 `business_id`;
+访问门禁(`HeaderIdentityProvider`)要求租户存在且状态为 ACTIVE。
+
+| 字段 | 类型 | 含义/用途 | 生成来源 |
+|---|---|---|---|
+| id | BIGINT PK | 代理主键 | 数据库自增 |
+| business_id | VARCHAR(64) | 业务主键,全库引用 | `"tenant-" + UUID`(TenantServiceImpl.createTenant) |
+| name | VARCHAR(128) | 租户名称(全局唯一) | 平台管理员创建请求 |
+| description | VARCHAR(512) | 租户描述 | 平台管理员创建/更新请求,可空 |
+| owner_user_id | VARCHAR(64) | 负责人(外部 userId) | 创建请求;仅平台管理员可改;负责人不可被移除成员 |
+| status | VARCHAR(16) | 状态 | `ACTIVE` / `DISABLED`(禁用后全租户访问 403) |
+| created_by | VARCHAR(64) | 创建者 userId | 创建请求的 X-User-Id |
+| created_at / updated_at | TIMESTAMP | 时间 | 数据库默认 / 业务 SQL 显式更新 |
+
+**写入方**:`TenantServiceImpl`(平台管理员建/改/禁;硬删除仅限无项目时)。
+**读取方**:`HeaderIdentityProvider`(门禁)、`TenantServiceImpl`(列表/详情)。
+
+# 24. digital_team_tenant_user — 租户成员(租户 → 外部 userId 赋权)
+
+服务不建用户表:userId 来自外部登录系统,本表仅保存赋权关系。
+门禁要求当前用户必须存在本表记录,否则 403 `TENANT_ACCESS_FORBIDDEN`。
+
+| 字段 | 类型 | 含义/用途 | 生成来源 |
+|---|---|---|---|
+| id | BIGINT PK | 代理主键 | 数据库自增 |
+| tenant_id | VARCHAR(64) | 所属租户 | (FK → tenant.business_id) |
+| user_id | VARCHAR(64) | 外部用户标识 | 赋权接口请求的 userId |
+| role | VARCHAR(16) | 角色 | `TENANT_ADMIN`(可管本租户成员/信息)/ `MEMBER`(正常使用) |
+| created_at / updated_at | TIMESTAMP | 时间 | 数据库默认 / 业务 SQL 显式更新 |
+
+**写入方**:`TenantServiceImpl.assignMember`(平台管理员或租户管理员;创建租户时
+负责人自动成为 TENANT_ADMIN;最后一名 TENANT_ADMIN 不可移除/降级)。
+**读取方**:`HeaderIdentityProvider`(成员门禁)、`TenantServiceImpl.listMyTenants/listMembers`。
+
+---
+
+# 25. digital_team_platform_admin — 平台管理员
+
+平台级超级管理员列表。**赋权方式:直接向本表插入 user_id 行**(无管理 API,
+运维可操作)。运行时判定 = 本表 ∪ `PLATFORM_ADMIN_USERS` 环境变量(后者
+保留作引导兜底)。平台管理员豁免租户成员门禁(可访问任意 ACTIVE 租户,
+禁用/未知租户仍拒绝),并拥有 `/api/v1/admin/tenants` 全部管理权限。
+
+| 字段 | 类型 | 含义/用途 | 生成来源 |
+|---|---|---|---|
+| id | BIGINT PK | 代理主键 | 数据库自增 |
+| user_id | VARCHAR(64) | 外部用户标识 | 运维手工 INSERT(唯一) |
+| created_at | TIMESTAMP | 赋权时间 | 数据库默认 |
+
+**写入方**:运维手工 INSERT(如 `INSERT INTO digital_team_platform_admin (user_id) VALUES ('ops-admin');`)。
+**读取方**:`HeaderIdentityProvider.isPlatformAdmin`、`TenantServiceImpl.isPlatformAdmin`。

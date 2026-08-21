@@ -20,11 +20,26 @@ import {
   addProjectSkill,
   removeProjectSkill,
   getArtifactByStorage,
+  listMyTenants,
+  listTenantMembers,
+  assignTenantMember,
+  removeTenantMember,
+  listAdminTenants,
+  createAdminTenant,
+  disableAdminTenant,
+  deleteAdminTenant,
+  updateAdminTenant,
+  listPromptTemplates,
+  createPromptTemplate,
+  publishPromptTemplate,
+  deletePromptTemplate,
   type Project,
   type Task,
   type HumanRequest,
   type ExpertInfo,
   type Skill,
+  type TenantInfo,
+  type PromptTemplate,
 } from "./api";
 import { SseStream, type SseEvent } from "./sse";
 
@@ -37,6 +52,8 @@ const state = {
   projects: [] as Project[],
   tasks: new Map<string, Task[]>(), // projectId → tasks
   pendingHumanRequest: null as HumanRequest | null,
+  isPlatformAdmin: false,
+  isTenantAdmin: false,
 };
 
 function save() {
@@ -97,6 +114,7 @@ async function init() {
   } catch {
     // Backend unreachable — projects list stays empty
   }
+  await refreshAdminCapability();
   refreshSidebar();
 
   // Default view
@@ -186,13 +204,43 @@ function renderSidebarActions() {
 function renderIdentity() {
   const { tenant, user } = getIdentity();
   const el = document.getElementById("sidebar-identity")!;
+  const adminBtn =
+    state.isPlatformAdmin || state.isTenantAdmin
+      ? `<button class="identity-btn" id="identity-admin-btn">管理</button>`
+      : "";
   el.innerHTML = `
     <div class="identity-row">
       <span class="identity-label">${esc(tenant)} / ${esc(user)}</span>
+      ${adminBtn}
       <button class="identity-btn" id="identity-edit-btn">⚙</button>
     </div>
   `;
   document.getElementById("identity-edit-btn")!.onclick = showIdentityDialog;
+  const adminButton = document.getElementById("identity-admin-btn");
+  if (adminButton) {
+    adminButton.onclick = () =>
+      state.isPlatformAdmin ? showAdminPage() : showAdminDialog();
+  }
+}
+
+/** 探测当前用户的管理能力:平台管理员 → 完整管理页;租户管理员 → 成员管理。 */
+async function refreshAdminCapability() {
+  try {
+    await listAdminTenants();
+    state.isPlatformAdmin = true;
+    state.isTenantAdmin = false;
+  } catch {
+    state.isPlatformAdmin = false;
+    try {
+      const mine = await listMyTenants();
+      const { tenant } = getIdentity();
+      const current = mine.find((t) => t.tenantId === tenant);
+      state.isTenantAdmin = !!current && current.role === "TENANT_ADMIN";
+    } catch {
+      state.isTenantAdmin = false;
+    }
+  }
+  renderIdentity();
 }
 
 function bindTreeEvents() {
@@ -266,7 +314,7 @@ function showIdentityDialog() {
   $("dialog-overlay").innerHTML = `
     <div class="dialog wide">
       <h3>身份设置</h3>
-      <label>Tenant ID <input id="dlg-tenant" value="${esc(tenant)}"></label>
+      <label>租户 <select id="dlg-tenant"><option>加载中…</option></select></label>
       <label>User ID <input id="dlg-user" value="${esc(user)}"></label>
       <div class="dialog-actions">
         <button class="primary" id="dlg-identity-save">保存</button>
@@ -277,13 +325,48 @@ function showIdentityDialog() {
   $("dialog-overlay").style.display = "flex";
   $("dlg-identity-cancel").onclick = () =>
     ($("dialog-overlay").style.display = "none");
-  $("dlg-identity-save").onclick = () => {
-    setIdentity(
-      ($("dlg-tenant") as HTMLInputElement).value.trim(),
-      ($("dlg-user") as HTMLInputElement).value.trim()
-    );
+
+  // 拉取当前用户有权访问的租户(切换器数据源)
+  listMyTenants().then((tenants) => {
+    const active = tenants.filter((t) => t.status === "ACTIVE");
+    const select = $("dlg-tenant") as HTMLSelectElement;
+    let options = active
+      .map((t) => `<option value="${esc(t.tenantId)}">${esc(t.name)} (${esc(t.tenantId)})</option>`)
+      .join("");
+    if (!active.some((t) => t.tenantId === tenant)) {
+      options = `<option value="${esc(tenant)}" disabled>当前租户（无权限）</option>` + options;
+    }
+    select.innerHTML = options || `<option value="" disabled>无可用租户</option>`;
+    select.value = tenant;
+  }).catch((err) => {
+    ($("dlg-tenant") as HTMLSelectElement).innerHTML =
+      `<option value="" disabled>租户列表加载失败</option>`;
+    alert(String(err));
+  });
+
+  $("dlg-identity-save").onclick = async () => {
+    const tenantId = ($("dlg-tenant") as HTMLSelectElement).value;
+    const userId = ($("dlg-user") as HTMLInputElement).value.trim();
+    if (!tenantId || !userId) return;
+    setIdentity(tenantId, userId);
     $("dialog-overlay").style.display = "none";
     renderIdentity();
+    // 切租户:断开旧 SSE(建连时固化身份)、清空项目/任务状态并重刷
+    state.stream?.disconnect();
+    state.stream = null;
+    state.projectId = "";
+    state.taskId = "";
+    save();
+    state.projects = [];
+    state.tasks.clear();
+    try {
+      state.projects = await listProjects();
+    } catch (err) {
+      alert(String(err));
+    }
+    await refreshAdminCapability();
+    refreshSidebar();
+    showWelcome();
   };
 }
 
@@ -1170,3 +1253,378 @@ async function submitHitl(response: Record<string, string>) {
 // ── Start ────────────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", init);
+
+// ── Tenant Admin Dialog ──────────────────────────────────────
+
+function showAdminDialog() {
+  const overlay = $("dialog-overlay");
+  overlay.innerHTML = `
+    <div class="dialog admin">
+      <h3>租户管理</h3>
+      <div id="admin-tenant-body">加载中…</div>
+      <div class="dialog-actions">
+        <button id="dlg-admin-close">关闭</button>
+      </div>
+    </div>
+  `;
+  overlay.style.display = "flex";
+  $("dlg-admin-close").onclick = () => (overlay.style.display = "none");
+  listAdminTenants()
+    .then(renderAdminTenants)
+    .catch(async (err) => {
+      // 非平台管理员:当前租户的 TENANT_ADMIN 降级为本租户成员管理
+      try {
+        const mine = await listMyTenants();
+        const { tenant } = getIdentity();
+        const current = mine.find((t) => t.tenantId === tenant);
+        if (current && current.role === "TENANT_ADMIN") {
+          $("admin-tenant-body")!.innerHTML = `
+            <p>你不是平台管理员(平台管理员由 PLATFORM_ADMIN_USERS 配置,默认 root);
+            以下为当前租户 <b>${esc(current.name)}</b> 的成员管理。</p>
+            <div id="admin-members-panel"></div>`;
+          showAdminMembers(tenant);
+          return;
+        }
+      } catch { /* fall through */ }
+      $("admin-tenant-body")!.textContent =
+        "无权限:既不是平台管理员,也不是当前租户的管理员。";
+      alert(String(err));
+    });
+}
+
+function renderAdminTenants(tenants: TenantInfo[]) {
+  const rows = tenants
+    .map(
+      (t) => `
+    <div class="admin-tenant-row">
+      <span class="admin-tenant-name">${esc(t.name)}
+        <small>${esc(t.tenantId)}</small></span>
+      <span class="admin-tenant-meta">负责人 ${esc(t.ownerUserId)} · ${esc(t.status)}${t.description ? ` · ${esc(t.description)}` : ""}</span>
+      <button data-action="admin-edit" data-tenant="${esc(t.tenantId)}">编辑</button>
+      <button data-action="admin-members" data-tenant="${esc(t.tenantId)}">成员</button>
+      <button data-action="admin-disable" data-tenant="${esc(t.tenantId)}">禁用</button>
+      <button data-action="admin-delete" data-tenant="${esc(t.tenantId)}">删除</button>
+    </div>`
+    )
+    .join("");
+  $("admin-tenant-body")!.innerHTML = `
+    <div class="admin-create">
+      <input id="admin-new-name" placeholder="租户名称">
+      <input id="admin-new-desc" placeholder="描述（可选）">
+      <input id="admin-new-owner" placeholder="负责人 userId">
+      <button class="primary" id="admin-create-btn">创建租户</button>
+    </div>
+    ${rows || "<p>暂无租户</p>"}
+    <div id="admin-members-panel"></div>
+  `;
+
+  $("admin-create-btn")!.onclick = async () => {
+    const name = ($("admin-new-name") as HTMLInputElement).value.trim();
+    const description = ($("admin-new-desc") as HTMLInputElement).value.trim();
+    const owner = ($("admin-new-owner") as HTMLInputElement).value.trim();
+    if (!name || !owner) return;
+    try {
+      await createAdminTenant(name, owner, description || undefined);
+      renderAdminTenants(await listAdminTenants());
+    } catch (err) {
+      alert(String(err));
+    }
+  };
+  document.querySelectorAll("[data-action=admin-disable]").forEach((btn) =>
+    btn.addEventListener("click", async () => {
+      const tenantId = (btn as HTMLElement).dataset.tenant!;
+      if (!confirm(`禁用租户 ${tenantId}？`)) return;
+      try {
+        await disableAdminTenant(tenantId);
+        renderAdminTenants(await listAdminTenants());
+      } catch (err) {
+        alert(String(err));
+      }
+    })
+  );
+  document.querySelectorAll("[data-action=admin-delete]").forEach((btn) =>
+    btn.addEventListener("click", async () => {
+      const tenantId = (btn as HTMLElement).dataset.tenant!;
+      if (!confirm(`删除租户 ${tenantId}？（仅限无项目的租户）`)) return;
+      try {
+        await deleteAdminTenant(tenantId);
+        renderAdminTenants(await listAdminTenants());
+      } catch (err) {
+        alert(String(err));
+      }
+    })
+  );
+  document.querySelectorAll("[data-action=admin-members]").forEach((btn) =>
+    btn.addEventListener("click", () =>
+      showAdminMembers((btn as HTMLElement).dataset.tenant!)
+    )
+  );
+  document.querySelectorAll("[data-action=admin-edit]").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      const tenantId = (btn as HTMLElement).dataset.tenant!;
+      const tenant = tenants.find((t) => t.tenantId === tenantId);
+      if (tenant) showTenantEditDialog(tenant);
+    })
+  );
+}
+
+function showTenantEditDialog(tenant: TenantInfo) {
+  const overlay = $("dialog-overlay");
+  overlay.innerHTML = `
+    <div class="dialog wide">
+      <h3>编辑租户 ${esc(tenant.name)}</h3>
+      <label>名称 <input id="te-name" value="${esc(tenant.name)}"></label>
+      <label>描述 <input id="te-desc" value="${esc(tenant.description ?? "")}"></label>
+      <label>负责人 userId <input id="te-owner" value="${esc(tenant.ownerUserId)}"></label>
+      <div class="dialog-actions">
+        <button class="primary" id="te-save">保存</button>
+        <button id="te-cancel">取消</button>
+      </div>
+    </div>
+  `;
+  overlay.style.display = "flex";
+  $("te-cancel")!.onclick = () => (overlay.style.display = "none");
+  $("te-save")!.onclick = async () => {
+    const name = ($("te-name") as HTMLInputElement).value.trim();
+    const owner = ($("te-owner") as HTMLInputElement).value.trim();
+    if (!name || !owner) return;
+    try {
+      await updateAdminTenant(tenant.tenantId, {
+        name,
+        description: ($("te-desc") as HTMLInputElement).value.trim(),
+        ownerUserId: owner,
+      });
+      overlay.style.display = "none";
+      renderAdminTenants(await listAdminTenants());
+    } catch (err) {
+      alert(String(err));
+    }
+  };
+}
+
+function showAdminMembers(tenantId: string) {
+  const panel = $("admin-members-panel")!;
+  panel.innerHTML = `<p>成员加载中…</p>`;
+  listTenantMembers(tenantId)
+    .then((members) => {
+      const rows = members
+        .map(
+          (m) => `
+      <div class="admin-member-row">
+        <span>${esc(m.userId)} · ${esc(m.role)}</span>
+        <button data-action="admin-rm-member" data-user="${esc(m.userId)}">移除</button>
+      </div>`
+        )
+        .join("");
+      panel.innerHTML = `
+      <h4>成员 · ${esc(tenantId)}</h4>
+      <div class="admin-create">
+        <input id="admin-mem-user" placeholder="userId">
+        <select id="admin-mem-role">
+          <option value="MEMBER">MEMBER</option>
+          <option value="TENANT_ADMIN">TENANT_ADMIN</option>
+        </select>
+        <button class="primary" id="admin-mem-add">赋权</button>
+      </div>
+      ${rows || "<p>暂无成员</p>"}`;
+      $("admin-mem-add")!.onclick = async () => {
+        const userId = ($("admin-mem-user") as HTMLInputElement).value.trim();
+        const role = ($("admin-mem-role") as HTMLSelectElement).value as
+          | "TENANT_ADMIN"
+          | "MEMBER";
+        if (!userId) return;
+        try {
+          await assignTenantMember(tenantId, userId, role);
+          showAdminMembers(tenantId);
+        } catch (err) {
+          alert(String(err));
+        }
+      };
+      panel.querySelectorAll("[data-action=admin-rm-member]").forEach((btn) =>
+        btn.addEventListener("click", async () => {
+          const userId = (btn as HTMLElement).dataset.user!;
+          if (!confirm(`移除成员 ${userId}？`)) return;
+          try {
+            await removeTenantMember(tenantId, userId);
+            showAdminMembers(tenantId);
+          } catch (err) {
+            alert(String(err));
+          }
+        })
+      );
+    })
+    .catch((err) => {
+      panel.innerHTML = "<p>成员加载失败</p>";
+      alert(String(err));
+    });
+}
+
+// ── Admin Page (platform admins only) ────────────────────────
+
+function showAdminPage() {
+  $("main-content").innerHTML = `
+    <div class="admin-page">
+      <div class="page-header">
+        <h2>系统管理</h2>
+        <button id="btn-admin-back">← 返回</button>
+      </div>
+      <section class="admin-section">
+        <h3>租户管理</h3>
+        <div id="admin-tenant-body">加载中…</div>
+        <div id="admin-members-panel"></div>
+      </section>
+      <section class="admin-section">
+        <h3>系统提示词</h3>
+        <div id="admin-prompt-body">加载中…</div>
+      </section>
+    </div>
+  `;
+  $("btn-admin-back")!.onclick = showWelcome;
+  listAdminTenants()
+    .then(renderAdminTenants)
+    .catch((err) => {
+      $("admin-tenant-body")!.textContent = "租户列表加载失败";
+      alert(String(err));
+    });
+  renderPromptSection();
+}
+
+function renderPromptSection() {
+  listPromptTemplates()
+    .then((templates) => {
+      // 按 promptKey 分组:每分类一行(最新版本),可展开历史版本
+      const groups = new Map<string, PromptTemplate[]>();
+      for (const t of templates) {
+        const list = groups.get(t.promptKey) || [];
+        list.push(t);
+        groups.set(t.promptKey, list);
+      }
+      const rows = Array.from(groups.entries())
+        .map(([key, list]) => {
+          const sorted = [...list].sort((a, b) => b.version - a.version);
+          const latest = sorted[0];
+          const versions = sorted
+            .map(
+              (v) => `
+        <div class="prompt-version-row">
+          <span>v${v.version} · ${esc(v.scene)} · ${esc(v.status)}${v.id === latest.id ? " · 最新" : ""}</span>
+          <button data-action="prompt-edit" data-id="${esc(v.id)}">编辑</button>
+          ${v.status !== "PUBLISHED" ? `<button data-action="prompt-publish" data-id="${esc(v.id)}">发布</button>` : ""}
+          ${v.status !== "PUBLISHED" ? `<button data-action="prompt-delete" data-id="${esc(v.id)}">删除</button>` : ""}
+        </div>`
+            )
+            .join("");
+          return `
+        <div class="prompt-group">
+          <div class="prompt-row">
+            <span class="prompt-key">${esc(key)}
+              <small>${list.length} 个版本 · 最新 v${latest.version}(${esc(latest.status)})</small></span>
+            <button data-action="prompt-toggle" data-key="${esc(key)}">版本</button>
+            <button data-action="prompt-edit" data-id="${esc(latest.id)}">编辑(新版本)</button>
+          </div>
+          <div class="prompt-versions" data-versions="${esc(key)}" style="display:none">
+            ${versions}
+          </div>
+        </div>`;
+        })
+        .join("");
+      $("admin-prompt-body")!.innerHTML = `
+        <button class="primary" id="btn-prompt-new">新建模板</button>
+        ${rows || "<p>暂无模板</p>"}`;
+
+      $("btn-prompt-new")!.onclick = () => showPromptEditor(null);
+      document.querySelectorAll("[data-action=prompt-toggle]").forEach((btn) =>
+        btn.addEventListener("click", () => {
+          const key = (btn as HTMLElement).dataset.key!;
+          const panel = document.querySelector(
+            `.prompt-versions[data-versions="${CSS.escape(key)}"]`
+          ) as HTMLElement | null;
+          if (panel) {
+            panel.style.display = panel.style.display === "none" ? "block" : "none";
+          }
+        })
+      );
+      document.querySelectorAll("[data-action=prompt-edit]").forEach((btn) =>
+        btn.addEventListener("click", () =>
+          showPromptEditor(
+            templates.find((t) => t.id === (btn as HTMLElement).dataset.id) || null
+          )
+        )
+      );
+      document.querySelectorAll("[data-action=prompt-publish]").forEach((btn) =>
+        btn.addEventListener("click", async () => {
+          const id = (btn as HTMLElement).dataset.id!;
+          if (!confirm("发布该版本？发布后运行时立即使用。")) return;
+          try {
+            await publishPromptTemplate(id);
+            renderPromptSection();
+          } catch (err) {
+            alert(String(err));
+          }
+        })
+      );
+      document.querySelectorAll("[data-action=prompt-delete]").forEach((btn) =>
+        btn.addEventListener("click", async () => {
+          const id = (btn as HTMLElement).dataset.id!;
+          if (!confirm("删除该版本？其渲染审计记录也会一并删除。")) return;
+          try {
+            await deletePromptTemplate(id);
+            renderPromptSection();
+          } catch (err) {
+            alert(String(err));
+          }
+        })
+      );
+    })
+    .catch((err) => {
+      $("admin-prompt-body")!.textContent = "提示词列表加载失败";
+      alert(String(err));
+    });
+}
+
+/** 编辑弹窗:保存即「另存新版本」(同 promptKey 版本 +1),发布后才生效。 */
+function showPromptEditor(template: PromptTemplate | null) {
+  const overlay = $("dialog-overlay");
+  const t = template;
+  overlay.innerHTML = `
+    <div class="dialog wide">
+      <h3>${t ? `编辑 ${esc(t.promptKey)}(保存为新版本)` : "新建模板"}</h3>
+      <label>promptKey
+        <input id="pe-key" value="${esc(t?.promptKey ?? "")}" placeholder="coordinator.execution"></label>
+      <label>agentScope
+        <input id="pe-scope" value="${esc(t?.agentScope ?? "COORDINATOR")}"></label>
+      <label>scene
+        <input id="pe-scene" value="${esc(t?.scene ?? "")}"></label>
+      <label>模板内容
+        <textarea id="pe-content" rows="14">${esc(t?.templateContent ?? "")}</textarea></label>
+      <label>variablesSchema
+        <input id="pe-vars" value="${esc(t?.variablesSchema ?? '{"required":["context_json"]}')}"></label>
+      <div class="dialog-actions">
+        <button class="primary" id="pe-save">保存为新版本</button>
+        <button id="pe-cancel">取消</button>
+      </div>
+    </div>
+  `;
+  overlay.style.display = "flex";
+  $("pe-cancel")!.onclick = () => (overlay.style.display = "none");
+  $("pe-save")!.onclick = async () => {
+    const promptKey = ($("pe-key") as HTMLInputElement).value.trim();
+    const templateContent = ($("pe-content") as HTMLTextAreaElement).value;
+    if (!promptKey || !templateContent) return;
+    try {
+      await createPromptTemplate({
+        promptKey,
+        agentScope:
+          ($("pe-scope") as HTMLInputElement).value.trim() || "COORDINATOR",
+        scene:
+          ($("pe-scene") as HTMLInputElement).value.trim() || promptKey,
+        templateContent,
+        variablesSchema: ($("pe-vars") as HTMLInputElement).value.trim(),
+      });
+      overlay.style.display = "none";
+      renderPromptSection();
+    } catch (err) {
+      alert(String(err));
+    }
+  };
+}

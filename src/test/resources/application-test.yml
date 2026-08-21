@@ -9,10 +9,15 @@ spring:
     password:
   flyway:
     enabled: true
+  sql:
+    init:
+      mode: always
+      data-locations: classpath:tenant-seed.sql
 
 digital-team:
-  prompt:
+  platform:
     admin-users:
+      - platform-admin
       - prompt-admin
   agent-core:
     artifact-tool-token: test-agentcore-tool-token
