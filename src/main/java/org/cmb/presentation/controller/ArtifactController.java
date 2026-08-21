@@ -73,4 +73,21 @@ public class ArtifactController {
         return service.get(
                 identityProvider.currentIdentity(servletRequest), projectId, artifactId);
     }
+
+    /**
+     * 按 storage_key 查询 Artifact 并取得临时 downloadUrl
+     * （SSE 事件里 attachment.path 存的就是 storage_key）
+     * @param servletRequest
+     * @param projectId
+     * @param storageKey
+     * @return
+     */
+    @GetMapping("/by-storage/{storageKey}")
+    public ArtifactView getByStorageKey(
+            HttpServletRequest servletRequest,
+            @PathVariable String projectId,
+            @PathVariable String storageKey) {
+        return service.getByStorageKey(
+                identityProvider.currentIdentity(servletRequest), projectId, storageKey);
+    }
 }

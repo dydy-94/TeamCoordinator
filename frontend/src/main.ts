@@ -19,6 +19,7 @@ import {
   listAvailableSkills,
   addProjectSkill,
   removeProjectSkill,
+  getArtifactByStorage,
   type Project,
   type Task,
   type HumanRequest,
@@ -967,7 +968,8 @@ function appendSseEvent(event: Partial<SseEvent>) {
     }
   }
 
-  if (!text) return;
+  const attachments = (event.attachments as SseAttachment[] | undefined) || [];
+  if (!text && attachments.length === 0) return;
 
   // Track agent for label
   if (event.agentId && event.agentId !== replyAgent) {
@@ -1007,7 +1009,49 @@ function appendSseEvent(event: Partial<SseEvent>) {
     outputEl.textContent += "[" + time(event.timestamp) + "] " + text;
   }
 
+  if (attachments.length > 0) {
+    renderAttachments(replyBubble, attachments);
+  }
+
   tl.scrollTop = tl.scrollHeight;
+}
+
+type SseAttachment = {
+  fileName?: string;
+  path?: string;
+  contentType?: string;
+  pathType?: string;
+};
+
+// 渲染事件里的附件：path 是 storage_key，点击时向后端换临时下载地址再打开
+function renderAttachments(bubble: HTMLElement, attachments: SseAttachment[]) {
+  const outputEl = bubble.querySelector(".reply-output") as HTMLElement;
+  const container = document.createElement("div");
+  container.className = "attachments";
+  for (const attachment of attachments) {
+    const path = attachment.path || "";
+    const name = attachment.fileName || path || "attachment";
+    const item = document.createElement("a");
+    item.className = "attachment-item";
+    item.textContent = "📎 " + name;
+    item.title = "点击预览/下载";
+    item.onclick = async (e) => {
+      e.preventDefault();
+      if (!path) return;
+      try {
+        const view = await getArtifactByStorage(state.projectId, path);
+        if (!view.downloadUrl) {
+          item.textContent = "📎 " + name + "(未完成上传)";
+          return;
+        }
+        window.open(view.downloadUrl, "_blank");
+      } catch {
+        item.textContent = "📎 " + name + "(不可用)";
+      }
+    };
+    container.appendChild(item);
+  }
+  outputEl.appendChild(container);
 }
 
 function eventLabel(e: SseEvent | Record<string, unknown>): string | null {

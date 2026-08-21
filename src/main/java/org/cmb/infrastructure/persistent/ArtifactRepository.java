@@ -44,6 +44,13 @@ public class ArtifactRepository {
         return rows.isEmpty() ? null : rows.get(0);
     }
 
+    public ArtifactRecord findByStorageKey(
+            String tenantId, String projectId, String storageKey) {
+        List<ArtifactRecord> rows =
+                mapper.findByStorageKey(tenantId, projectId, storageKey);
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
     public String resolveStorageKey(
             String tenantId, String projectId, String reference) {
         List<String> keys = mapper.resolveStorageKey(tenantId, projectId, reference);

@@ -28,6 +28,11 @@ public interface ProjectArtifactMapper {
             @Param("projectId") String projectId,
             @Param("id") String id);
 
+    List<ArtifactRecord> findByStorageKey(
+            @Param("tenantId") String tenantId,
+            @Param("projectId") String projectId,
+            @Param("storageKey") String storageKey);
+
     List<String> resolveStorageKey(
             @Param("tenantId") String tenantId,
             @Param("projectId") String projectId,

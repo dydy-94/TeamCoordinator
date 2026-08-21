@@ -82,6 +82,21 @@ public class ArtifactService {
         return toView(artifact, "AVAILABLE".equals(artifact.status));
     }
 
+    /**
+     * 按 storage_key 查询（SSE 事件 attachment.path 使用的就是 storage_key），
+     * 返回带临时 downloadUrl 的 ArtifactView，供前端预览/下载事件里的附件。
+     */
+    public ArtifactView getByStorageKey(
+            RequestIdentity identity, String projectId, String storageKey) {
+        projectService.get(identity, projectId);
+        ArtifactRecord artifact =
+                repository.findByStorageKey(identity.getTenantId(), projectId, storageKey);
+        if (artifact == null) {
+            throw ApiException.notFound("ARTIFACT_NOT_FOUND", "Artifact was not found.");
+        }
+        return toView(artifact, "AVAILABLE".equals(artifact.status));
+    }
+
     @Transactional
     public ArtifactView uploadFromAgent(
             String projectId, AgentArtifactUploadContext context,

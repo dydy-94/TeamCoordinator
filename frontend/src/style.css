@@ -423,6 +423,31 @@ body {
   line-height: 1.5;
 }
 
+/* ── Attachments (chat/end events) ───────────────────────── */
+.attachments {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.attachment-item {
+  display: inline-block;
+  font-size: 12px;
+  padding: 3px 10px;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 999px;
+  background: var(--surface, #f8fafc);
+  color: var(--primary, #2563eb);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.attachment-item:hover {
+  border-color: var(--primary, #2563eb);
+  background: var(--primary-soft, #eff6ff);
+}
+
 /* ── HITL Panel ───────────────────────────────────────────── */
 .hitl-panel {
   border-top: 2px solid var(--warning);

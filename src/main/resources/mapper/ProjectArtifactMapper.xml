@@ -40,6 +40,13 @@
         AND project_id = #{projectId} AND business_id = #{id}
     </select>
 
+    <select id="findByStorageKey" resultMap="artifactRecord">
+        SELECT business_id, project_id, task_id, expert_run_id, version,
+        storage_key, file_name, media_type, size_bytes, sha256, status
+        FROM digital_team_project_artifact WHERE tenant_id = #{tenantId}
+        AND project_id = #{projectId} AND storage_key = #{storageKey}
+    </select>
+
     <select id="resolveStorageKey" resultType="string">
         SELECT storage_key FROM digital_team_project_artifact
         WHERE tenant_id = #{tenantId} AND project_id = #{projectId}

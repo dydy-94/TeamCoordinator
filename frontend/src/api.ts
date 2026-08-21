@@ -327,3 +327,11 @@ export function getArtifact(
 ): Promise<{ downloadUrl: string }> {
   return request(`/api/v1/projects/${projectId}/artifacts/${artifactId}`);
 }
+
+/** SSE 事件 attachment.path 存的是 storage_key，按它换临时 downloadUrl。 */
+export function getArtifactByStorage(
+  projectId: string,
+  storageKey: string
+): Promise<{ artifactId: string; fileName: string; downloadUrl?: string; status: string }> {
+  return request(`/api/v1/projects/${projectId}/artifacts/by-storage/${storageKey}`);
+}

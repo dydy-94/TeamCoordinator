@@ -72,6 +72,39 @@ class ArtifactIntegrationTest {
     }
 
     @Test
+    void resolvesArtifactByStorageKeyFromSseAttachmentPath() throws Exception {
+        String projectId = createProject();
+        JsonNode reserved = reserve(projectId, "report.txt");
+        String artifactId = reserved.get("artifactId").asText();
+        mockMvc.perform(put(reserved.get("uploadUrl").asText())
+                        .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                        .content("by-storage lookup".getBytes(StandardCharsets.UTF_8)))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/projects/" + projectId
+                        + "/artifacts/" + artifactId + "/complete")
+                        .headers(identity("artifact-owner")))
+                .andExpect(status().isOk());
+
+        String storageKey = jdbc.queryForObject(
+                "SELECT storage_key FROM digital_team_project_artifact WHERE business_id = ?",
+                String.class, artifactId);
+
+        mockMvc.perform(get("/api/v1/projects/" + projectId
+                        + "/artifacts/by-storage/" + storageKey)
+                        .headers(identity("artifact-owner")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.artifactId").value(artifactId))
+                .andExpect(jsonPath("$.status").value("AVAILABLE"))
+                .andExpect(jsonPath("$.downloadUrl").isNotEmpty());
+
+        // 未知 storage_key → 404
+        mockMvc.perform(get("/api/v1/projects/" + projectId
+                        + "/artifacts/by-storage/file-no-such-key")
+                        .headers(identity("artifact-owner")))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void agentCoreToolUploadsGeneratedFileWithoutStorageCredentials() throws Exception {
         String projectId = createProject();
         JsonNode conversation = createConversation(projectId);
